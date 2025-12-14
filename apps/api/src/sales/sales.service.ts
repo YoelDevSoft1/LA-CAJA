@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { Sale } from '../database/entities/sale.entity';
 import { SaleItem } from '../database/entities/sale-item.entity';
 import { Product } from '../database/entities/product.entity';
 import { InventoryMovement } from '../database/entities/inventory-movement.entity';
 import { Customer } from '../database/entities/customer.entity';
 import { Debt, DebtStatus } from '../database/entities/debt.entity';
+import { DebtPayment } from '../database/entities/debt-payment.entity';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { randomUUID } from 'crypto';
 
@@ -25,6 +26,8 @@ export class SalesService {
     private customerRepository: Repository<Customer>,
     @InjectRepository(Debt)
     private debtRepository: Repository<Debt>,
+    @InjectRepository(DebtPayment)
+    private debtPaymentRepository: Repository<DebtPayment>,
     private dataSource: DataSource,
   ) {}
 
@@ -302,27 +305,27 @@ export class SalesService {
       throw new NotFoundException('Venta no encontrada');
     }
 
-    // Agregar información de pagos si hay deuda
+    // Agregar información de pagos si hay deuda (optimizado)
     const saleWithDebt = sale as any;
     if (saleWithDebt.debt) {
-      const debtWithPayments = await this.debtRepository.findOne({
-        where: { id: saleWithDebt.debt.id },
-        relations: ['payments'],
+      // Obtener pagos directamente sin cargar toda la relación
+      const payments = await this.debtPaymentRepository.find({
+        where: { debt_id: saleWithDebt.debt.id },
+        select: ['amount_bs', 'amount_usd'],
       });
-      if (debtWithPayments) {
-        const totalPaidBs = (debtWithPayments.payments || []).reduce(
-          (sum: number, p: any) => sum + Number(p.amount_bs),
-          0,
-        );
-        const totalPaidUsd = (debtWithPayments.payments || []).reduce(
-          (sum: number, p: any) => sum + Number(p.amount_usd),
-          0,
-        );
-        saleWithDebt.debt.total_paid_bs = totalPaidBs;
-        saleWithDebt.debt.total_paid_usd = totalPaidUsd;
-        saleWithDebt.debt.remaining_bs = Number(debtWithPayments.amount_bs) - totalPaidBs;
-        saleWithDebt.debt.remaining_usd = Number(debtWithPayments.amount_usd) - totalPaidUsd;
-      }
+      
+      const totalPaidBs = payments.reduce(
+        (sum: number, p: any) => sum + Number(p.amount_bs || 0),
+        0,
+      );
+      const totalPaidUsd = payments.reduce(
+        (sum: number, p: any) => sum + Number(p.amount_usd || 0),
+        0,
+      );
+      saleWithDebt.debt.total_paid_bs = totalPaidBs;
+      saleWithDebt.debt.total_paid_usd = totalPaidUsd;
+      saleWithDebt.debt.remaining_bs = Number(saleWithDebt.debt.amount_bs || 0) - totalPaidBs;
+      saleWithDebt.debt.remaining_usd = Number(saleWithDebt.debt.amount_usd || 0) - totalPaidUsd;
     }
 
     return saleWithDebt;
@@ -366,33 +369,50 @@ export class SalesService {
       ])
       .getMany();
 
-    // Enriquecer con información de pagos para ventas con deuda
-    const salesWithDebtInfo = await Promise.all(
-      sales.map(async (sale) => {
-        const saleWithDebt = sale as any;
-        if (saleWithDebt.debt) {
-          const debtWithPayments = await this.debtRepository.findOne({
-            where: { id: saleWithDebt.debt.id },
-            relations: ['payments'],
-          });
-          if (debtWithPayments) {
-            const totalPaidBs = (debtWithPayments.payments || []).reduce(
-              (sum: number, p: any) => sum + Number(p.amount_bs),
-              0,
-            );
-            const totalPaidUsd = (debtWithPayments.payments || []).reduce(
-              (sum: number, p: any) => sum + Number(p.amount_usd),
-              0,
-            );
-            saleWithDebt.debt.total_paid_bs = totalPaidBs;
-            saleWithDebt.debt.total_paid_usd = totalPaidUsd;
-            saleWithDebt.debt.remaining_bs = Number(debtWithPayments.amount_bs) - totalPaidBs;
-            saleWithDebt.debt.remaining_usd = Number(debtWithPayments.amount_usd) - totalPaidUsd;
-          }
+    // Optimización: Obtener todas las deudas con sus pagos en una sola query (evita N+1)
+    const debtIds = sales
+      .map((sale) => (sale as any).debt?.id)
+      .filter((id): id is string => Boolean(id));
+
+    let debtPaymentsMap = new Map<string, any[]>();
+    if (debtIds.length > 0) {
+      // Obtener todos los pagos de todas las deudas en una sola query
+      const allPayments = await this.debtPaymentRepository.find({
+        where: { debt_id: In(debtIds) },
+        select: ['id', 'debt_id', 'amount_bs', 'amount_usd'],
+      });
+
+      // Agrupar pagos por debt_id
+      debtPaymentsMap = allPayments.reduce((map, payment) => {
+        const debtId = payment.debt_id;
+        if (!map.has(debtId)) {
+          map.set(debtId, []);
         }
-        return saleWithDebt;
-      }),
-    );
+        map.get(debtId)!.push(payment);
+        return map;
+      }, new Map<string, any[]>());
+    }
+
+    // Enriquecer ventas con información de pagos (sin queries adicionales)
+    const salesWithDebtInfo = sales.map((sale) => {
+      const saleWithDebt = sale as any;
+      if (saleWithDebt.debt) {
+        const payments = debtPaymentsMap.get(saleWithDebt.debt.id) || [];
+        const totalPaidBs = payments.reduce(
+          (sum: number, p: any) => sum + Number(p.amount_bs || 0),
+          0,
+        );
+        const totalPaidUsd = payments.reduce(
+          (sum: number, p: any) => sum + Number(p.amount_usd || 0),
+          0,
+        );
+        saleWithDebt.debt.total_paid_bs = totalPaidBs;
+        saleWithDebt.debt.total_paid_usd = totalPaidUsd;
+        saleWithDebt.debt.remaining_bs = Number(saleWithDebt.debt.amount_bs || 0) - totalPaidBs;
+        saleWithDebt.debt.remaining_usd = Number(saleWithDebt.debt.amount_usd || 0) - totalPaidUsd;
+      }
+      return saleWithDebt;
+    });
 
     return { sales: salesWithDebtInfo, total };
   }

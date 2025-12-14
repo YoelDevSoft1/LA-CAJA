@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Event } from '../database/entities/event.entity';
@@ -8,6 +8,8 @@ import { SyncStatusDto } from './dto/sync-status.dto';
 
 @Injectable()
 export class SyncService {
+  private readonly logger = new Logger(SyncService.name);
+
   constructor(
     @InjectRepository(Event)
     private eventRepository: Repository<Event>,
@@ -131,7 +133,7 @@ export class SyncService {
           await this.projectionsService.projectEvent(event);
         } catch (error) {
           // Log error pero no fallar el sync
-          console.error(`Error proyectando evento ${event.event_id}:`, error);
+          this.logger.error(`Error proyectando evento ${event.event_id}`, error instanceof Error ? error.stack : String(error));
         }
       }
     }

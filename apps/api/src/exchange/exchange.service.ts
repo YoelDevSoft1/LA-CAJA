@@ -25,6 +25,7 @@ export class ExchangeService {
   private readonly CACHE_DURATION_MS = 1000 * 60 * 60; // 1 hora de cache
   private readonly axiosInstance: AxiosInstance;
   private readonly DOLAR_API_URL = 'https://ve.dolarapi.com/v1/dolares/oficial';
+  private fetchPromise: Promise<BCVRateResponse | null> | null = null; // Prevenir múltiples requests simultáneos
 
   constructor(private configService: ConfigService) {
     this.axiosInstance = axios.create({
@@ -38,17 +39,37 @@ export class ExchangeService {
   /**
    * Intenta obtener la tasa del BCV de fuentes automáticas
    * Retorna null si no puede obtenerla automáticamente
+   * Usa cache y previene múltiples requests simultáneos
    */
   async getBCVRate(): Promise<BCVRateResponse | null> {
     // Si hay un cache válido, retornarlo
     if (this.cachedRate && this.isCacheValid()) {
-      this.logger.log('Usando tasa BCV del cache');
+      this.logger.debug('Usando tasa BCV del cache');
       return this.cachedRate;
     }
 
-    // Intentar obtener de diferentes fuentes
+    // Si ya hay un request en progreso, esperar a que termine
+    if (this.fetchPromise) {
+      this.logger.debug('Esperando request de tasa BCV en progreso...');
+      return this.fetchPromise;
+    }
+
+    // Crear nuevo request
+    this.fetchPromise = this.fetchRate();
+
     try {
-      // Opción 1: API de BCV (si existe)
+      const result = await this.fetchPromise;
+      return result;
+    } finally {
+      this.fetchPromise = null;
+    }
+  }
+
+  /**
+   * Obtiene la tasa desde la API y actualiza el cache
+   */
+  private async fetchRate(): Promise<BCVRateResponse | null> {
+    try {
       const rate = await this.fetchFromBCVAPI();
       if (rate) {
         this.cachedRate = {
@@ -56,15 +77,20 @@ export class ExchangeService {
           source: 'api',
           timestamp: new Date(),
         };
-        this.logger.log(`Tasa BCV obtenida: ${rate}`);
+        this.logger.log(`Tasa BCV obtenida y cacheada: ${rate}`);
         return this.cachedRate;
       }
     } catch (error) {
-      this.logger.warn('Error al obtener tasa del BCV:', error);
+      this.logger.warn('Error al obtener tasa del BCV', error instanceof Error ? error.message : String(error));
+    }
+
+    // Si hay un cache expirado pero válido, usarlo como fallback
+    if (this.cachedRate) {
+      this.logger.warn('Usando tasa BCV cacheada (expirada) como fallback');
+      return this.cachedRate;
     }
 
     // Si no se pudo obtener, retornar null
-    // El frontend deberá solicitar entrada manual
     return null;
   }
 

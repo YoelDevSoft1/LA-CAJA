@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Event } from '../database/entities/event.entity';
@@ -15,6 +15,8 @@ import { randomUUID } from 'crypto';
 
 @Injectable()
 export class ProjectionsService {
+  private readonly logger = new Logger(ProjectionsService.name);
+
   constructor(
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
@@ -384,17 +386,17 @@ export class ProjectionsService {
     
     // Validar campos requeridos
     if (!payload.payment_id) {
-      console.error(`[ProjectDebtPaymentRecorded] Error: payment_id faltante en evento ${event.event_id}`);
+      this.logger.error(`Error: payment_id faltante en evento ${event.event_id}`);
       throw new Error(`payment_id es requerido en el payload del evento DebtPaymentRecorded`);
     }
 
     if (!payload.debt_id) {
-      console.error(`[ProjectDebtPaymentRecorded] Error: debt_id faltante en evento ${event.event_id}. Payload:`, JSON.stringify(payload));
+      this.logger.error(`Error: debt_id faltante en evento ${event.event_id}`, JSON.stringify(payload));
       throw new Error(`debt_id es requerido en el payload del evento DebtPaymentRecorded. Evento: ${event.event_id}`);
     }
 
     if (!payload.method) {
-      console.error(`[ProjectDebtPaymentRecorded] Error: method faltante en evento ${event.event_id}`);
+      this.logger.error(`Error: method faltante en evento ${event.event_id}`);
       throw new Error(`method es requerido en el payload del evento DebtPaymentRecorded`);
     }
 
@@ -413,7 +415,7 @@ export class ProjectionsService {
     });
 
     if (!debt) {
-      console.error(`[ProjectDebtPaymentRecorded] Error: Deuda ${payload.debt_id} no encontrada para store ${event.store_id} en evento ${event.event_id}`);
+      this.logger.error(`Deuda ${payload.debt_id} no encontrada para store ${event.store_id} en evento ${event.event_id}`);
       throw new Error(`La deuda ${payload.debt_id} no existe para la tienda ${event.store_id}`);
     }
 
@@ -424,11 +426,11 @@ export class ProjectionsService {
 
     // Validar que debt_id no sea null antes de insertar
     if (!payload.debt_id) {
-      console.error(`[ProjectDebtPaymentRecorded] Error crítico: debt_id es null/undefined. Payload completo:`, JSON.stringify(payload));
+      this.logger.error(`Error crítico: debt_id es null/undefined`, JSON.stringify(payload));
       throw new Error(`debt_id es requerido y no puede ser null. Evento: ${event.event_id}`);
     }
 
-    console.log(`[ProjectDebtPaymentRecorded] Insertando pago - payment_id: ${payload.payment_id}, store_id: ${event.store_id}, debt_id: ${payload.debt_id}`);
+    this.logger.debug(`Insertando pago - payment_id: ${payload.payment_id}, store_id: ${event.store_id}, debt_id: ${payload.debt_id}`);
 
     // Usar SQL directo para insertar (igual que en debts.service.ts)
     await this.dataSource.query(
@@ -446,7 +448,7 @@ export class ProjectionsService {
       ],
     );
 
-    console.log(`[ProjectDebtPaymentRecorded] Pago insertado exitosamente`);
+    this.logger.debug(`Pago insertado exitosamente - payment_id: ${payload.payment_id}`);
 
     // Actualizar estado de la deuda si está completamente pagada
     // Recargar la deuda con todos los pagos para calcular correctamente

@@ -9,9 +9,10 @@ import { InventoryMovement } from '../database/entities/inventory-movement.entit
 import { Customer } from '../database/entities/customer.entity';
 import { Profile } from '../database/entities/profile.entity';
 import { Debt } from '../database/entities/debt.entity';
+import { DebtPayment } from '../database/entities/debt-payment.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Sale, SaleItem, Product, InventoryMovement, Customer, Profile, Debt])],
+  imports: [TypeOrmModule.forFeature([Sale, SaleItem, Product, InventoryMovement, Customer, Profile, Debt, DebtPayment])],
   controllers: [SalesController],
   providers: [SalesService],
   exports: [SalesService],

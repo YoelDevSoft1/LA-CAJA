@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { DebtsService } from './debts.service';
 import { CreateDebtPaymentDto } from './dto/create-debt-payment.dto';
@@ -19,6 +20,8 @@ import { DebtStatus } from '../database/entities/debt.entity';
 @Controller('debts')
 @UseGuards(JwtAuthGuard)
 export class DebtsController {
+  private readonly logger = new Logger(DebtsController.name);
+
   constructor(private readonly debtsService: DebtsService) {}
 
   @Post('from-sale/:saleId')
@@ -46,8 +49,7 @@ export class DebtsController {
       throw new BadRequestException('El ID de la deuda es requerido');
     }
     
-    // Log para debugging
-    console.log('AddPayment - debtId:', debtId, 'storeId:', storeId, 'dto:', JSON.stringify(dto));
+    this.logger.debug(`Agregando pago a deuda - debtId: ${debtId}, storeId: ${storeId}`);
     return this.debtsService.addPayment(storeId, debtId, dto);
   }
 

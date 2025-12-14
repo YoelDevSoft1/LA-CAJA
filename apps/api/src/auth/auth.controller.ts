@@ -1,4 +1,5 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request, Get, Param, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request, Get, Param, BadRequestException, Logger } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { CreateCashierDto } from './dto/create-cashier.dto';
@@ -8,6 +9,8 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(private readonly authService: AuthService) {}
 
   @Get('stores')
@@ -39,19 +42,9 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 intentos por minuto
   async login(@Body() body: any): Promise<AuthResponseDto> {
-    console.log('🔵 [AuthController] Login request received (raw body):', JSON.stringify(body, null, 2));
-    console.log('🔵 [AuthController] Body type analysis:', {
-      isObject: typeof body === 'object',
-      keys: Object.keys(body || {}),
-      store_id: body?.store_id,
-      store_id_type: typeof body?.store_id,
-      store_id_length: body?.store_id?.length,
-      pin: body?.pin,
-      pin_type: typeof body?.pin,
-    });
-    
-    // Validación manual antes de pasar al DTO
+    // Validación manual antes de pasar al DTO (mantener compatibilidad con frontend)
     if (!body || !body.store_id || !body.pin) {
       throw new BadRequestException({
         message: 'Validation failed',
@@ -62,12 +55,22 @@ export class AuthController {
       });
     }
     
+    // Normalizar y limpiar valores
     const dto: LoginDto = {
       store_id: String(body.store_id).trim(),
       pin: String(body.pin).trim(),
     };
     
-    return this.authService.login(dto);
+    this.logger.log(`Intento de login para tienda: ${dto.store_id}`);
+    
+    try {
+      const result = await this.authService.login(dto);
+      this.logger.log(`Login exitoso para usuario: ${result.user_id} en tienda: ${result.store_id}`);
+      return result;
+    } catch (error) {
+      this.logger.warn(`Login fallido para tienda: ${dto.store_id} - ${error.message}`);
+      throw error;
+    }
   }
 }
 
