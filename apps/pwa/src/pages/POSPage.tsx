@@ -68,7 +68,15 @@ export default function POSPage() {
   const createSaleMutation = useMutation({
     mutationFn: salesService.create,
     onSuccess: (sale) => {
-      toast.success(`Venta #${sale.id.slice(0, 8)} procesada exitosamente`)
+      const isOnline = navigator.onLine
+      if (isOnline) {
+        toast.success(`Venta #${sale.id.slice(0, 8)} procesada exitosamente`)
+      } else {
+        toast.success(
+          `Venta #${sale.id.slice(0, 8)} guardada localmente. Se sincronizará cuando vuelva la conexión.`,
+          { duration: 5000 }
+        )
+      }
       clear()
       setShowCheckout(false)
     },
@@ -112,6 +120,10 @@ export default function POSPage() {
       customer_phone: checkoutData.customer_phone,
       customer_note: checkoutData.customer_note,
       note: null,
+      // Datos para modo offline
+      store_id: user?.store_id,
+      user_id: user?.user_id,
+      user_role: user?.role || 'cashier',
     })
   }
 
