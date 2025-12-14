@@ -1,5 +1,6 @@
 import { api } from '@/lib/api'
 import { syncService } from './sync.service'
+import { exchangeService } from './exchange.service'
 import { BaseEvent, SaleCreatedPayload, SaleItem as DomainSaleItem } from '@la-caja/domain'
 
 // Función auxiliar para generar UUIDs
@@ -184,6 +185,19 @@ export const salesService = {
       const deviceId = getDeviceId()
       const now = Date.now()
 
+      // Asegurar que tenemos la tasa de cambio (usar la guardada si no viene en los datos)
+      let exchangeRate = data.exchange_rate
+      if (!exchangeRate || exchangeRate <= 0) {
+        const cachedRate = await exchangeService.getCachedRate()
+        if (cachedRate.available && cachedRate.rate) {
+          exchangeRate = cachedRate.rate
+        } else {
+          // Si no hay tasa guardada, usar un valor por defecto (pero esto no debería pasar)
+          exchangeRate = 36 // Valor por defecto
+          console.warn('No se encontró tasa de cambio guardada, usando valor por defecto:', exchangeRate)
+        }
+      }
+
       // Obtener productos del cache para calcular totales y precios
       const { db } = await import('@/db/database')
       let subtotalBs = 0
@@ -287,7 +301,7 @@ export const salesService = {
             }
           : null,
         debt: null,
-        exchange_rate: data.exchange_rate,
+        exchange_rate: exchangeRate,
         currency: data.currency,
         totals: {
           subtotal_bs: totals.subtotal_bs.toString(),
@@ -357,6 +371,19 @@ export const salesService = {
         const deviceId = getDeviceId()
         const now = Date.now()
 
+        // Asegurar que tenemos la tasa de cambio (usar la guardada si no viene en los datos)
+        let exchangeRate = data.exchange_rate
+        if (!exchangeRate || exchangeRate <= 0) {
+          const cachedRate = await exchangeService.getCachedRate()
+          if (cachedRate.available && cachedRate.rate) {
+            exchangeRate = cachedRate.rate
+          } else {
+            // Si no hay tasa guardada, usar un valor por defecto (pero esto no debería pasar)
+            exchangeRate = 36 // Valor por defecto
+            console.warn('No se encontró tasa de cambio guardada, usando valor por defecto:', exchangeRate)
+          }
+        }
+
         // Obtener productos del cache para calcular totales y precios
         const { db } = await import('@/db/database')
         let subtotalBs = 0
@@ -405,7 +432,7 @@ export const salesService = {
           sale_id: saleId,
           cash_session_id: data.cash_session_id || '',
           sold_at: now,
-          exchange_rate: data.exchange_rate,
+          exchange_rate: exchangeRate,
           currency: data.currency,
           items: saleItems,
           totals,
@@ -460,7 +487,7 @@ export const salesService = {
               }
             : null,
           debt: null,
-          exchange_rate: data.exchange_rate,
+          exchange_rate: exchangeRate,
           currency: data.currency,
           totals: {
             subtotal_bs: totals.subtotal_bs.toString(),
