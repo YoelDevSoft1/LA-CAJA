@@ -322,6 +322,13 @@ class SyncServiceClass {
     }
 
     try {
+      console.log('[SyncService] Enviando /sync/push', {
+        store_id: this.storeId,
+        device_id: this.deviceId,
+        events_count: sanitizedEvents.length,
+        first_event: sanitizedEvents[0],
+      });
+
       const dto: PushSyncDto = {
         store_id: this.storeId,
         device_id: this.deviceId,
