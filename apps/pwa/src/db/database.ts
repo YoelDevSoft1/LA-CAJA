@@ -97,6 +97,39 @@ export class LaCajaDB extends Dexie {
       .sort((a, b) => (a.created_at as number) - (b.created_at as number))
       .slice(0, limit);
   }
+
+  /**
+   * Obtiene eventos por estado sin filtrar por store/device
+   */
+  async getEventsByStatus(
+    status: LocalEvent['sync_status'],
+    limit: number = 200
+  ): Promise<LocalEvent[]> {
+    const events = await this.localEvents
+      .where('sync_status')
+      .equals(status)
+      .toArray();
+    return events
+      .sort((a, b) => (a.created_at as number) - (b.created_at as number))
+      .slice(0, limit);
+  }
+
+  /**
+   * Resetea eventos fallidos a pendiente (útil tras corregir validaciones)
+   */
+  async resetFailedEventsToPending(): Promise<number> {
+    const failed = await this.getEventsByStatus('failed', 500);
+    if (failed.length === 0) return 0;
+    const updates = failed.map((evt) =>
+      this.localEvents.update(evt.id!, {
+        sync_status: 'pending',
+        sync_attempts: 0,
+        last_error: null,
+      })
+    );
+    await Promise.all(updates);
+    return failed.length;
+  }
   
   /**
    * Query optimizada para obtener eventos por dispositivo y estado
@@ -224,5 +257,4 @@ export class LaCajaDB extends Dexie {
 }
 
 export const db = new LaCajaDB();
-
 

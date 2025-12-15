@@ -103,6 +103,16 @@ class SyncServiceClass {
     this.storeId = storeId;
     this.deviceId = deviceId;
 
+    // Reintentar eventos fallidos (por validaciones previas) marcándolos como pendientes
+    try {
+      const resetCount = await db.resetFailedEventsToPending();
+      if (resetCount > 0) {
+        console.log('[SyncService] resetFailedEventsToPending', { count: resetCount });
+      }
+    } catch (error) {
+      console.warn('[SyncService] No se pudieron resetear eventos fallidos', error);
+    }
+
     // Crear la cola de sincronización con callback personalizado
     this.syncQueue = new SyncQueue(
       this.syncBatchToServer.bind(this),
