@@ -37,6 +37,9 @@ class SyncServiceClass {
   private storeId: string | null = null;
   private syncIntervalId: ReturnType<typeof setInterval> | null = null;
   private readonly SYNC_INTERVAL_MS = 30000; // Sincronizar cada 30 segundos
+  private readonly SYNC_BATCH_SIZE = 10;
+  private readonly SYNC_BATCH_TIMEOUT_MS = 300; // ms
+  private readonly SYNC_PRIORITIZE_CRITICAL = false; // permitir batching de ventas críticas
   private onlineListener: (() => void) | null = null;
   private offlineListener: (() => void) | null = null;
 
@@ -116,7 +119,11 @@ class SyncServiceClass {
     // Crear la cola de sincronización con callback personalizado
     this.syncQueue = new SyncQueue(
       this.syncBatchToServer.bind(this),
-      config || {},
+      config || {
+        batchSize: this.SYNC_BATCH_SIZE,
+        batchTimeout: this.SYNC_BATCH_TIMEOUT_MS,
+        prioritizeCritical: this.SYNC_PRIORITIZE_CRITICAL,
+      },
       this.metrics
     );
 
