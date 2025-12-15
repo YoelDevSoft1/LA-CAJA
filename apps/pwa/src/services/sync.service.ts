@@ -53,7 +53,10 @@ class SyncServiceClass {
       // Cuando vuelve la conexión, sincronizar inmediatamente
       if (this.isInitialized && this.syncQueue) {
         console.log('[SyncService] online -> flush queue');
-        this.syncQueue.flush().catch(() => {
+        this.syncQueue.flush().then(() => {
+          console.log('[SyncService] flush complete (online event)');
+        }).catch((err: any) => {
+          console.error('[SyncService] flush error (online event)', err);
           // Silenciar errores, el sync periódico lo intentará de nuevo
         });
       }
@@ -134,6 +137,10 @@ class SyncServiceClass {
     // Si está inicializado, agregar a la cola de sincronización
     if (this.isInitialized && this.syncQueue) {
       this.syncQueue.enqueue(event);
+      console.log('[SyncService] enqueue -> flush attempt');
+      this.syncQueue.flush().catch(() => {
+        // Silenciar, ya hay flush periódico
+      });
     } else {
       // Si no está inicializado, intentar inicializar automáticamente si tenemos los datos necesarios
       if (event.store_id && event.device_id) {
@@ -269,6 +276,14 @@ class SyncServiceClass {
    * Callback para sincronizar un batch de eventos con el servidor
    */
   private async syncBatchToServer(events: BaseEvent[]): Promise<{ success: boolean; error?: Error }> {
+    console.log('[SyncService] syncBatchToServer start', {
+      events_count: events.length,
+      first_event: events[0],
+      online: navigator.onLine,
+      store_id: this.storeId,
+      device_id: this.deviceId,
+    });
+
     if (!this.storeId || !this.deviceId) {
       return {
         success: false,
@@ -278,6 +293,7 @@ class SyncServiceClass {
 
     // Verificar conectividad antes de intentar sincronizar
     if (!navigator.onLine) {
+      console.warn('[SyncService] Aborting sync, navigator.offline');
       return {
         success: false,
         error: new Error('Sin conexión a internet'),
@@ -464,7 +480,10 @@ class SyncServiceClass {
     this.syncIntervalId = setInterval(() => {
       // Solo sincronizar si hay conexión
       if (navigator.onLine && this.syncQueue) {
-        this.syncQueue.flush().catch(() => {
+        this.syncQueue.flush().then(() => {
+          console.log('[SyncService] flush complete (interval)');
+        }).catch((err: any) => {
+          console.error('[SyncService] flush error (interval)', err);
           // Silenciar errores, se reintentará en el siguiente intervalo
         });
       }
