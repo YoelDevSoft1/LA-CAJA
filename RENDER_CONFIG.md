@@ -1,6 +1,24 @@
 # Configuración para Render - Backend LA-CAJA
 
-## 🚨 SOLUCIÓN RÁPIDA AL ERROR
+## 🚨 SOLUCIÓN AL ERROR: nest: not found
+
+**Error**: `sh: 1: nest: not found` - El CLI de NestJS no se encuentra.
+
+**Causa**: `@nestjs/cli` está en `devDependencies` y no se instala por defecto en producción.
+
+**Solución Rápida**:
+
+1. **Root Directory**: Dejar VACÍO (no usar `apps/api`)
+2. **Build Command**: `npm install --include=dev && cd apps/api && npm run build`
+3. **Start Command**: `cd apps/api && npm run start:prod`
+
+**Importante**: Agrega `--include=dev` al comando `npm install` para instalar las devDependencies necesarias para compilar.
+
+Ver detalles completos más abajo en la sección "SOLUCIÓN AL ERROR: Build Failed".
+
+---
+
+## 🚨 SOLUCIÓN RÁPIDA AL ERROR: Variables Duplicadas
 
 Si ves el error **"There's an error above. Please fix it to continue"**, el problema es que tienes **variables de entorno duplicadas**.
 
@@ -35,15 +53,25 @@ Si ves el error **"There's an error above. Please fix it to continue"**, el prob
 
 ### Comandos
 
+**IMPORTANTE**: Este es un monorepo con workspaces. Los comandos deben ejecutarse desde la raíz.
+
+**Root Directory**: Dejar VACÍO (no usar `apps/api`)
+
 **Build Command:**
 ```
-npm install && npm run build
+npm install --include=dev && cd apps/api && npm run build
 ```
 
 **Start Command:**
 ```
-npm run start:prod
+cd apps/api && npm run start:prod
 ```
+
+**Nota**: `--include=dev` es necesario porque `@nestjs/cli` está en `devDependencies` y se necesita para compilar.
+
+**Alternativa (si Root Directory está en `apps/api`):**
+- **Build Command**: `npm install && npm run build`
+- **Start Command**: `npm run start:prod`
 
 ### Instance Type
 
@@ -151,6 +179,50 @@ Agrega estas 8 variables (una sola vez cada una):
 6. `JWT_EXPIRES_IN` = `7d`
 7. `THROTTLE_TTL` = `60000`
 8. `THROTTLE_LIMIT` = `100`
+
+---
+
+## 🚨 SOLUCIÓN AL ERROR: Build Failed
+
+### Error 1: nest: not found
+
+**Problema**: `sh: 1: nest: not found` - El CLI de NestJS no se encuentra.
+
+**Causa**: `@nestjs/cli` está en `devDependencies` y no se instala por defecto.
+
+**Solución**: Agrega `--include=dev` al comando de instalación.
+
+### Error 2: dist/main.js not found
+
+**Problema**: Error `npm error command sh -c node dist/main` - El archivo `dist/main.js` no existe.
+
+**Causa**: Es un monorepo con workspaces. El build necesita instalarse desde la raíz.
+
+**Solución**:
+
+### Opción 1: Sin Root Directory (Recomendado)
+
+1. **Root Directory**: Dejar VACÍO
+2. **Build Command**: 
+   ```
+   npm install --include=dev && cd apps/api && npm run build
+   ```
+3. **Start Command**: 
+   ```
+   cd apps/api && npm run start:prod
+   ```
+
+### Opción 2: Con Root Directory = `apps/api`
+
+1. **Root Directory**: `apps/api`
+2. **Build Command**: 
+   ```
+   cd ../.. && npm install --include=dev && cd apps/api && npm run build
+   ```
+3. **Start Command**: 
+   ```
+   npm run start:prod
+   ```
 
 ---
 

@@ -35,6 +35,8 @@ import { Event } from './database/entities/event.entity';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      ignoreEnvFile: false, // Intentar leer .env si existe
+      // En producción (Render), las variables vienen de process.env automáticamente
     }),
     // Rate limiting global
     ThrottlerModule.forRootAsync({
