@@ -37,9 +37,10 @@ class SyncServiceClass {
   private storeId: string | null = null;
   private syncIntervalId: ReturnType<typeof setInterval> | null = null;
   private readonly SYNC_INTERVAL_MS = 30000; // Sincronizar cada 30 segundos
-  private readonly SYNC_BATCH_SIZE = 10;
-  private readonly SYNC_BATCH_TIMEOUT_MS = 300; // ms
-  private readonly SYNC_PRIORITIZE_CRITICAL = false; // permitir batching de ventas críticas
+  // Config: casi tiempo real, pero con batching pequeño para reducir requests
+  private readonly SYNC_BATCH_SIZE = 5;
+  private readonly SYNC_BATCH_TIMEOUT_MS = 150; // ms
+  private readonly SYNC_PRIORITIZE_CRITICAL = true; // ventas salen inmediato si hay red
   private onlineListener: (() => void) | null = null;
   private offlineListener: (() => void) | null = null;
 
