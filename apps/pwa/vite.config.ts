@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         // CRÍTICO: Precachear index.html explícitamente y todos los assets
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot}'],
-        globIgnores: ['**/node_modules/**/*', '**/sw.js', '**/workbox-*.js'],
+        globIgnores: ['**/node_modules/**/*', '**/sw.js'],
         // NO agregar index.html manualmente - Workbox lo detecta automáticamente
         // Si lo agregamos manualmente, causa conflicto con la entrada automática
         // Modo de precache más agresivo para producción
@@ -114,6 +114,18 @@ export default defineConfig(({ mode }) => ({
                 statuses: [0, 200],
               },
               networkTimeoutSeconds: 1,
+            },
+          },
+          {
+            // CRÍTICO: Cachear workbox.js para que el Service Worker funcione offline
+            urlPattern: ({ url }) => url.pathname.includes('workbox-') && url.pathname.endsWith('.js'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'static-resources',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 año
+              },
             },
           },
           {

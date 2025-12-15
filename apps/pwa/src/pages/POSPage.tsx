@@ -111,7 +111,8 @@ export default function POSPage() {
       setShowCheckout(false)
     },
     onError: (error: any) => {
-      const message = error.response?.data?.message || 'Error al procesar la venta'
+      console.error('[POS] Error en createSaleMutation:', error)
+      const message = error.response?.data?.message || error.message || 'Error al procesar la venta'
       toast.error(message)
     },
   })
