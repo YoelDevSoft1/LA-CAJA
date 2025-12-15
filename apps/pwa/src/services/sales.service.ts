@@ -178,9 +178,10 @@ function calculateTotals(
 
 export const salesService = {
   async create(data: CreateSaleRequest): Promise<Sale> {
+    // Verificar estado de conexión
     const isOnline = navigator.onLine
-
-    // Si está offline, guardar como evento local
+    
+    // Si está offline Y tenemos store_id/user_id, guardar como evento local inmediatamente
     if (!isOnline && data.store_id && data.user_id) {
       const saleId = randomUUID()
       const deviceId = getDeviceId()
@@ -351,8 +352,174 @@ export const salesService = {
       return mockSale
     }
 
-    // Si está online, intentar hacer la llamada HTTP normal
+    // Si está online Y tenemos store_id/user_id, intentar hacer la llamada HTTP normal
     // Si falla por error de red, guardar como evento offline
+    // Verificar nuevamente antes de intentar (puede haber cambiado)
+    if (!navigator.onLine && data.store_id && data.user_id) {
+      // Si se perdió la conexión mientras procesábamos, guardar offline
+      console.log('[Sales] ⚠️ Conexión perdida durante el proceso, guardando offline...')
+      // Reutilizar la lógica offline (código duplicado pero necesario)
+      const saleId = randomUUID()
+      const deviceId = getDeviceId()
+      const now = Date.now()
+
+      let exchangeRate = data.exchange_rate
+      if (!exchangeRate || exchangeRate <= 0) {
+        const cachedRate = await exchangeService.getCachedRate()
+        if (cachedRate.available && cachedRate.rate) {
+          exchangeRate = cachedRate.rate
+        } else {
+          exchangeRate = 36
+          console.warn('No se encontró tasa de cambio guardada, usando valor por defecto:', exchangeRate)
+        }
+      }
+
+      const { db } = await import('@/db/database')
+      let subtotalBs = 0
+      let subtotalUsd = 0
+      let discountBs = 0
+      let discountUsd = 0
+
+      const saleItems: DomainSaleItem[] = []
+      for (const item of data.items) {
+        const product = await db.getProductById(item.product_id)
+        if (!product) continue
+
+        const unitPriceBs = product.price_bs
+        const unitPriceUsd = product.price_usd
+        const itemDiscountBs = item.discount_bs || 0
+        const itemDiscountUsd = item.discount_usd || 0
+        const itemSubtotalBs = unitPriceBs * item.qty
+        const itemSubtotalUsd = unitPriceUsd * item.qty
+
+        subtotalBs += itemSubtotalBs
+        subtotalUsd += itemSubtotalUsd
+        discountBs += itemDiscountBs
+        discountUsd += itemDiscountUsd
+
+        saleItems.push({
+          line_id: randomUUID(),
+          product_id: item.product_id,
+          qty: item.qty,
+          unit_price_bs: unitPriceBs,
+          unit_price_usd: unitPriceUsd,
+          discount_bs: itemDiscountBs,
+          discount_usd: itemDiscountUsd,
+        })
+      }
+
+      const totals = {
+        subtotal_bs: subtotalBs,
+        subtotal_usd: subtotalUsd,
+        discount_bs: discountBs,
+        discount_usd: discountUsd,
+        total_bs: subtotalBs - discountBs,
+        total_usd: subtotalUsd - discountUsd,
+      }
+
+      const payload: SaleCreatedPayload = {
+        sale_id: saleId,
+        cash_session_id: data.cash_session_id || '',
+        sold_at: now,
+        exchange_rate: exchangeRate,
+        currency: data.currency,
+        items: saleItems,
+        totals,
+        payment: {
+          method: data.payment_method,
+          split: data.split ? {
+            cash_bs: data.split.cash_bs ?? 0,
+            cash_usd: data.split.cash_usd ?? 0,
+            pago_movil_bs: data.split.pago_movil_bs ?? 0,
+            transfer_bs: data.split.transfer_bs ?? 0,
+            other_bs: data.split.other_bs ?? 0,
+          } : undefined,
+        },
+        customer: data.customer_id
+          ? {
+              customer_id: data.customer_id,
+            }
+          : undefined,
+        note: data.note || undefined,
+      }
+
+      const allEvents = await db.localEvents.orderBy('seq').reverse().limit(1).toArray()
+      const nextSeq = allEvents.length > 0 ? allEvents[0].seq + 1 : 1
+
+      const event: BaseEvent = {
+        event_id: randomUUID(),
+        store_id: data.store_id,
+        device_id: deviceId,
+        seq: nextSeq,
+        type: 'SaleCreated',
+        version: 1,
+        created_at: now,
+        actor: {
+          user_id: data.user_id,
+          role: data.user_role || 'cashier',
+        },
+        payload,
+      }
+
+      try {
+        await syncService.enqueueEvent(event)
+        console.log('[Sales] ✅ Venta guardada localmente (conexión perdida):', saleId)
+      } catch (error) {
+        console.error('[Sales] ❌ Error guardando venta localmente:', error)
+      }
+
+      const mockSale: Sale = {
+        id: saleId,
+        store_id: data.store_id,
+        cash_session_id: data.cash_session_id || null,
+        customer_id: data.customer_id || null,
+        sold_by_user_id: data.user_id || null,
+        sold_by_user: null,
+        customer: data.customer_id
+          ? {
+              id: data.customer_id,
+              name: data.customer_name || '',
+              document_id: data.customer_document_id || null,
+              phone: data.customer_phone || null,
+            }
+          : null,
+        debt: null,
+        exchange_rate: exchangeRate,
+        currency: data.currency,
+        totals: {
+          subtotal_bs: totals.subtotal_bs.toString(),
+          subtotal_usd: totals.subtotal_usd.toString(),
+          discount_bs: totals.discount_bs.toString(),
+          discount_usd: totals.discount_usd.toString(),
+          total_bs: totals.total_bs.toString(),
+          total_usd: totals.total_usd.toString(),
+        },
+        sold_at: new Date(now).toISOString(),
+        items: saleItems.map((item) => ({
+          id: item.line_id,
+          product_id: item.product_id,
+          qty: item.qty,
+          unit_price_bs: item.unit_price_bs,
+          unit_price_usd: item.unit_price_usd,
+          discount_bs: item.discount_bs,
+          discount_usd: item.discount_usd,
+        })),
+        payment: {
+          method: data.payment_method,
+          split: data.split ? {
+            cash_bs: data.split.cash_bs ?? 0,
+            cash_usd: data.split.cash_usd ?? 0,
+            pago_movil_bs: data.split.pago_movil_bs ?? 0,
+            transfer_bs: data.split.transfer_bs ?? 0,
+            other_bs: data.split.other_bs ?? 0,
+          } : undefined,
+        },
+        note: data.note || null,
+      }
+
+      return mockSale
+    }
+
     try {
       console.log('📤 [Frontend] Sending sale data (before cleaning):', {
         cash_session_id: data.cash_session_id,
@@ -378,12 +545,24 @@ export const salesService = {
         keys: Object.keys(cleanedData),
       })
 
-      const response = await api.post<Sale>('/sales', cleanedData)
+      // Agregar timeout de 10 segundos para evitar que se quede colgada
+      const response = await Promise.race([
+        api.post<Sale>('/sales', cleanedData),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('TIMEOUT')), 10000)
+        ),
+      ])
       return response.data
     } catch (error: any) {
-      // Si falla por error de red y tenemos los datos necesarios, guardar offline
+      // Si falla por error de red, timeout, o error offline y tenemos los datos necesarios, guardar offline
       const isNetworkError =
-        !error.response || error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK'
+        !error.response || 
+        error.code === 'ECONNABORTED' || 
+        error.code === 'ERR_NETWORK' ||
+        error.code === 'ERR_INTERNET_DISCONNECTED' ||
+        error.isOffline ||
+        error.message === 'TIMEOUT' ||
+        !navigator.onLine
 
       if (isNetworkError && data.store_id && data.user_id) {
         // Reutilizar la lógica offline
