@@ -71,7 +71,7 @@ export default function LoginPage() {
       prefetchAllData({
         storeId: data.store_id,
         queryClient,
-        onProgress: (progress, message) => {
+        onProgress: (progress) => {
           // Log silencioso - no molestar al usuario
           if (progress === 100) {
             console.log('[Prefetch] ✅ Cacheo completo')

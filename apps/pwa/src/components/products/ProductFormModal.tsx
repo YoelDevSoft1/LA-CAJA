@@ -71,7 +71,6 @@ export default function ProductFormModal({
     staleTime: 1000 * 60 * 60 * 2, // 2 horas
     gcTime: Infinity, // Nunca eliminar
     enabled: isOpen,
-    staleTime: 1000 * 60 * 5, // 5 minutos
   })
 
   // Observar cambios en price_usd y cost_usd para calcular automáticamente los valores en Bs

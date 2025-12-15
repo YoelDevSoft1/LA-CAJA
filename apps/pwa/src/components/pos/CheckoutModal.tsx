@@ -72,7 +72,6 @@ export default function CheckoutModal({
     staleTime: 1000 * 60 * 60 * 2, // 2 horas
     gcTime: Infinity, // Nunca eliminar
     enabled: isOpen, // Solo obtener cuando el modal está abierto
-    staleTime: 1000 * 60 * 5, // 5 minutos de cache
     refetchOnWindowFocus: false,
   })
 

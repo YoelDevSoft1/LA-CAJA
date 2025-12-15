@@ -64,7 +64,6 @@ export default function ChangePriceModal({
     staleTime: 1000 * 60 * 60 * 2, // 2 horas
     gcTime: Infinity, // Nunca eliminar
     enabled: isOpen,
-    staleTime: 1000 * 60 * 5, // 5 minutos
   })
 
   // Observar cambios en price_usd para calcular automáticamente price_bs

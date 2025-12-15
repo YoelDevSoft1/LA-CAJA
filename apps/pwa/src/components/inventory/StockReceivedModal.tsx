@@ -80,7 +80,6 @@ export default function StockReceivedModal({
     staleTime: 1000 * 60 * 60 * 2, // 2 horas
     gcTime: Infinity, // Nunca eliminar
     enabled: isOpen,
-    staleTime: 1000 * 60 * 5,
   })
 
   const products = (productsData?.products || initialProducts?.products || []) as any[]

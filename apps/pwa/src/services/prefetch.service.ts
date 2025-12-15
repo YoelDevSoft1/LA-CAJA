@@ -4,7 +4,7 @@
  */
 
 import { QueryClient } from '@tanstack/react-query'
-import { productsService, ProductSearchResponse } from './products.service'
+import { productsService } from './products.service'
 import { customersService } from './customers.service'
 import { cashService } from './cash.service'
 import { exchangeService } from './exchange.service'
@@ -57,8 +57,8 @@ export async function prefetchAllData({ storeId, queryClient, onProgress }: Pref
       }),
       // También cachear en IndexedDB
       productsService.search({ is_active: true, limit: 500 }, storeId).then((data) => {
-        if (data.products) {
-          return productsCacheService.cacheProducts(storeId, data.products)
+        if (data.products && data.products.length > 0) {
+          return productsCacheService.cacheProducts(data.products, storeId)
         }
       }).catch(() => {
         // Silenciar errores
@@ -69,7 +69,7 @@ export async function prefetchAllData({ storeId, queryClient, onProgress }: Pref
     updateProgress('Cacheando clientes...')
     await queryClient.prefetchQuery({
       queryKey: ['customers', storeId],
-      queryFn: () => customersService.getAll(storeId),
+      queryFn: () => customersService.search(''), // Obtener todos los clientes
       staleTime: 1000 * 60 * 30,
       gcTime: Infinity,
     })
@@ -89,7 +89,7 @@ export async function prefetchAllData({ storeId, queryClient, onProgress }: Pref
     updateProgress('Cacheando ventas recientes...')
     await queryClient.prefetchQuery({
       queryKey: ['sales', 'list', storeId, { limit: 50 }],
-      queryFn: () => salesService.getSales({ limit: 50 }, storeId),
+      queryFn: () => salesService.list({ limit: 50, store_id: storeId }),
       staleTime: 1000 * 60 * 10,
       gcTime: Infinity,
     })
@@ -98,7 +98,7 @@ export async function prefetchAllData({ storeId, queryClient, onProgress }: Pref
     updateProgress('Cacheando deudas...')
     await queryClient.prefetchQuery({
       queryKey: ['debts', 'list', storeId],
-      queryFn: () => debtsService.getAll(storeId),
+      queryFn: () => debtsService.findAll(), // Obtener todas las deudas
       staleTime: 1000 * 60 * 15,
       gcTime: Infinity,
     })
@@ -116,7 +116,7 @@ export async function prefetchAllData({ storeId, queryClient, onProgress }: Pref
     updateProgress('Cacheando sesiones de caja...')
     await queryClient.prefetchQuery({
       queryKey: ['cash', 'sessions', storeId],
-      queryFn: () => cashService.getSessions({ limit: 20 }, storeId),
+      queryFn: () => cashService.listSessions({ limit: 20 }),
       staleTime: 1000 * 60 * 10,
       gcTime: Infinity,
     })
@@ -176,7 +176,7 @@ export async function prefetchPageData(
       case 'sales':
         await queryClient.prefetchQuery({
           queryKey: ['sales', 'list', storeId],
-          queryFn: () => salesService.getSales({ limit: 100 }, storeId),
+          queryFn: () => salesService.list({ limit: 100, store_id: storeId }),
           staleTime: 1000 * 60 * 10,
         })
         break
@@ -190,7 +190,7 @@ export async function prefetchPageData(
           }),
           queryClient.prefetchQuery({
             queryKey: ['cash', 'sessions', storeId],
-            queryFn: () => cashService.getSessions({ limit: 20 }, storeId),
+            queryFn: () => cashService.listSessions({ limit: 20 }),
             staleTime: 1000 * 60 * 10,
           }),
         ])
@@ -199,7 +199,7 @@ export async function prefetchPageData(
       case 'customers':
         await queryClient.prefetchQuery({
           queryKey: ['customers', storeId],
-          queryFn: () => customersService.getAll(storeId),
+          queryFn: () => customersService.search(''), // Obtener todos los clientes
           staleTime: 1000 * 60 * 30,
         })
         break
@@ -208,12 +208,12 @@ export async function prefetchPageData(
         await Promise.all([
           queryClient.prefetchQuery({
             queryKey: ['debts', 'list', storeId],
-            queryFn: () => debtsService.getAll(storeId),
+            queryFn: () => debtsService.findAll(), // Obtener todas las deudas
             staleTime: 1000 * 60 * 15,
           }),
           queryClient.prefetchQuery({
             queryKey: ['customers', storeId],
-            queryFn: () => customersService.getAll(storeId),
+            queryFn: () => customersService.search(''), // Obtener todos los clientes
             staleTime: 1000 * 60 * 30,
           }),
         ])

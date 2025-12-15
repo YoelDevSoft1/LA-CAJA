@@ -71,7 +71,6 @@ export default function AddPaymentModal({
     staleTime: 1000 * 60 * 60 * 2, // 2 horas
     gcTime: Infinity, // Nunca eliminar
     enabled: isOpen,
-    staleTime: 1000 * 60 * 5,
   })
 
   const exchangeRate = bcvRateData?.rate || 0
