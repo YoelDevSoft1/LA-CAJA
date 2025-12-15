@@ -12,11 +12,22 @@ import CustomersPage from './pages/CustomersPage'
 import DebtsPage from './pages/DebtsPage'
 import ReportsPage from './pages/ReportsPage'
 import { useOnline } from './hooks/use-online'
+import { useAuth } from './stores/auth.store'
 import { offlineIndicator } from './services/offline-indicator.service'
 import { syncService } from './services/sync.service'
 
 function App() {
+  const { user } = useAuth()
   const { isOnline, wasOffline } = useOnline();
+
+  // Rehidratar el sync service si hay sesión persistida
+  useEffect(() => {
+    if (user?.store_id) {
+      syncService.ensureInitialized(user.store_id).catch((error) => {
+        console.error('[SyncService] Error al rehidratar:', error)
+      })
+    }
+  }, [user?.store_id])
 
   // Manejar cambios de conectividad
   useEffect(() => {

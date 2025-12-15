@@ -68,10 +68,25 @@ class SyncServiceClass {
   }
 
   /**
+   * Asegura que el servicio esté inicializado (idempotente)
+   * Útil para rehidratar después de un reload con sesión guardada.
+   */
+  async ensureInitialized(storeId: string): Promise<void> {
+    if (this.isInitialized && this.storeId === storeId && this.syncQueue) {
+      return;
+    }
+    const deviceId = this.getOrCreateDeviceId();
+    await this.initialize(storeId, deviceId);
+  }
+
+  /**
    * Inicializa el servicio de sincronización
    * Debe llamarse después de que el usuario esté autenticado
    */
   async initialize(storeId: string, deviceId: string, config?: SyncQueueConfig): Promise<void> {
+    if (this.isInitialized && this.storeId === storeId && this.syncQueue) {
+      return;
+    }
     this.storeId = storeId;
     this.deviceId = deviceId;
 
