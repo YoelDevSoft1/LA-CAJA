@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useAuth } from '@/stores/auth.store'
 
 // Detectar automáticamente la URL del API basándose en la URL actual
 function getApiUrl(): string {
@@ -63,8 +64,21 @@ api.interceptors.response.use(
       // Token inválido o expirado
       localStorage.removeItem('auth_token');
       window.location.href = '/login';
+      return Promise.reject(error);
+    }
+
+    if (error.response?.status === 403) {
+      const auth = useAuth.getState()
+      const currentUser = auth.user
+      if (currentUser) {
+        auth.setUser({
+          ...currentUser,
+          license_status: currentUser.license_status ?? 'suspended',
+        })
+      }
+      window.location.href = '/license'
+      return Promise.reject(error);
     }
     return Promise.reject(error);
   }
 );
-

@@ -348,10 +348,10 @@ export default function MainLayout() {
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="xs" variant="ghost" onClick={markAllAsRead}>
+                    <Button size="sm" variant="ghost" onClick={markAllAsRead}>
                       Marcar leídas
                     </Button>
-                    <Button size="xs" variant="ghost" onClick={clear}>
+                    <Button size="sm" variant="ghost" onClick={clear}>
                       Limpiar
                     </Button>
                   </div>

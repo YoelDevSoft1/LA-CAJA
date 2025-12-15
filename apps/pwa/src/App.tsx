@@ -11,6 +11,7 @@ import CashPage from './pages/CashPage'
 import CustomersPage from './pages/CustomersPage'
 import DebtsPage from './pages/DebtsPage'
 import ReportsPage from './pages/ReportsPage'
+import LicenseBlockedPage from './pages/LicenseBlockedPage'
 import { useOnline } from './hooks/use-online'
 import { useAuth } from './stores/auth.store'
 import { offlineIndicator } from './services/offline-indicator.service'
@@ -48,6 +49,14 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/license"
+          element={
+            <ProtectedRoute allowLicenseBlocked>
+              <LicenseBlockedPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/"
           element={
