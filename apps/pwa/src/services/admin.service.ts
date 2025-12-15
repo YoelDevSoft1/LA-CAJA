@@ -1,4 +1,18 @@
-import { api } from '@/lib/api'
+import axios from 'axios'
+
+function getApiUrl(): string {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:3000'
+  }
+  const hostname = window.location.hostname
+  return `http://${hostname}:3000`
+}
+
+const adminApi = axios.create({
+  baseURL: getApiUrl(),
+  headers: { 'Content-Type': 'application/json' },
+})
 
 const ADMIN_KEY_STORAGE = 'admin_key'
 
@@ -34,7 +48,7 @@ const adminServiceObj = {
 
   async listStores(params?: { status?: string; plan?: string; expiring_in_days?: number }) {
     const key = ensureKey()
-    const res = await api.get<AdminStore[]>('/admin/stores', {
+    const res = await adminApi.get<AdminStore[]>('/admin/stores', {
       params,
       headers: { 'x-admin-key': key },
     })
@@ -52,7 +66,7 @@ const adminServiceObj = {
     }>
   ) {
     const key = ensureKey()
-    const res = await api.patch(`/admin/stores/${storeId}/license`, payload, {
+    const res = await adminApi.patch(`/admin/stores/${storeId}/license`, payload, {
       headers: { 'x-admin-key': key },
     })
     return res.data
@@ -60,7 +74,7 @@ const adminServiceObj = {
 
   async startTrial(storeId: string, days?: number, grace_days?: number) {
     const key = ensureKey()
-    const res = await api.post(
+    const res = await adminApi.post(
       `/admin/stores/${storeId}/trial`,
       { days, grace_days },
       { headers: { 'x-admin-key': key } }
