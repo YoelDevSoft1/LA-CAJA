@@ -30,6 +30,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { formatDateInAppTimeZone, getTimeZoneLabel } from '@/lib/timezone'
 
 const paymentMethodLabels: Record<string, string> = {
   CASH_BS: 'Efectivo Bs',
@@ -105,9 +106,9 @@ export default function SalesPage() {
     enabled: isOwner,
   })
 
-  // Convertir fechas a formato string para la API
-  const effectiveDateFrom = dateFrom ? format(dateFrom, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
-  const effectiveDateTo = dateTo ? format(dateTo, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
+  // Convertir fechas a formato string para la API (usando zona horaria configurada)
+  const effectiveDateFrom = dateFrom ? formatDateInAppTimeZone(dateFrom) : formatDateInAppTimeZone()
+  const effectiveDateTo = dateTo ? formatDateInAppTimeZone(dateTo) : formatDateInAppTimeZone()
 
   // Determinar store_id a usar
   const effectiveStoreId = selectedStoreId || user?.store_id || ''
@@ -178,6 +179,8 @@ export default function SalesPage() {
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Historial de Ventas</h1>
             <p className="text-sm sm:text-base text-muted-foreground mt-1">
               {total} venta{total !== 1 ? 's' : ''} en el período seleccionado
+              {' · '}
+              Zona horaria: {getTimeZoneLabel()}
             </p>
           </div>
           {total > 0 && (
