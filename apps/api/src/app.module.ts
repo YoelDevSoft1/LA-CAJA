@@ -32,6 +32,8 @@ import { Debt } from './database/entities/debt.entity';
 import { DebtPayment } from './database/entities/debt-payment.entity';
 import { Event } from './database/entities/event.entity';
 import { LicenseGuard } from './auth/guards/license.guard';
+import { DatabaseErrorInterceptor } from './common/interceptors/database-error.interceptor';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 
 @Module({
   imports: [
@@ -63,6 +65,7 @@ import { LicenseGuard } from './auth/guards/license.guard';
 
         // Parsear la URL manualmente
         const url = new URL(databaseUrl);
+        const isProduction = configService.get<string>('NODE_ENV') === 'production';
         
         return {
           type: 'postgres',
@@ -74,6 +77,28 @@ import { LicenseGuard } from './auth/guards/license.guard';
           entities: [Store, Profile, StoreMember, Product, InventoryMovement, Sale, SaleItem, CashSession, Customer, Debt, DebtPayment, Event],
           synchronize: false, // Usamos migraciones SQL manuales
           logging: configService.get<string>('NODE_ENV') === 'development',
+          // Configuración robusta del pool de conexiones para Render/Cloud
+          extra: {
+            // Pool de conexiones
+            max: 20, // Máximo de conexiones en el pool
+            min: 2, // Mínimo de conexiones en el pool
+            idleTimeoutMillis: 30000, // Cerrar conexiones inactivas después de 30s
+            connectionTimeoutMillis: 10000, // Timeout al conectar (10s)
+            // Reconexión automática
+            keepAlive: true,
+            keepAliveInitialDelayMillis: 10000, // Enviar keep-alive cada 10s
+          },
+          // Configuración de reconexión automática
+          retryAttempts: 10, // Reintentar conexión hasta 10 veces
+          retryDelay: 3000, // Esperar 3 segundos entre reintentos
+          // Timeouts
+          connectTimeoutMS: 10000, // 10 segundos para conectar
+          // Manejo de errores de conexión
+          autoLoadEntities: false, // Ya especificamos entities manualmente
+          // SSL para producción (Render/Supabase)
+          ssl: isProduction ? {
+            rejectUnauthorized: false, // Necesario para Supabase y algunos servicios cloud
+          } : false,
         };
       },
       inject: [ConfigService],
@@ -103,6 +128,11 @@ import { LicenseGuard } from './auth/guards/license.guard';
     {
       provide: APP_GUARD,
       useClass: LicenseGuard,
+    },
+    // Interceptor global para manejar errores de base de datos
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: DatabaseErrorInterceptor,
     },
   ],
 })

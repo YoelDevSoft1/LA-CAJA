@@ -115,6 +115,19 @@ const adminServiceObj = {
     })
     return res.data
   },
+
+  async createStore(payload: {
+    name: string
+    plan?: string
+    status?: string
+    expires_at?: string
+    grace_days?: number
+    notes?: string
+  }) {
+    const key = ensureKey()
+    const res = await adminApi.post('/admin/stores', payload, { headers: { 'x-admin-key': key } })
+    return res.data
+  },
 }
 
 export const adminService = adminServiceObj

@@ -65,6 +65,12 @@ export default function AdminPage() {
     role: 'cashier',
     pin: '',
   })
+  const [newStore, setNewStore] = useState<{ name: string; plan: string; days: string; notes: string }>({
+    name: '',
+    plan: '',
+    days: '',
+    notes: '',
+  })
   const { data: stores, isLoading, refetch, error } = useQuery<AdminStore[], Error>({
     queryKey: ['admin-stores', statusFilter, planFilter, expiringIn, adminKey],
     queryFn: () =>
@@ -145,6 +151,25 @@ export default function AdminPage() {
       data: { status: 'active', expires_at: newDate.toISOString(), plan: store.license_plan ?? 'plan' },
     })
   }
+
+  const createStoreMutation = useMutation({
+    mutationFn: () =>
+      adminService.createStore({
+        name: newStore.name,
+        plan: newStore.plan || undefined,
+        expires_at: newStore.days ? new Date(Date.now() + Number(newStore.days) * 86400000).toISOString() : undefined,
+        notes: newStore.notes || undefined,
+      }),
+    onSuccess: () => {
+      toast.success('Tienda creada')
+      setNewStore({ name: '', plan: '', days: '', notes: '' })
+      qc.invalidateQueries({ queryKey: ['admin-stores'] })
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Error'
+      toast.error(msg)
+    },
+  })
 
   const {
     data: members,
@@ -287,13 +312,37 @@ export default function AdminPage() {
                 <Sparkles className="h-5 w-5 text-amber-300" />
               </h1>
             </div>
-            <div className="text-xs text-slate-400">
-              Sincronizado{' '}
-              {stores ? (
-                <span className="text-emerald-300">OK</span>
-              ) : (
-                <span className="text-slate-400">pendiente</span>
-              )}
+            <div className="flex items-center gap-2">
+              <div className="text-xs text-slate-400">
+                Sincronizado {stores ? <span className="text-emerald-300">OK</span> : <span className="text-slate-400">pendiente</span>}
+              </div>
+              <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-3 py-2">
+                <Input
+                  placeholder="Nombre de tienda"
+                  value={newStore.name}
+                  onChange={(e) => setNewStore((prev) => ({ ...prev, name: e.target.value }))}
+                  className="h-9 bg-slate-950 border-slate-800 text-slate-100"
+                />
+                <Input
+                  placeholder="Plan (opcional)"
+                  value={newStore.plan}
+                  onChange={(e) => setNewStore((prev) => ({ ...prev, plan: e.target.value }))}
+                  className="h-9 bg-slate-950 border-slate-800 text-slate-100 w-32"
+                />
+                <Input
+                  placeholder="Días trial"
+                  value={newStore.days}
+                  onChange={(e) => setNewStore((prev) => ({ ...prev, days: e.target.value }))}
+                  className="h-9 bg-slate-950 border-slate-800 text-slate-100 w-24"
+                />
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white h-9"
+                  disabled={!newStore.name || createStoreMutation.isPending}
+                  onClick={() => createStoreMutation.mutate()}
+                >
+                  Crear tienda
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -489,7 +538,7 @@ export default function AdminPage() {
       <Sheet open={!!userSheetStore} onOpenChange={(open) => !open && setUserSheetStore(null)}>
         <SheetContent className="bg-slate-900 text-slate-100 border-slate-800 w-[420px]">
           <SheetHeader>
-            <SheetTitle>Usuarios de {userSheetStore?.name || ''}</SheetTitle>
+            <SheetTitle className="text-white">Usuarios de {userSheetStore?.name || ''}</SheetTitle>
             <SheetDescription className="text-slate-400">
               Crea, revisa o elimina usuarios (owner/cashier) de la tienda.
             </SheetDescription>

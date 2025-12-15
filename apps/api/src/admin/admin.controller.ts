@@ -22,6 +22,7 @@ import { CreateTrialDto, UpdateLicenseDto } from './dto/update-license.dto';
 import { AdminCreateUserDto } from './dto/admin-user.dto';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
+import { AdminCreateStoreDto } from './dto/admin-store.dto';
 
 @Controller('admin')
 @UseGuards(AdminApiGuard)
@@ -147,6 +148,32 @@ export class AdminController {
       license_plan: store.license_plan,
       license_expires_at: store.license_expires_at,
       license_grace_days: store.license_grace_days,
+    };
+  }
+
+  @Post('stores')
+  async createStore(@Body() dto: AdminCreateStoreDto) {
+    const store = this.storeRepo.create({
+      id: randomUUID(),
+      name: dto.name,
+      license_status: dto.status ?? 'active',
+      license_plan: dto.plan ?? null,
+      license_expires_at: dto.expires_at ? new Date(dto.expires_at) : null,
+      license_grace_days: dto.grace_days ?? Number(process.env.LICENSE_GRACE_DEFAULT ?? 3),
+      license_notes: dto.notes ?? null,
+    });
+    const saved = await this.storeRepo.save(store);
+    return {
+      id: saved.id,
+      name: saved.name,
+      license_status: saved.license_status,
+      license_plan: saved.license_plan,
+      license_expires_at: saved.license_expires_at,
+      license_grace_days: saved.license_grace_days,
+      license_notes: saved.license_notes,
+      created_at: saved.created_at,
+      member_count: 0,
+      members: [],
     };
   }
 
