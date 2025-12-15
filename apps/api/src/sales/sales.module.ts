@@ -10,12 +10,24 @@ import { Customer } from '../database/entities/customer.entity';
 import { Profile } from '../database/entities/profile.entity';
 import { Debt } from '../database/entities/debt.entity';
 import { DebtPayment } from '../database/entities/debt-payment.entity';
+import { CashSession } from '../database/entities/cash-session.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Sale, SaleItem, Product, InventoryMovement, Customer, Profile, Debt, DebtPayment])],
+  imports: [
+    TypeOrmModule.forFeature([
+      Sale,
+      SaleItem,
+      Product,
+      InventoryMovement,
+      Customer,
+      Profile,
+      Debt,
+      DebtPayment,
+      CashSession,
+    ]),
+  ],
   controllers: [SalesController],
   providers: [SalesService],
   exports: [SalesService],
 })
 export class SalesModule {}
-
