@@ -65,6 +65,8 @@ export default function LoginPage() {
         store_id: data.store_id,
         role: data.role,
         full_name: data.full_name,
+        license_status: data.license_status,
+        license_expires_at: data.license_expires_at,
       })
       toast.success(`Bienvenido, ${data.full_name || 'Usuario'}`)
       
@@ -162,11 +164,16 @@ export default function LoginPage() {
                       <SelectValue placeholder="Selecciona tu tienda" />
                     </SelectTrigger>
                     <SelectContent>
-                      {stores?.map((store) => (
-                        <SelectItem key={store.id} value={store.id}>
-                          {store.name}
-                        </SelectItem>
-                      ))}
+                      {stores?.map((store) => {
+                        const expired = store.license_expires_at ? new Date(store.license_expires_at).getTime() < Date.now() : false
+                        const blocked = store.license_status === 'suspended' || expired
+                        return (
+                          <SelectItem key={store.id} value={store.id} disabled={blocked}>
+                            {store.name}
+                            {blocked && ' (licencia vencida/suspendida)'}
+                          </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
                 )}

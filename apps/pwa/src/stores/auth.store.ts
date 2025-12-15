@@ -6,6 +6,8 @@ export interface AuthUser {
   store_id: string
   role: 'owner' | 'cashier'
   full_name: string | null
+  license_status?: string
+  license_expires_at?: string | null
 }
 
 interface AuthState {
@@ -38,8 +40,8 @@ export const useAuth = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,
+        token: state.token,
       }),
     }
   )
 )
-

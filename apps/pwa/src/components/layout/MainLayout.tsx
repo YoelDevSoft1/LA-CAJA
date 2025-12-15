@@ -42,6 +42,7 @@ import { ScrollArea as ShadScrollArea } from '@/components/ui/scroll-area'
 import { useOnline } from '@/hooks/use-online'
 import { inventoryService } from '@/services/inventory.service'
 import { cashService } from '@/services/cash.service'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 const navItems = [
   { path: '/pos', label: 'Punto de Venta', icon: ShoppingCart, badge: null },
@@ -63,6 +64,13 @@ export default function MainLayout() {
   const { items: notifications, add, addUnique, markAsRead, markAllAsRead, clear } = useNotifications()
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications])
   const storeId = user?.store_id
+
+  // Licencia (solo lectura)
+  const licenseStatus = user?.license_status || 'active'
+  const licenseExpiresAt = user?.license_expires_at ? new Date(user.license_expires_at) : null
+  const daysToExpire = licenseExpiresAt ? Math.ceil((licenseExpiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null
+  const isExpired = licenseStatus === 'suspended' || (licenseExpiresAt ? licenseExpiresAt.getTime() < Date.now() : false)
+  const isExpiringSoon = !isExpired && daysToExpire !== null && daysToExpire <= 7
 
   // Alertas de stock bajo (se refrescan cada 5 min)
   const { data: lowStock } = useQuery({
@@ -122,6 +130,24 @@ export default function MainLayout() {
       type: isOnline ? 'success' : 'warning',
     })
   }, [isOnline, add])
+
+  // Alertas de licencia
+  useEffect(() => {
+    if (!storeId) return
+    if (isExpired) {
+      addUnique(`license-expired-${storeId}`, {
+        title: 'Licencia vencida o suspendida',
+        description: 'Contacta al administrador para renovar tu acceso.',
+        type: 'error',
+      })
+    } else if (isExpiringSoon && daysToExpire !== null) {
+      addUnique(`license-expiring-${storeId}`, {
+        title: 'Licencia por vencer',
+        description: `Tu licencia vence en ${daysToExpire} día(s).`,
+        type: 'warning',
+      })
+    }
+  }, [storeId, isExpired, isExpiringSoon, daysToExpire, addUnique])
 
   // Alertas de stock bajo
   useEffect(() => {
@@ -429,6 +455,20 @@ export default function MainLayout() {
             </DropdownMenu>
           </div>
         </div>
+        {(isExpired || isExpiringSoon) && (
+          <div className="px-6 pb-3">
+            <Alert variant={isExpired ? 'destructive' : 'default'}>
+              <AlertTitle>
+                {isExpired ? 'Licencia vencida/suspendida' : `Licencia vence en ${daysToExpire} día(s)` }
+              </AlertTitle>
+              <AlertDescription>
+                {isExpired
+                  ? 'Renueva tu licencia para continuar operando.'
+                  : 'Por favor renueva antes de la fecha de vencimiento.'}
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
       </header>
 
       <div className="flex h-[calc(100vh-4rem)]">
