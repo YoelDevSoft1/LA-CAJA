@@ -24,6 +24,7 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000, // Timeout de 10 segundos para todas las peticiones
 });
 
 // Interceptor para agregar token JWT y bloquear peticiones offline

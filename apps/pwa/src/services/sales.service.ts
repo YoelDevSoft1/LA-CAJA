@@ -563,12 +563,25 @@ export const salesService = {
 
       // Agregar timeout de 5 segundos para evitar que se quede colgada
       // El interceptor de axios ya rechaza si está offline, así que esto solo se ejecuta si está online
+      console.log('[Sales] ⏳ Iniciando llamada HTTP con timeout de 5 segundos...')
+      
       const response = await Promise.race([
-        api.post<Sale>('/sales', cleanedData),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('TIMEOUT')), 5000)
-        ),
+        api.post<Sale>('/sales', cleanedData).then((res) => {
+          console.log('[Sales] ✅ Respuesta HTTP recibida exitosamente')
+          return res
+        }).catch((err) => {
+          console.log('[Sales] ❌ Error en llamada HTTP:', err)
+          throw err
+        }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            console.log('[Sales] ⏰ TIMEOUT después de 5 segundos')
+            reject(new Error('TIMEOUT'))
+          }, 5000)
+        }),
       ])
+      
+      console.log('[Sales] ✅ Venta procesada exitosamente:', response.data?.id)
       return response.data
     } catch (error: any) {
       // Si falla por error de red, timeout, o error offline y tenemos los datos necesarios, guardar offline
