@@ -21,10 +21,11 @@
     "paths": {
       "@/*": ["./src/*"],
       "@la-caja/domain": ["../../packages/domain/src/index.ts"],
-      "@la-caja/domain/*": ["../../packages/domain/src/*"]
+      "@la-caja/domain/*": ["../../packages/domain/src/*"],
+      "@la-caja/sync": ["../../packages/sync/src/index.ts"],
+      "@la-caja/sync/*": ["../../packages/sync/src/*"]
     }
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
-
