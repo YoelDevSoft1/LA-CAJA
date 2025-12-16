@@ -1,0 +1,53 @@
+# LA-CAJA - Cursor Rules & Agent Prompts
+# Este archivo configura los prompts y reglas para agentes de IA en Cursor
+
+## CONTEXTO DEL PROYECTO
+LA-CAJA es un sistema POS offline-first para Venezuela con:
+- Arquitectura: Event Sourcing + CQRS + Offline-First
+- Backend: NestJS 10+ con Fastify, PostgreSQL, TypeORM
+- Frontend: React 18+ con TypeScript, Vite, PWA
+- Stack: TypeScript strict, Event-driven, Multi-tenant SaaS
+
+## REGLAS GENERALES
+- Usar TypeScript strict mode (no `any`)
+- Seguir principios offline-first (todo funciona sin internet)
+- Generar eventos para todos los cambios de estado
+- Validar todas las entradas
+- Incluir manejo de errores apropiado
+- Documentar con JSDoc
+- Aislar por store_id (multi-tenant)
+
+## PROMPT BASE PARA AGENTES
+Cuando se solicite implementar una funcionalidad, el agente debe:
+
+1. **ANALIZAR**: Leer el código existente relacionado, entender el contexto
+2. **DISEÑAR**: Proponer estructura siguiendo patrones del proyecto
+3. **IMPLEMENTAR**: Código completo, tipado, con tests
+4. **VALIDAR**: Verificar offline-first, eventos, validaciones, seguridad
+5. **DOCUMENTAR**: JSDoc, comentarios para lógica compleja
+
+## ROLES DISPONIBLES
+Para usar un rol específico, menciona: "@backend", "@frontend", "@ml", "@devops", "@qa", "@data", "@security", "@architect"
+
+Ver documentación completa en: docs/PROMPTS_AGENTES_DESARROLLO.md
+
+## ESTRUCTURA DE ARCHIVOS
+- Backend: apps/api/src/
+- Frontend: apps/pwa/src/
+- Desktop: apps/desktop/src/
+- Domain: packages/domain/
+- Sync: packages/sync/
+- Migrations: apps/api/src/database/migrations/
+
+## CONVENCIONES
+- Nombres: camelCase (variables), PascalCase (clases), UPPER_CASE (constantes)
+- Archivos: kebab-case.ts
+- Eventos: PascalCaseEvent (ej: SaleCreatedEvent)
+- DTOs: CreateXDto, UpdateXDto, XResponseDto
+
+## PATRONES ESPECÍFICOS
+- Eventos: Siempre incluir event_id, store_id, device_id, seq, type, version, created_at, actor, payload
+- Validación: Usar class-validator en DTOs
+- Errores: Usar excepciones apropiadas con mensajes claros
+- Tests: Unit tests para servicios, integration tests para endpoints
+

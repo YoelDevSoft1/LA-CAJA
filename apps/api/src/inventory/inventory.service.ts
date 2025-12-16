@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InventoryMovement, MovementType } from '../database/entities/inventory-movement.entity';
@@ -16,7 +16,12 @@ export class InventoryService {
     private productRepository: Repository<Product>,
   ) {}
 
-  async stockReceived(storeId: string, dto: StockReceivedDto): Promise<InventoryMovement> {
+  async stockReceived(
+    storeId: string,
+    dto: StockReceivedDto,
+    userId: string,
+    role: string,
+  ): Promise<InventoryMovement> {
     // Verificar que el producto existe y pertenece a la tienda
     const product = await this.productRepository.findOne({
       where: { id: dto.product_id, store_id: storeId },
@@ -37,12 +42,20 @@ export class InventoryService {
       note: dto.note || null,
       ref: dto.ref || null,
       happened_at: new Date(),
+      approved: role === 'owner',
+      requested_by: role === 'owner' ? null : userId,
+      approved_by: role === 'owner' ? userId : null,
+      approved_at: role === 'owner' ? new Date() : null,
     });
 
     return this.movementRepository.save(movement);
   }
 
-  async stockAdjusted(storeId: string, dto: StockAdjustedDto): Promise<InventoryMovement> {
+  async stockAdjusted(
+    storeId: string,
+    dto: StockAdjustedDto,
+    userId: string,
+  ): Promise<InventoryMovement> {
     // Verificar que el producto existe
     const product = await this.productRepository.findOne({
       where: { id: dto.product_id, store_id: storeId },
@@ -71,6 +84,10 @@ export class InventoryService {
       note: dto.note || null,
       ref: null,
       happened_at: new Date(),
+      approved: true,
+      requested_by: userId,
+      approved_by: userId,
+      approved_at: new Date(),
     });
 
     return this.movementRepository.save(movement);
@@ -82,6 +99,7 @@ export class InventoryService {
       .select('COALESCE(SUM(movement.qty_delta), 0)', 'stock')
       .where('movement.store_id = :storeId', { storeId })
       .andWhere('movement.product_id = :productId', { productId })
+      .andWhere('movement.approved = true')
       .getRawOne();
 
     return parseInt(result.stock, 10) || 0;
@@ -93,7 +111,7 @@ export class InventoryService {
       .leftJoin(
         'inventory_movements',
         'movement',
-        'movement.product_id = product.id AND movement.store_id = :storeId',
+        'movement.product_id = product.id AND movement.store_id = :storeId AND movement.approved = true',
         { storeId },
       )
       .select('product.id', 'product_id')
@@ -129,6 +147,7 @@ export class InventoryService {
     productId?: string,
     limit: number = 50,
     offset: number = 0,
+    includePending: boolean = true,
   ): Promise<{ movements: any[]; total: number }> {
     const query = this.movementRepository
       .createQueryBuilder('movement')
@@ -138,6 +157,10 @@ export class InventoryService {
 
     if (productId) {
       query.andWhere('movement.product_id = :productId', { productId });
+    }
+
+    if (!includePending) {
+      query.andWhere('movement.approved = true');
     }
 
     const total = await query.getCount();
@@ -155,5 +178,28 @@ export class InventoryService {
       total,
     };
   }
-}
 
+  async approveReceivedMovement(storeId: string, movementId: string, approverId: string, role: string) {
+    if (role !== 'owner') {
+      throw new ForbiddenException('Solo un owner puede aprobar entradas de stock');
+    }
+
+    const movement = await this.movementRepository.findOne({
+      where: { id: movementId, store_id: storeId, movement_type: 'received' },
+    });
+
+    if (!movement) {
+      throw new NotFoundException('Movimiento no encontrado');
+    }
+
+    if (movement.approved) {
+      return movement;
+    }
+
+    movement.approved = true;
+    movement.approved_by = approverId;
+    movement.approved_at = new Date();
+
+    return this.movementRepository.save(movement);
+  }
+}

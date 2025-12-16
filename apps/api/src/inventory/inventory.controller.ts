@@ -14,6 +14,7 @@ import { InventoryService } from './inventory.service';
 import { StockReceivedDto } from './dto/stock-received.dto';
 import { StockAdjustedDto } from './dto/stock-adjusted.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ApproveStockDto } from './dto/approve-stock.dto';
 
 @Controller('inventory')
 @UseGuards(JwtAuthGuard)
@@ -24,14 +25,21 @@ export class InventoryController {
   @HttpCode(HttpStatus.CREATED)
   async stockReceived(@Body() dto: StockReceivedDto, @Request() req: any) {
     const storeId = req.user.store_id;
-    return this.inventoryService.stockReceived(storeId, dto);
+    return this.inventoryService.stockReceived(storeId, dto, req.user.sub, req.user.role);
   }
 
   @Post('stock/adjust')
   @HttpCode(HttpStatus.CREATED)
   async stockAdjusted(@Body() dto: StockAdjustedDto, @Request() req: any) {
     const storeId = req.user.store_id;
-    return this.inventoryService.stockAdjusted(storeId, dto);
+    return this.inventoryService.stockAdjusted(storeId, dto, req.user.sub);
+  }
+
+  @Post('stock/approve')
+  @HttpCode(HttpStatus.OK)
+  async approveStock(@Body() dto: ApproveStockDto, @Request() req: any) {
+    const storeId = req.user.store_id;
+    return this.inventoryService.approveReceivedMovement(storeId, dto.movement_id, req.user.sub, req.user.role);
   }
 
   @Get('stock/status')
@@ -51,6 +59,7 @@ export class InventoryController {
     @Query('product_id') productId: string,
     @Query('limit') limit: string,
     @Query('offset') offset: string,
+    @Query('include_pending') includePending: string,
     @Request() req: any,
   ) {
     const storeId = req.user.store_id;
@@ -59,6 +68,7 @@ export class InventoryController {
       productId,
       limit ? parseInt(limit, 10) : 50,
       offset ? parseInt(offset, 10) : 0,
+      includePending ? includePending === 'true' : true,
     );
   }
 
@@ -69,4 +79,3 @@ export class InventoryController {
     return { product_id: productId, current_stock: stock };
   }
 }
-

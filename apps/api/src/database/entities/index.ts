@@ -10,4 +10,6 @@ export { Customer } from './customer.entity';
 export { Debt, DebtStatus } from './debt.entity';
 export { DebtPayment } from './debt-payment.entity';
 export { Event } from './event.entity';
+export { Shift, ShiftStatus } from './shift.entity';
+export { ShiftCut, CutType } from './shift-cut.entity';
 

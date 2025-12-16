@@ -12,6 +12,7 @@ import { ProductsModule } from './products/products.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { SalesModule } from './sales/sales.module';
 import { CashModule } from './cash/cash.module';
+import { ShiftsModule } from './shifts/shifts.module';
 import { CustomersModule } from './customers/customers.module';
 import { DebtsModule } from './debts/debts.module';
 import { ReportsModule } from './reports/reports.module';
@@ -27,6 +28,8 @@ import { InventoryMovement } from './database/entities/inventory-movement.entity
 import { Sale } from './database/entities/sale.entity';
 import { SaleItem } from './database/entities/sale-item.entity';
 import { CashSession } from './database/entities/cash-session.entity';
+import { Shift } from './database/entities/shift.entity';
+import { ShiftCut } from './database/entities/shift-cut.entity';
 import { Customer } from './database/entities/customer.entity';
 import { Debt } from './database/entities/debt.entity';
 import { DebtPayment } from './database/entities/debt-payment.entity';
@@ -74,7 +77,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
           username: url.username,
           password: decodeURIComponent(url.password), // Decodificar contraseña URL-encoded
           database: url.pathname.slice(1), // Remover el '/' inicial
-          entities: [Store, Profile, StoreMember, Product, InventoryMovement, Sale, SaleItem, CashSession, Customer, Debt, DebtPayment, Event],
+          entities: [Store, Profile, StoreMember, Product, InventoryMovement, Sale, SaleItem, CashSession, Shift, ShiftCut, Customer, Debt, DebtPayment, Event],
           synchronize: false, // Usamos migraciones SQL manuales
           logging: configService.get<string>('NODE_ENV') === 'development',
           // Configuración robusta del pool de conexiones para Render/Cloud
@@ -110,6 +113,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     InventoryModule,
     SalesModule,
         CashModule,
+        ShiftsModule,
         CustomersModule,
         DebtsModule,
         ReportsModule,

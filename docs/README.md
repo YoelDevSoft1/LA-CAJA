@@ -41,6 +41,14 @@ Roadmaps y planificación de sprints:
 - Planes de migración
 - Roadmaps de UX/UI
 
+### 📊 [Estrategia y Competitividad](./)
+Documentación estratégica y análisis competitivo:
+- **[White Paper y Roadmap Competitivo](./WHITE_PAPER_ROADMAP_COMPETITIVO.md)** - Análisis completo vs competencia
+- **[Resumen Ejecutivo Competitivo](./RESUMEN_EJECUTIVO_COMPETITIVO.md)** - Resumen ejecutivo para stakeholders
+- **[Plan de Implementación Técnico](./PLAN_IMPLEMENTACION_TECNICO.md)** - Guía técnica detallada de implementación
+- **[Prompts para Agentes de Desarrollo](./PROMPTS_AGENTES_DESARROLLO.md)** 🤖 - Prompts optimizados para IA por rol
+- [Bitácora de Implementación](./IMPLEMENTATION_LOG.md) - Estado actual del proyecto
+
 ## Guía Rápida
 
 ### Para empezar
@@ -57,4 +65,11 @@ Roadmaps y planificación de sprints:
 1. [Arquitectura Offline-First](./architecture/ARQUITECTURA_OFFLINE_ROBUSTA.md)
 2. [Sistema de Sincronización](./architecture/SYNC_IMPLEMENTACION_COMPLETA.md)
 3. [Sistema de Cache](./architecture/SISTEMA_CACHE_COMPLETO.md)
+
+### Para estrategia y competitividad
+1. **[Resumen Ejecutivo Competitivo](./RESUMEN_EJECUTIVO_COMPETITIVO.md)** ⭐ - Empieza aquí
+2. [White Paper y Roadmap Competitivo](./WHITE_PAPER_ROADMAP_COMPETITIVO.md) - Análisis completo
+3. [Plan de Implementación Técnico](./PLAN_IMPLEMENTACION_TECNICO.md) - Detalles técnicos
+4. **[Prompts para Agentes de Desarrollo](./PROMPTS_AGENTES_DESARROLLO.md)** 🤖 - Prompts optimizados por rol
+5. **[Configuración Optimizada de Cursor](./CURSOR_SETUP_OPTIMIZADO.md)** 🚀 - Guía de uso en Cursor
 

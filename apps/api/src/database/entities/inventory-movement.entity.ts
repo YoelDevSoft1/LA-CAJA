@@ -29,6 +29,18 @@ export class InventoryMovement {
   @Column({ type: 'int' })
   qty_delta: number; // Positivo para entradas, negativo para salidas
 
+  @Column({ type: 'boolean', default: true })
+  approved: boolean;
+
+  @Column({ type: 'uuid', nullable: true })
+  requested_by: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  approved_by: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  approved_at: Date | null;
+
   @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
   unit_cost_bs: number;
 
@@ -44,4 +56,3 @@ export class InventoryMovement {
   @Column({ type: 'timestamptz' })
   happened_at: Date;
 }
-
