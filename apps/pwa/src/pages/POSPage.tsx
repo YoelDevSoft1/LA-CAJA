@@ -9,8 +9,10 @@ import { useCart, CartItem } from '@/stores/cart.store'
 import { useAuth } from '@/stores/auth.store'
 import { useOnline } from '@/hooks/use-online'
 import { printService } from '@/services/print.service'
+import { fastCheckoutService, QuickProduct } from '@/services/fast-checkout.service'
 import toast from 'react-hot-toast'
 import CheckoutModal from '@/components/pos/CheckoutModal'
+import QuickProductsGrid from '@/components/fast-checkout/QuickProductsGrid'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -35,6 +37,70 @@ export default function POSPage() {
     queryFn: () => cashService.getCurrentSession(),
     refetchInterval: 60000, // Refrescar cada minuto
   })
+
+  // Obtener configuración de modo rápido
+  const { data: fastCheckoutConfig } = useQuery({
+    queryKey: ['fast-checkout', 'config'],
+    queryFn: () => fastCheckoutService.getFastCheckoutConfig(),
+    staleTime: 1000 * 60 * 5, // 5 minutos
+  })
+
+  // Handler para productos rápidos
+  const handleQuickProductClick = async (quickProduct: QuickProduct) => {
+    if (!quickProduct.product) {
+      toast.error('Producto no encontrado')
+      return
+    }
+
+    // Buscar si el producto ya está en el carrito
+    const existingItem = items.find((item) => item.product_id === quickProduct.product_id)
+
+    if (existingItem) {
+      // Si existe, aumentar cantidad
+      updateItem(existingItem.id, { qty: existingItem.qty + 1 })
+      toast.success(`${quickProduct.product.name} agregado al carrito`)
+    } else {
+      // Si no existe, agregar nuevo item
+      addItem({
+        product_id: quickProduct.product_id,
+        product_name: quickProduct.product.name,
+        qty: 1,
+        unit_price_bs: Number(quickProduct.product.price_bs),
+        unit_price_usd: Number(quickProduct.product.price_usd),
+      })
+      toast.success(`${quickProduct.product.name} agregado al carrito`)
+    }
+  }
+
+  // Soporte para teclas de acceso rápido
+  useEffect(() => {
+    if (!fastCheckoutConfig?.enabled) return
+
+    const handleKeyPress = async (e: KeyboardEvent) => {
+      // Ignorar si está escribiendo en un input
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return
+      }
+
+      const key = e.key.toUpperCase()
+
+      try {
+        const quickProduct = await fastCheckoutService.getQuickProductByKey(key)
+        if (quickProduct && quickProduct.is_active) {
+          handleQuickProductClick(quickProduct)
+        }
+      } catch (error) {
+        // Silenciar errores, simplemente no hacer nada si no hay producto para esa tecla
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [fastCheckoutConfig, items])
 
   const { isOnline } = useOnline(); // Usar hook más confiable
   const [initialData, setInitialData] = useState<ProductSearchResponse | undefined>(undefined);
@@ -236,6 +302,11 @@ export default function POSPage() {
               autoFocus
             />
           </div>
+
+          {/* Productos rápidos (solo si está habilitado) */}
+          {fastCheckoutConfig?.enabled && (
+            <QuickProductsGrid onProductClick={handleQuickProductClick} />
+          )}
 
           {/* Lista de productos */}
           <Card className="border border-border flex flex-col">

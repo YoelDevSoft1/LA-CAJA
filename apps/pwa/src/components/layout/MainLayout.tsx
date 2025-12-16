@@ -20,6 +20,9 @@ import {
   AlertTriangle,
   CheckCircle2,
   Info,
+  Clock,
+  Percent,
+  Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -51,6 +54,10 @@ const navItems = [
   { path: '/inventory', label: 'Inventario', icon: Boxes, badge: null },
   { path: '/sales', label: 'Ventas', icon: FileText, badge: null },
   { path: '/cash', label: 'Caja', icon: DollarSign, badge: null },
+  { path: '/shifts', label: 'Turnos', icon: Clock, badge: null },
+  { path: '/payments', label: 'Pagos', icon: Settings, badge: null },
+  { path: '/discounts', label: 'Descuentos', icon: Percent, badge: null },
+  { path: '/fast-checkout', label: 'Caja Rápida', icon: Zap, badge: null },
   { path: '/customers', label: 'Clientes', icon: Users, badge: null },
   { path: '/debts', label: 'Fiao', icon: Users, badge: 'Beta' },
   { path: '/reports', label: 'Reportes', icon: BarChart3, badge: null },

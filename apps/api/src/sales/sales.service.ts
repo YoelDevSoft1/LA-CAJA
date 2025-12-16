@@ -12,6 +12,9 @@ import { CreateSaleDto } from './dto/create-sale.dto';
 import { randomUUID } from 'crypto';
 import { CashSession } from '../database/entities/cash-session.entity';
 import { IsNull } from 'typeorm';
+import { PaymentRulesService } from '../payments/payment-rules.service';
+import { DiscountRulesService } from '../discounts/discount-rules.service';
+import { FastCheckoutRulesService } from '../fast-checkout/fast-checkout-rules.service';
 
 @Injectable()
 export class SalesService {
@@ -33,12 +36,32 @@ export class SalesService {
     @InjectRepository(CashSession)
     private cashSessionRepository: Repository<CashSession>,
     private dataSource: DataSource,
+    private paymentRulesService: PaymentRulesService,
+    private discountRulesService: DiscountRulesService,
+    private fastCheckoutRulesService: FastCheckoutRulesService,
   ) {}
 
   async create(storeId: string, dto: CreateSaleDto, userId?: string): Promise<Sale> {
     // Validar que hay items
     if (!dto.items || dto.items.length === 0) {
       throw new BadRequestException('El carrito no puede estar vacío');
+    }
+
+    // Validar modo caja rápida si aplica
+    const hasDiscounts = dto.items.some(
+      (item) => (item.discount_bs || 0) > 0 || (item.discount_usd || 0) > 0,
+    );
+    const hasCustomer = !!(dto.customer_id || dto.customer_name || dto.customer_document_id);
+
+    const fastCheckoutValidation = await this.fastCheckoutRulesService.validateFastCheckout(
+      storeId,
+      dto.items.length,
+      hasDiscounts,
+      hasCustomer,
+    );
+
+    if (!fastCheckoutValidation.valid) {
+      throw new BadRequestException(fastCheckoutValidation.error);
     }
 
     // Validar que exista una sesión de caja abierta
@@ -189,6 +212,62 @@ export class SalesService {
       // Calcular totales
       const totalBs = subtotalBs;
       const totalUsd = subtotalUsd;
+
+      // Validar descuentos si hay alguno
+      if (discountBs > 0 || discountUsd > 0) {
+        // Calcular porcentaje de descuento basado en el subtotal original
+        const originalSubtotalBs = subtotalBs + discountBs;
+        const originalSubtotalUsd = subtotalUsd + discountUsd;
+        const discountPercentage =
+          originalSubtotalBs > 0
+            ? (discountBs / originalSubtotalBs) * 100
+            : originalSubtotalUsd > 0
+              ? (discountUsd / originalSubtotalUsd) * 100
+              : 0;
+
+        const discountValidation = await this.discountRulesService.requiresAuthorization(
+          storeId,
+          discountBs,
+          discountUsd,
+          discountPercentage,
+        );
+
+        // Si requiere autorización y no está auto-aprobado, lanzar error
+        if (
+          discountValidation.requires_authorization &&
+          !discountValidation.auto_approved
+        ) {
+          throw new BadRequestException(
+            discountValidation.error ||
+              'Este descuento requiere autorización de un supervisor',
+          );
+        }
+      }
+
+      // Validar método de pago según configuración de topes
+      if (dto.payment_method === 'SPLIT' && dto.split) {
+        // Validar pago split
+        const splitValidation = await this.paymentRulesService.validateSplitPayment(
+          storeId,
+          dto.split,
+        );
+        if (!splitValidation.valid) {
+          throw new BadRequestException(splitValidation.error);
+        }
+      } else {
+        // Validar método de pago individual
+        const currency = dto.currency === 'BS' ? 'BS' : 'USD';
+        const amount = currency === 'BS' ? totalBs : totalUsd;
+        const validation = await this.paymentRulesService.validatePaymentMethod(
+          storeId,
+          dto.payment_method,
+          amount,
+          currency,
+        );
+        if (!validation.valid) {
+          throw new BadRequestException(validation.error);
+        }
+      }
 
       // Crear la venta
       const sale = manager.create(Sale, {

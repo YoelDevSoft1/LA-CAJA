@@ -13,6 +13,9 @@ import { InventoryModule } from './inventory/inventory.module';
 import { SalesModule } from './sales/sales.module';
 import { CashModule } from './cash/cash.module';
 import { ShiftsModule } from './shifts/shifts.module';
+import { PaymentsModule } from './payments/payments.module';
+import { DiscountsModule } from './discounts/discounts.module';
+import { FastCheckoutModule } from './fast-checkout/fast-checkout.module';
 import { CustomersModule } from './customers/customers.module';
 import { DebtsModule } from './debts/debts.module';
 import { ReportsModule } from './reports/reports.module';
@@ -30,6 +33,12 @@ import { SaleItem } from './database/entities/sale-item.entity';
 import { CashSession } from './database/entities/cash-session.entity';
 import { Shift } from './database/entities/shift.entity';
 import { ShiftCut } from './database/entities/shift-cut.entity';
+import { PaymentMethodConfig } from './database/entities/payment-method-config.entity';
+import { CashMovement } from './database/entities/cash-movement.entity';
+import { DiscountConfig } from './database/entities/discount-config.entity';
+import { DiscountAuthorization } from './database/entities/discount-authorization.entity';
+import { FastCheckoutConfig } from './database/entities/fast-checkout-config.entity';
+import { QuickProduct } from './database/entities/quick-product.entity';
 import { Customer } from './database/entities/customer.entity';
 import { Debt } from './database/entities/debt.entity';
 import { DebtPayment } from './database/entities/debt-payment.entity';
@@ -77,7 +86,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
           username: url.username,
           password: decodeURIComponent(url.password), // Decodificar contraseña URL-encoded
           database: url.pathname.slice(1), // Remover el '/' inicial
-          entities: [Store, Profile, StoreMember, Product, InventoryMovement, Sale, SaleItem, CashSession, Shift, ShiftCut, Customer, Debt, DebtPayment, Event],
+          entities: [Store, Profile, StoreMember, Product, InventoryMovement, Sale, SaleItem, CashSession, Shift, ShiftCut, PaymentMethodConfig, CashMovement, DiscountConfig, DiscountAuthorization, FastCheckoutConfig, QuickProduct, Customer, Debt, DebtPayment, Event],
           synchronize: false, // Usamos migraciones SQL manuales
           logging: configService.get<string>('NODE_ENV') === 'development',
           // Configuración robusta del pool de conexiones para Render/Cloud
@@ -114,6 +123,9 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     SalesModule,
         CashModule,
         ShiftsModule,
+        PaymentsModule,
+        DiscountsModule,
+        FastCheckoutModule,
         CustomersModule,
         DebtsModule,
         ReportsModule,

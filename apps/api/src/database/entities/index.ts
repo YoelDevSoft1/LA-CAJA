@@ -12,4 +12,10 @@ export { DebtPayment } from './debt-payment.entity';
 export { Event } from './event.entity';
 export { Shift, ShiftStatus } from './shift.entity';
 export { ShiftCut, CutType } from './shift-cut.entity';
+export { PaymentMethodConfig } from './payment-method-config.entity';
+export { CashMovement, CashMovementType } from './cash-movement.entity';
+export { DiscountConfig } from './discount-config.entity';
+export { DiscountAuthorization } from './discount-authorization.entity';
+export { FastCheckoutConfig } from './fast-checkout-config.entity';
+export { QuickProduct } from './quick-product.entity';
 

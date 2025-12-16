@@ -4,6 +4,8 @@ import { X, CreditCard, Wallet, Banknote, User, Search, Check, Calculator } from
 import { CartItem } from '@/stores/cart.store'
 import { exchangeService } from '@/services/exchange.service'
 import { customersService } from '@/services/customers.service'
+import { paymentsService } from '@/services/payments.service'
+import { fastCheckoutService } from '@/services/fast-checkout.service'
 import { calculateRoundedChange, roundToNearestDenomination, calculateChange, formatChangeBreakdown } from '@/utils/vzla-denominations'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,6 +75,22 @@ export default function CheckoutModal({
     gcTime: Infinity, // Nunca eliminar
     enabled: isOpen, // Solo obtener cuando el modal está abierto
     refetchOnWindowFocus: false,
+  })
+
+  // Obtener configuraciones de métodos de pago para validar topes
+  const { data: paymentConfigs } = useQuery({
+    queryKey: ['payments', 'methods'],
+    queryFn: () => paymentsService.getPaymentMethodConfigs(),
+    staleTime: 1000 * 60 * 5, // 5 minutos
+    enabled: isOpen,
+  })
+
+  // Obtener configuración de modo rápido
+  const { data: fastCheckoutConfig } = useQuery({
+    queryKey: ['fast-checkout', 'config'],
+    queryFn: () => fastCheckoutService.getFastCheckoutConfig(),
+    staleTime: 1000 * 60 * 5, // 5 minutos
+    enabled: isOpen,
   })
 
   // Prellenar la tasa cuando se obtiene del backend
@@ -234,11 +252,95 @@ export default function CheckoutModal({
       return
     }
 
+    // Validación de topes de métodos de pago
+    if (paymentConfigs) {
+      const config = paymentConfigs.find((c) => c.method === selectedMethod)
+      
+      if (config) {
+        // Verificar si el método está habilitado
+        if (!config.enabled) {
+          setError(`El método de pago ${selectedMethod} está deshabilitado`)
+          return
+        }
+
+        // Validar topes en Bs
+        if (config.min_amount_bs !== null && total.bs < config.min_amount_bs) {
+          setError(
+            `El monto mínimo para ${selectedMethod} es ${Number(config.min_amount_bs).toFixed(2)} Bs. Total actual: ${total.bs.toFixed(2)} Bs`
+          )
+          return
+        }
+        if (config.max_amount_bs !== null && total.bs > config.max_amount_bs) {
+          setError(
+            `El monto máximo para ${selectedMethod} es ${Number(config.max_amount_bs).toFixed(2)} Bs. Total actual: ${total.bs.toFixed(2)} Bs`
+          )
+          return
+        }
+
+        // Validar topes en USD
+        if (config.min_amount_usd !== null && total.usd < config.min_amount_usd) {
+          setError(
+            `El monto mínimo para ${selectedMethod} es $${Number(config.min_amount_usd).toFixed(2)} USD. Total actual: $${total.usd.toFixed(2)} USD`
+          )
+          return
+        }
+        if (config.max_amount_usd !== null && total.usd > config.max_amount_usd) {
+          setError(
+            `El monto máximo para ${selectedMethod} es $${Number(config.max_amount_usd).toFixed(2)} USD. Total actual: $${total.usd.toFixed(2)} USD`
+          )
+          return
+        }
+      }
+    }
+
+    // Validación de modo caja rápida
+    if (fastCheckoutConfig?.enabled) {
+      // Validar límite de items
+      const totalItems = items.reduce((sum, item) => sum + item.qty, 0)
+      if (totalItems > fastCheckoutConfig.max_items) {
+        setError(
+          `El modo caja rápida permite máximo ${fastCheckoutConfig.max_items} items. Total actual: ${totalItems} items`
+        )
+        return
+      }
+
+      // Validar descuentos
+      if (!fastCheckoutConfig.allow_discounts) {
+        const hasDiscounts = items.some(
+          (item) => (item.discount_bs && item.discount_bs > 0) || (item.discount_usd && item.discount_usd > 0)
+        )
+        if (hasDiscounts) {
+          setError('El modo caja rápida no permite descuentos')
+          return
+        }
+      }
+
+      // Validar selección de cliente
+      if (!fastCheckoutConfig.allow_customer_selection) {
+        if (selectedCustomerId || customerName.trim() || customerDocumentId.trim()) {
+          setError('El modo caja rápida no permite seleccionar cliente')
+          return
+        }
+      }
+
+      // Aplicar método de pago por defecto si está configurado
+      if (fastCheckoutConfig.default_payment_method && selectedMethod !== fastCheckoutConfig.default_payment_method) {
+        // Solo mostrar advertencia, no bloquear
+        // El backend también validará esto
+      }
+    }
+
+    // Aplicar método de pago por defecto del modo rápido si está configurado
+    let finalPaymentMethod = selectedMethod
+    if (fastCheckoutConfig?.enabled && fastCheckoutConfig.default_payment_method) {
+      finalPaymentMethod = fastCheckoutConfig.default_payment_method as any
+    }
+
     // Determinar currency basado en el método de pago
     let currency: 'BS' | 'USD' | 'MIXED' = 'USD'
-    if (selectedMethod === 'CASH_BS' || selectedMethod === 'PAGO_MOVIL' || selectedMethod === 'TRANSFER') {
+    if (finalPaymentMethod === 'CASH_BS' || finalPaymentMethod === 'PAGO_MOVIL' || finalPaymentMethod === 'TRANSFER') {
       currency = 'BS'
-    } else if (selectedMethod === 'CASH_USD') {
+    } else if (finalPaymentMethod === 'CASH_USD') {
       currency = 'USD'
     }
 
@@ -246,7 +348,7 @@ export default function CheckoutModal({
     // IMPORTANTE: Solo enviamos change_bs si es > 0 (redondeado)
     // Si es 0, no se envía, y el backend NO descuenta nada (excedente a favor del POS)
     let cashPayment: { received_usd: number; change_bs?: number } | undefined = undefined
-    if (selectedMethod === 'CASH_USD' && receivedUsd > 0) {
+    if (finalPaymentMethod === 'CASH_USD' && receivedUsd > 0) {
       cashPayment = {
         received_usd: Math.round(receivedUsd * 100) / 100,
       }
@@ -262,7 +364,7 @@ export default function CheckoutModal({
     // IMPORTANTE: Solo enviamos change_bs si es > 0 (redondeado)
     // Si es 0, no se envía, y el backend NO descuenta nada (excedente a favor del POS)
     let cashPaymentBs: { received_bs: number; change_bs?: number } | undefined = undefined
-    if (selectedMethod === 'CASH_BS' && receivedBs > 0) {
+    if (finalPaymentMethod === 'CASH_BS' && receivedBs > 0) {
       cashPaymentBs = {
         received_bs: Math.round(receivedBs * 100) / 100,
       }
@@ -275,7 +377,7 @@ export default function CheckoutModal({
     }
 
     onConfirm({
-      payment_method: selectedMethod,
+      payment_method: finalPaymentMethod,
       currency,
       exchange_rate: exchangeRate,
       cash_payment: cashPayment,
@@ -399,11 +501,19 @@ export default function CheckoutModal({
                       setSelectedMethod(method.id as any)
                       setError('')
                     }}
+                    disabled={(() => {
+                      const config = paymentConfigs?.find((c) => c.method === method.id)
+                      return config ? !config.enabled : false
+                    })()}
                     className={cn(
                       "p-3 border rounded-lg transition-all",
                       isSelected
                         ? 'border-primary bg-primary/10'
-                        : 'border-border hover:border-primary/50'
+                        : 'border-border hover:border-primary/50',
+                      (() => {
+                        const config = paymentConfigs?.find((c) => c.method === method.id)
+                        return config && !config.enabled ? 'opacity-50 cursor-not-allowed' : ''
+                      })()
                     )}
                   >
                     <Icon className={cn(

@@ -8,6 +8,10 @@ import ProductsPage from './pages/ProductsPage'
 import InventoryPage from './pages/InventoryPage'
 import SalesPage from './pages/SalesPage'
 import CashPage from './pages/CashPage'
+import ShiftsPage from './pages/ShiftsPage'
+import PaymentsPage from './pages/PaymentsPage'
+import DiscountsPage from './pages/DiscountsPage'
+import FastCheckoutPage from './pages/FastCheckoutPage'
 import CustomersPage from './pages/CustomersPage'
 import DebtsPage from './pages/DebtsPage'
 import ReportsPage from './pages/ReportsPage'
@@ -74,6 +78,10 @@ function App() {
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="sales" element={<SalesPage />} />
           <Route path="cash" element={<CashPage />} />
+          <Route path="shifts" element={<ShiftsPage />} />
+          <Route path="payments" element={<PaymentsPage />} />
+          <Route path="discounts" element={<DiscountsPage />} />
+          <Route path="fast-checkout" element={<FastCheckoutPage />} />
           <Route path="customers" element={<CustomersPage />} />
           <Route path="debts" element={<DebtsPage />} />
           <Route path="reports" element={<ReportsPage />} />

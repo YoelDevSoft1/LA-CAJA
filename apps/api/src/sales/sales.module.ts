@@ -11,6 +11,9 @@ import { Profile } from '../database/entities/profile.entity';
 import { Debt } from '../database/entities/debt.entity';
 import { DebtPayment } from '../database/entities/debt-payment.entity';
 import { CashSession } from '../database/entities/cash-session.entity';
+import { PaymentsModule } from '../payments/payments.module';
+import { DiscountsModule } from '../discounts/discounts.module';
+import { FastCheckoutModule } from '../fast-checkout/fast-checkout.module';
 
 @Module({
   imports: [
@@ -25,6 +28,9 @@ import { CashSession } from '../database/entities/cash-session.entity';
       DebtPayment,
       CashSession,
     ]),
+    PaymentsModule,
+    DiscountsModule,
+    FastCheckoutModule,
   ],
   controllers: [SalesController],
   providers: [SalesService],
