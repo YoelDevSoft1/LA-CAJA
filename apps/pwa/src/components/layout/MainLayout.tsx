@@ -25,6 +25,7 @@ import {
   Zap,
   Calendar,
   Receipt,
+  Square,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -62,6 +63,7 @@ const navItems = [
   { path: '/fast-checkout', label: 'Caja Rápida', icon: Zap, badge: null },
   { path: '/lots', label: 'Lotes', icon: Calendar, badge: null },
   { path: '/invoice-series', label: 'Series de Factura', icon: Receipt, badge: null },
+  { path: '/tables', label: 'Mesas y Órdenes', icon: Square, badge: null },
   { path: '/customers', label: 'Clientes', icon: Users, badge: null },
   { path: '/debts', label: 'Fiao', icon: Users, badge: 'Beta' },
   { path: '/reports', label: 'Reportes', icon: BarChart3, badge: null },

@@ -22,6 +22,7 @@ import { ProductSerialsModule } from './product-serials/product-serials.module';
 import { InvoiceSeriesModule } from './invoice-series/invoice-series.module';
 import { TablesModule } from './tables/tables.module';
 import { OrdersModule } from './orders/orders.module';
+import { PeripheralsModule } from './peripherals/peripherals.module';
 import { CustomersModule } from './customers/customers.module';
 import { DebtsModule } from './debts/debts.module';
 import { ReportsModule } from './reports/reports.module';
@@ -54,6 +55,7 @@ import { Table } from './database/entities/table.entity';
 import { Order } from './database/entities/order.entity';
 import { OrderItem } from './database/entities/order-item.entity';
 import { OrderPayment } from './database/entities/order-payment.entity';
+import { PeripheralConfig } from './database/entities/peripheral-config.entity';
 import { Customer } from './database/entities/customer.entity';
 import { Debt } from './database/entities/debt.entity';
 import { DebtPayment } from './database/entities/debt-payment.entity';
@@ -101,7 +103,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
           username: url.username,
           password: decodeURIComponent(url.password), // Decodificar contraseña URL-encoded
           database: url.pathname.slice(1), // Remover el '/' inicial
-          entities: [Store, Profile, StoreMember, Product, ProductVariant, ProductLot, LotMovement, ProductSerial, InvoiceSeries, Table, Order, OrderItem, OrderPayment, InventoryMovement, Sale, SaleItem, CashSession, Shift, ShiftCut, PaymentMethodConfig, CashMovement, DiscountConfig, DiscountAuthorization, FastCheckoutConfig, QuickProduct, Customer, Debt, DebtPayment, Event],
+          entities: [Store, Profile, StoreMember, Product, ProductVariant, ProductLot, LotMovement, ProductSerial, InvoiceSeries, Table, Order, OrderItem, OrderPayment, PeripheralConfig, InventoryMovement, Sale, SaleItem, CashSession, Shift, ShiftCut, PaymentMethodConfig, CashMovement, DiscountConfig, DiscountAuthorization, FastCheckoutConfig, QuickProduct, Customer, Debt, DebtPayment, Event],
           synchronize: false, // Usamos migraciones SQL manuales
           logging: configService.get<string>('NODE_ENV') === 'development',
           // Configuración robusta del pool de conexiones para Render/Cloud
@@ -147,6 +149,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
         InvoiceSeriesModule,
         TablesModule,
         OrdersModule,
+        PeripheralsModule,
         CustomersModule,
         DebtsModule,
         ReportsModule,

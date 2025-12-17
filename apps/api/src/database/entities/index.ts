@@ -27,4 +27,5 @@ export { Table } from './table.entity';
 export { Order } from './order.entity';
 export { OrderItem } from './order-item.entity';
 export { OrderPayment } from './order-payment.entity';
+export { PeripheralConfig } from './peripheral-config.entity';
 

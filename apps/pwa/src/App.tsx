@@ -17,6 +17,7 @@ import DebtsPage from './pages/DebtsPage'
 import ReportsPage from './pages/ReportsPage'
 import LotsPage from './pages/LotsPage'
 import InvoiceSeriesPage from './pages/InvoiceSeriesPage'
+import TablesPage from './pages/TablesPage'
 import LicenseBlockedPage from './pages/LicenseBlockedPage'
 import AdminPage from './pages/AdminPage'
 import { useOnline } from './hooks/use-online'
@@ -86,6 +87,7 @@ function App() {
           <Route path="fast-checkout" element={<FastCheckoutPage />} />
           <Route path="lots" element={<LotsPage />} />
           <Route path="invoice-series" element={<InvoiceSeriesPage />} />
+          <Route path="tables" element={<TablesPage />} />
           <Route path="customers" element={<CustomersPage />} />
           <Route path="debts" element={<DebtsPage />} />
           <Route path="reports" element={<ReportsPage />} />
