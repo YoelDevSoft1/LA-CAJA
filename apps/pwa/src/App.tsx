@@ -31,15 +31,17 @@ import DashboardPage from './pages/DashboardPage'
 import MLDashboardPage from './pages/MLDashboardPage'
 import DemandPredictionsPage from './pages/DemandPredictionsPage'
 import AnomaliesPage from './pages/AnomaliesPage'
+import RealtimeAnalyticsPage from './pages/RealtimeAnalyticsPage'
 import LicenseBlockedPage from './pages/LicenseBlockedPage'
 import AdminPage from './pages/AdminPage'
 import { useOnline } from './hooks/use-online'
 import { useAuth } from './stores/auth.store'
 import { offlineIndicator } from './services/offline-indicator.service'
 import { syncService } from './services/sync.service'
+import { realtimeWebSocketService } from './services/realtime-websocket.service'
 
 function App() {
-  const { user } = useAuth()
+  const { user, isAuthenticated } = useAuth()
   const { isOnline, wasOffline } = useOnline();
 
   // Rehidratar el sync service si hay sesión persistida
@@ -50,6 +52,19 @@ function App() {
       })
     }
   }, [user?.store_id])
+
+  // Conectar WebSocket de analytics en tiempo real
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      realtimeWebSocketService.connect()
+    } else {
+      realtimeWebSocketService.disconnect()
+    }
+
+    return () => {
+      // No desconectar aquí, dejar que se maneje automáticamente
+    }
+  }, [isAuthenticated, user])
 
   // Manejar cambios de conectividad
   useEffect(() => {
@@ -114,6 +129,7 @@ function App() {
           <Route path="ml" element={<MLDashboardPage />} />
           <Route path="ml/predictions" element={<DemandPredictionsPage />} />
           <Route path="ml/anomalies" element={<AnomaliesPage />} />
+          <Route path="realtime-analytics" element={<RealtimeAnalyticsPage />} />
           <Route path="customers" element={<CustomersPage />} />
           <Route path="debts" element={<DebtsPage />} />
           <Route path="reports" element={<ReportsPage />} />

@@ -35,6 +35,7 @@ import {
   ReceiptText,
   Brain,
   TrendingUp,
+  Activity,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -145,6 +146,7 @@ const navSections: NavSection[] = [
       { path: '/ml', label: 'ML Dashboard', icon: Brain, badge: null },
       { path: '/ml/predictions', label: 'Predicciones', icon: TrendingUp, badge: null },
       { path: '/ml/anomalies', label: 'Anomalías', icon: AlertTriangle, badge: null },
+      { path: '/realtime-analytics', label: 'Analytics Tiempo Real', icon: Activity, badge: null },
     ],
   },
 ]

@@ -1,0 +1,224 @@
+import { io, Socket } from 'socket.io-client'
+import {
+  RealTimeMetric,
+  RealTimeAlert,
+  SalesHeatmapData,
+} from '@/types/realtime-analytics.types'
+
+type MetricUpdateCallback = (metric: RealTimeMetric) => void
+type AlertNewCallback = (alert: RealTimeAlert) => void
+type HeatmapUpdateCallback = (data: SalesHeatmapData[]) => void
+type ErrorCallback = (error: string) => void
+
+class RealtimeWebSocketService {
+  private socket: Socket | null = null
+  private isConnected = false
+  private maxReconnectAttempts = 5
+  private reconnectDelay = 1000
+
+  // Callbacks
+  private metricUpdateCallbacks: Set<MetricUpdateCallback> = new Set()
+  private alertNewCallbacks: Set<AlertNewCallback> = new Set()
+  private heatmapUpdateCallbacks: Set<HeatmapUpdateCallback> = new Set()
+  private errorCallbacks: Set<ErrorCallback> = new Set()
+
+  /**
+   * Conecta al WebSocket
+   */
+  connect(): void {
+    if (this.socket?.connected) {
+      return
+    }
+
+    const token = localStorage.getItem('auth_token')
+    if (!token) {
+      console.warn('[RealtimeWS] No hay token de autenticación')
+      return
+    }
+
+    // Obtener URL del API (usar la misma lógica que api.ts)
+    let apiUrl = import.meta.env.VITE_API_URL
+    if (!apiUrl) {
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        apiUrl = 'http://localhost:3000'
+      } else {
+        const hostname = window.location.hostname
+        apiUrl = `http://${hostname}:3000`
+      }
+    }
+
+    // Socket.IO funciona con HTTP/HTTPS, no necesita ws://
+    // El namespace /realtime se agrega automáticamente
+    this.socket = io(`${apiUrl}/realtime`, {
+      auth: {
+        token,
+      },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: this.reconnectDelay,
+      reconnectionAttempts: this.maxReconnectAttempts,
+    })
+
+    this.setupEventHandlers()
+  }
+
+  /**
+   * Configura los event handlers
+   */
+  private setupEventHandlers(): void {
+    if (!this.socket) return
+
+    this.socket.on('connect', () => {
+      this.isConnected = true
+      console.log('[RealtimeWS] Conectado')
+    })
+
+    this.socket.on('disconnect', () => {
+      this.isConnected = false
+      console.log('[RealtimeWS] Desconectado')
+    })
+
+    this.socket.on('connected', (data: { message: string }) => {
+      console.log('[RealtimeWS]', data.message)
+    })
+
+    this.socket.on('subscribed', (data: { channel: string }) => {
+      console.log('[RealtimeWS] Suscrito a:', data.channel)
+    })
+
+    this.socket.on('metric:update', (metric: RealTimeMetric) => {
+      this.metricUpdateCallbacks.forEach((callback) => callback(metric))
+    })
+
+    this.socket.on('alert:new', (alert: RealTimeAlert) => {
+      this.alertNewCallbacks.forEach((callback) => callback(alert))
+    })
+
+    this.socket.on('heatmap:update', (data: SalesHeatmapData[]) => {
+      this.heatmapUpdateCallbacks.forEach((callback) => callback(data))
+    })
+
+    this.socket.on('error', (error: { message: string }) => {
+      console.error('[RealtimeWS] Error:', error.message)
+      this.errorCallbacks.forEach((callback) => callback(error.message))
+    })
+  }
+
+  /**
+   * Suscribe a métricas
+   */
+  subscribeToMetrics(metricTypes?: string[]): void {
+    if (!this.socket?.connected) {
+      console.warn('[RealtimeWS] No conectado, no se puede suscribir')
+      return
+    }
+
+    this.socket.emit('subscribe:metrics', { metric_types: metricTypes })
+  }
+
+  /**
+   * Suscribe a alertas
+   */
+  subscribeToAlerts(): void {
+    if (!this.socket?.connected) {
+      console.warn('[RealtimeWS] No conectado, no se puede suscribir')
+      return
+    }
+
+    this.socket.emit('subscribe:alerts')
+  }
+
+  /**
+   * Obtiene métricas actuales
+   */
+  getMetrics(metricTypes?: string[]): Promise<RealTimeMetric[]> {
+    return new Promise((resolve, reject) => {
+      if (!this.socket?.connected) {
+        reject(new Error('No conectado'))
+        return
+      }
+
+      this.socket.emit('get:metrics', { metric_types: metricTypes }, (data: { metrics: RealTimeMetric[] }) => {
+        resolve(data.metrics)
+      })
+    })
+  }
+
+  /**
+   * Obtiene alertas actuales
+   */
+  getAlerts(): Promise<RealTimeAlert[]> {
+    return new Promise((resolve, reject) => {
+      if (!this.socket?.connected) {
+        reject(new Error('No conectado'))
+        return
+      }
+
+      this.socket.emit('get:alerts', {}, (data: { alerts: RealTimeAlert[] }) => {
+        resolve(data.alerts)
+      })
+    })
+  }
+
+  /**
+   * Registra callback para actualizaciones de métricas
+   */
+  onMetricUpdate(callback: MetricUpdateCallback): () => void {
+    this.metricUpdateCallbacks.add(callback)
+    return () => {
+      this.metricUpdateCallbacks.delete(callback)
+    }
+  }
+
+  /**
+   * Registra callback para nuevas alertas
+   */
+  onAlertNew(callback: AlertNewCallback): () => void {
+    this.alertNewCallbacks.add(callback)
+    return () => {
+      this.alertNewCallbacks.delete(callback)
+    }
+  }
+
+  /**
+   * Registra callback para actualizaciones de heatmap
+   */
+  onHeatmapUpdate(callback: HeatmapUpdateCallback): () => void {
+    this.heatmapUpdateCallbacks.add(callback)
+    return () => {
+      this.heatmapUpdateCallbacks.delete(callback)
+    }
+  }
+
+  /**
+   * Registra callback para errores
+   */
+  onError(callback: ErrorCallback): () => void {
+    this.errorCallbacks.add(callback)
+    return () => {
+      this.errorCallbacks.delete(callback)
+    }
+  }
+
+  /**
+   * Desconecta del WebSocket
+   */
+  disconnect(): void {
+    if (this.socket) {
+      this.socket.disconnect()
+      this.socket = null
+      this.isConnected = false
+    }
+  }
+
+  /**
+   * Verifica si está conectado
+   */
+  get connected(): boolean {
+    return this.isConnected && this.socket?.connected === true
+  }
+}
+
+// Singleton instance
+export const realtimeWebSocketService = new RealtimeWebSocketService()
+

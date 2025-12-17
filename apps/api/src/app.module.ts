@@ -38,6 +38,7 @@ import { FiscalConfigsModule } from './fiscal-configs/fiscal-configs.module';
 import { FiscalInvoicesModule } from './fiscal-invoices/fiscal-invoices.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { MLModule } from './ml/ml.module';
+import { RealTimeAnalyticsModule } from './realtime-analytics/realtime-analytics.module';
 import { AdminController } from './admin/admin.controller';
 import { LicenseWatcherService } from './admin/license-watcher.service';
 import { Store } from './database/entities/store.entity';
@@ -89,6 +90,11 @@ import { DemandPrediction } from './database/entities/demand-prediction.entity';
 import { ProductRecommendation } from './database/entities/product-recommendation.entity';
 import { DetectedAnomaly } from './database/entities/detected-anomaly.entity';
 import { MLModelMetric } from './database/entities/ml-model-metric.entity';
+import { RealTimeMetric } from './database/entities/real-time-metric.entity';
+import { AlertThreshold } from './database/entities/alert-threshold.entity';
+import { RealTimeAlert } from './database/entities/real-time-alert.entity';
+import { SalesHeatmap } from './database/entities/sales-heatmap.entity';
+import { ComparativeMetric } from './database/entities/comparative-metric.entity';
 import { Event } from './database/entities/event.entity';
 import { LicenseGuard } from './auth/guards/license.guard';
 import { DatabaseErrorInterceptor } from './common/interceptors/database-error.interceptor';
@@ -133,7 +139,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
           username: url.username,
           password: decodeURIComponent(url.password), // Decodificar contraseña URL-encoded
           database: url.pathname.slice(1), // Remover el '/' inicial
-          entities: [Store, Profile, StoreMember, Product, ProductVariant, ProductLot, LotMovement, ProductSerial, InvoiceSeries, Table, Order, OrderItem, OrderPayment, PeripheralConfig, PriceList, PriceListItem, Promotion, PromotionProduct, PromotionUsage, InventoryMovement, Sale, SaleItem, CashSession, Shift, ShiftCut, PaymentMethodConfig, CashMovement, DiscountConfig, DiscountAuthorization, FastCheckoutConfig, QuickProduct, Customer, Debt, DebtPayment, ExchangeRate, Warehouse, WarehouseStock, Transfer, TransferItem, Supplier, PurchaseOrder, PurchaseOrderItem, FiscalInvoice, FiscalInvoiceItem, FiscalConfig, DemandPrediction, ProductRecommendation, DetectedAnomaly, MLModelMetric, Event],
+          entities: [Store, Profile, StoreMember, Product, ProductVariant, ProductLot, LotMovement, ProductSerial, InvoiceSeries, Table, Order, OrderItem, OrderPayment, PeripheralConfig, PriceList, PriceListItem, Promotion, PromotionProduct, PromotionUsage, InventoryMovement, Sale, SaleItem, CashSession, Shift, ShiftCut, PaymentMethodConfig, CashMovement, DiscountConfig, DiscountAuthorization, FastCheckoutConfig, QuickProduct, Customer, Debt, DebtPayment, ExchangeRate, Warehouse, WarehouseStock, Transfer, TransferItem, Supplier, PurchaseOrder, PurchaseOrderItem, FiscalInvoice, FiscalInvoiceItem, FiscalConfig, DemandPrediction, ProductRecommendation, DetectedAnomaly, MLModelMetric, RealTimeMetric, AlertThreshold, RealTimeAlert, SalesHeatmap, ComparativeMetric, Event],
           synchronize: false, // Usamos migraciones SQL manuales
           logging: configService.get<string>('NODE_ENV') === 'development',
           // Configuración robusta del pool de conexiones para Render/Cloud
@@ -195,6 +201,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
         FiscalInvoicesModule,
         DashboardModule,
         MLModule,
+        RealTimeAnalyticsModule,
   ],
   controllers: [AppController, AdminController],
   providers: [
