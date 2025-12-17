@@ -18,6 +18,9 @@ import ReportsPage from './pages/ReportsPage'
 import LotsPage from './pages/LotsPage'
 import InvoiceSeriesPage from './pages/InvoiceSeriesPage'
 import TablesPage from './pages/TablesPage'
+import PeripheralsPage from './pages/PeripheralsPage'
+import PriceListsPage from './pages/PriceListsPage'
+import PromotionsPage from './pages/PromotionsPage'
 import LicenseBlockedPage from './pages/LicenseBlockedPage'
 import AdminPage from './pages/AdminPage'
 import { useOnline } from './hooks/use-online'
@@ -88,6 +91,9 @@ function App() {
           <Route path="lots" element={<LotsPage />} />
           <Route path="invoice-series" element={<InvoiceSeriesPage />} />
           <Route path="tables" element={<TablesPage />} />
+          <Route path="peripherals" element={<PeripheralsPage />} />
+          <Route path="price-lists" element={<PriceListsPage />} />
+          <Route path="promotions" element={<PromotionsPage />} />
           <Route path="customers" element={<CustomersPage />} />
           <Route path="debts" element={<DebtsPage />} />
           <Route path="reports" element={<ReportsPage />} />

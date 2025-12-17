@@ -28,4 +28,9 @@ export { Order } from './order.entity';
 export { OrderItem } from './order-item.entity';
 export { OrderPayment } from './order-payment.entity';
 export { PeripheralConfig } from './peripheral-config.entity';
+export { PriceList } from './price-list.entity';
+export { PriceListItem } from './price-list-item.entity';
+export { Promotion } from './promotion.entity';
+export { PromotionProduct } from './promotion-product.entity';
+export { PromotionUsage } from './promotion-usage.entity';
 

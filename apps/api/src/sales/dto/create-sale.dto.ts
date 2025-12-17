@@ -79,5 +79,13 @@ export class CreateSaleDto {
   @IsUUID()
   @IsOptional()
   invoice_series_id?: string; // Serie de factura a usar (opcional, usa la por defecto si no se especifica)
+
+  @IsUUID()
+  @IsOptional()
+  price_list_id?: string; // Lista de precio a usar (opcional, usa la por defecto si no se especifica)
+
+  @IsUUID()
+  @IsOptional()
+  promotion_id?: string; // Promoción a aplicar (opcional)
 }
 

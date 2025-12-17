@@ -26,6 +26,9 @@ import {
   Calendar,
   Receipt,
   Square,
+  Cpu,
+  DollarSign as DollarSignIcon,
+  Tag,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -64,6 +67,9 @@ const navItems = [
   { path: '/lots', label: 'Lotes', icon: Calendar, badge: null },
   { path: '/invoice-series', label: 'Series de Factura', icon: Receipt, badge: null },
   { path: '/tables', label: 'Mesas y Órdenes', icon: Square, badge: null },
+  { path: '/peripherals', label: 'Periféricos', icon: Cpu, badge: null },
+  { path: '/price-lists', label: 'Listas de Precio', icon: DollarSignIcon, badge: null },
+  { path: '/promotions', label: 'Promociones', icon: Tag, badge: null },
   { path: '/customers', label: 'Clientes', icon: Users, badge: null },
   { path: '/debts', label: 'Fiao', icon: Users, badge: 'Beta' },
   { path: '/reports', label: 'Reportes', icon: BarChart3, badge: null },

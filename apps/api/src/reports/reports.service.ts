@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In } from 'typeorm';
+import { Repository, Between, In, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
 import { Sale } from '../database/entities/sale.entity';
 import { Product } from '../database/entities/product.entity';
 import { SaleItem } from '../database/entities/sale-item.entity';
@@ -8,6 +8,11 @@ import { Debt } from '../database/entities/debt.entity';
 import { DebtPayment } from '../database/entities/debt-payment.entity';
 import { Customer } from '../database/entities/customer.entity';
 import { DebtStatus } from '../database/entities/debt.entity';
+import { Shift } from '../database/entities/shift.entity';
+import { ShiftCut } from '../database/entities/shift-cut.entity';
+import { Profile } from '../database/entities/profile.entity';
+import { ProductLot } from '../database/entities/product-lot.entity';
+import { ProductSerial } from '../database/entities/product-serial.entity';
 
 @Injectable()
 export class ReportsService {
@@ -24,6 +29,16 @@ export class ReportsService {
     private debtPaymentRepository: Repository<DebtPayment>,
     @InjectRepository(Customer)
     private customerRepository: Repository<Customer>,
+    @InjectRepository(Shift)
+    private shiftRepository: Repository<Shift>,
+    @InjectRepository(ShiftCut)
+    private shiftCutRepository: Repository<ShiftCut>,
+    @InjectRepository(Profile)
+    private profileRepository: Repository<Profile>,
+    @InjectRepository(ProductLot)
+    private productLotRepository: Repository<ProductLot>,
+    @InjectRepository(ProductSerial)
+    private productSerialRepository: Repository<ProductSerial>,
   ) {}
 
   async getSalesByDay(
@@ -465,6 +480,657 @@ export class ReportsService {
     }
 
     return rows.join('\n');
+  }
+
+  /**
+   * Reporte por turno/cajero
+   */
+  async getShiftsReport(
+    storeId: string,
+    startDate?: Date,
+    endDate?: Date,
+    cashierId?: string,
+  ): Promise<{
+    total_shifts: number;
+    total_sales_bs: number;
+    total_sales_usd: number;
+    total_differences_bs: number;
+    total_differences_usd: number;
+    by_cashier: Array<{
+      cashier_id: string;
+      cashier_name: string;
+      shifts_count: number;
+      total_sales_bs: number;
+      total_sales_usd: number;
+      total_differences_bs: number;
+      total_differences_usd: number;
+    }>;
+    shifts: Array<{
+      shift_id: string;
+      cashier_id: string;
+      cashier_name: string;
+      opened_at: Date;
+      closed_at: Date | null;
+      sales_count: number;
+      total_sales_bs: number;
+      total_sales_usd: number;
+      difference_bs: number | null;
+      difference_usd: number | null;
+    }>;
+  }> {
+    const query = this.shiftRepository
+      .createQueryBuilder('shift')
+      .where('shift.store_id = :storeId', { storeId });
+
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      query.andWhere('shift.opened_at >= :startDate', { startDate: start });
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query.andWhere('shift.opened_at <= :endDate', { endDate: end });
+    }
+    if (cashierId) {
+      query.andWhere('shift.cashier_id = :cashierId', { cashierId });
+    }
+
+    const shifts = await query
+      .leftJoinAndSelect('shift.cashier', 'cashier')
+      .orderBy('shift.opened_at', 'DESC')
+      .getMany();
+
+    const cashierMap = new Map<
+      string,
+      {
+        cashier_name: string;
+        shifts_count: number;
+        total_sales_bs: number;
+        total_sales_usd: number;
+        total_differences_bs: number;
+        total_differences_usd: number;
+      }
+    >();
+
+    let total_sales_bs = 0;
+    let total_sales_usd = 0;
+    let total_differences_bs = 0;
+    let total_differences_usd = 0;
+
+    const shiftsData: Array<{
+      shift_id: string;
+      cashier_id: string;
+      cashier_name: string;
+      opened_at: Date;
+      closed_at: Date | null;
+      sales_count: number;
+      total_sales_bs: number;
+      total_sales_usd: number;
+      difference_bs: number | null;
+      difference_usd: number | null;
+    }> = [];
+
+    for (const shift of shifts) {
+      // Obtener ventas del turno
+      const sales = await this.saleRepository
+        .createQueryBuilder('sale')
+        .where('sale.store_id = :storeId', { storeId })
+        .andWhere('sale.sold_by_user_id = :cashierId', { cashierId: shift.cashier_id })
+        .andWhere('sale.sold_at >= :openedAt', { openedAt: shift.opened_at })
+        .getMany();
+
+      let shiftSalesBs = 0;
+      let shiftSalesUsd = 0;
+
+      for (const sale of sales) {
+        const totals = sale.totals || {};
+        shiftSalesBs += Number(totals.total_bs || 0);
+        shiftSalesUsd += Number(totals.total_usd || 0);
+      }
+
+      total_sales_bs += shiftSalesBs;
+      total_sales_usd += shiftSalesUsd;
+
+      const diffBs = shift.difference_bs ? Number(shift.difference_bs) : 0;
+      const diffUsd = shift.difference_usd ? Number(shift.difference_usd) : 0;
+      total_differences_bs += diffBs;
+      total_differences_usd += diffUsd;
+
+      const cashierName = shift.cashier?.full_name || `Cajero ${shift.cashier_id.substring(0, 8)}`;
+
+      if (!cashierMap.has(shift.cashier_id)) {
+        cashierMap.set(shift.cashier_id, {
+          cashier_name: cashierName,
+          shifts_count: 0,
+          total_sales_bs: 0,
+          total_sales_usd: 0,
+          total_differences_bs: 0,
+          total_differences_usd: 0,
+        });
+      }
+
+      const cashierData = cashierMap.get(shift.cashier_id)!;
+      cashierData.shifts_count++;
+      cashierData.total_sales_bs += shiftSalesBs;
+      cashierData.total_sales_usd += shiftSalesUsd;
+      cashierData.total_differences_bs += diffBs;
+      cashierData.total_differences_usd += diffUsd;
+
+      shiftsData.push({
+        shift_id: shift.id,
+        cashier_id: shift.cashier_id,
+        cashier_name: cashierName,
+        opened_at: shift.opened_at,
+        closed_at: shift.closed_at,
+        sales_count: sales.length,
+        total_sales_bs: shiftSalesBs,
+        total_sales_usd: shiftSalesUsd,
+        difference_bs: shift.difference_bs,
+        difference_usd: shift.difference_usd,
+      });
+    }
+
+    return {
+      total_shifts: shifts.length,
+      total_sales_bs,
+      total_sales_usd,
+      total_differences_bs,
+      total_differences_usd,
+      by_cashier: Array.from(cashierMap.entries()).map(([cashier_id, data]) => ({
+        cashier_id,
+        ...data,
+      })),
+      shifts: shiftsData,
+    };
+  }
+
+  /**
+   * Reporte de arqueos y diferencias
+   */
+  async getArqueosReport(
+    storeId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<{
+    total_arqueos: number;
+    total_differences_bs: number;
+    total_differences_usd: number;
+    shifts_with_differences: number;
+    shifts_without_differences: number;
+    by_cashier: Array<{
+      cashier_id: string;
+      cashier_name: string;
+      arqueos_count: number;
+      total_differences_bs: number;
+      total_differences_usd: number;
+    }>;
+    arqueos: Array<{
+      shift_id: string;
+      cashier_id: string;
+      cashier_name: string;
+      closed_at: Date;
+      expected_bs: number;
+      expected_usd: number;
+      counted_bs: number;
+      counted_usd: number;
+      difference_bs: number;
+      difference_usd: number;
+    }>;
+  }> {
+    const query = this.shiftRepository
+      .createQueryBuilder('shift')
+      .where('shift.store_id = :storeId', { storeId })
+      .andWhere('shift.status = :status', { status: 'closed' })
+      .andWhere('shift.closed_at IS NOT NULL');
+
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      query.andWhere('shift.closed_at >= :startDate', { startDate: start });
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query.andWhere('shift.closed_at <= :endDate', { endDate: end });
+    }
+
+    const shifts = await query
+      .leftJoinAndSelect('shift.cashier', 'cashier')
+      .orderBy('shift.closed_at', 'DESC')
+      .getMany();
+
+    const cashierMap = new Map<
+      string,
+      {
+        cashier_name: string;
+        arqueos_count: number;
+        total_differences_bs: number;
+        total_differences_usd: number;
+      }
+    >();
+
+    let total_differences_bs = 0;
+    let total_differences_usd = 0;
+    let shifts_with_differences = 0;
+    let shifts_without_differences = 0;
+
+    const arqueosData: Array<{
+      shift_id: string;
+      cashier_id: string;
+      cashier_name: string;
+      closed_at: Date;
+      expected_bs: number;
+      expected_usd: number;
+      counted_bs: number;
+      counted_usd: number;
+      difference_bs: number;
+      difference_usd: number;
+    }> = [];
+
+    for (const shift of shifts) {
+      const expected = (shift.expected_totals || {}) as {
+        cash_bs?: number;
+        cash_usd?: number;
+        pago_movil_bs?: number;
+        transfer_bs?: number;
+        other_bs?: number;
+        total_bs?: number;
+        total_usd?: number;
+      };
+      const counted = (shift.counted_totals || {}) as {
+        cash_bs?: number;
+        cash_usd?: number;
+        pago_movil_bs?: number;
+        transfer_bs?: number;
+        other_bs?: number;
+      };
+      const diffBs = shift.difference_bs ? Number(shift.difference_bs) : 0;
+      const diffUsd = shift.difference_usd ? Number(shift.difference_usd) : 0;
+
+      total_differences_bs += Math.abs(diffBs);
+      total_differences_usd += Math.abs(diffUsd);
+
+      if (diffBs !== 0 || diffUsd !== 0) {
+        shifts_with_differences++;
+      } else {
+        shifts_without_differences++;
+      }
+
+      const cashierName = shift.cashier?.full_name || `Cajero ${shift.cashier_id.substring(0, 8)}`;
+
+      if (!cashierMap.has(shift.cashier_id)) {
+        cashierMap.set(shift.cashier_id, {
+          cashier_name: cashierName,
+          arqueos_count: 0,
+          total_differences_bs: 0,
+          total_differences_usd: 0,
+        });
+      }
+
+      const cashierData = cashierMap.get(shift.cashier_id)!;
+      cashierData.arqueos_count++;
+      cashierData.total_differences_bs += Math.abs(diffBs);
+      cashierData.total_differences_usd += Math.abs(diffUsd);
+
+      arqueosData.push({
+        shift_id: shift.id,
+        cashier_id: shift.cashier_id,
+        cashier_name: cashierName,
+        closed_at: shift.closed_at!,
+        expected_bs: Number(expected.cash_bs || 0),
+        expected_usd: Number(expected.cash_usd || 0),
+        counted_bs: Number(counted.cash_bs || 0),
+        counted_usd: Number(counted.cash_usd || 0),
+        difference_bs: diffBs,
+        difference_usd: diffUsd,
+      });
+    }
+
+    return {
+      total_arqueos: shifts.length,
+      total_differences_bs,
+      total_differences_usd,
+      shifts_with_differences,
+      shifts_without_differences,
+      by_cashier: Array.from(cashierMap.entries()).map(([cashier_id, data]) => ({
+        cashier_id,
+        ...data,
+      })),
+      arqueos: arqueosData,
+    };
+  }
+
+  /**
+   * Reporte de productos próximos a vencer
+   */
+  async getExpiringProductsReport(
+    storeId: string,
+    daysAhead: number = 30,
+  ): Promise<{
+    total_lots: number;
+    total_quantity: number;
+    total_value_bs: number;
+    total_value_usd: number;
+    by_product: Array<{
+      product_id: string;
+      product_name: string;
+      lots_count: number;
+      total_quantity: number;
+      expiration_dates: Array<{
+        lot_number: string;
+        expiration_date: Date;
+        quantity: number;
+        days_until_expiration: number;
+      }>;
+    }>;
+  }> {
+    const now = new Date();
+    const expirationLimit = new Date(now);
+    expirationLimit.setDate(expirationLimit.getDate() + daysAhead);
+
+    const lots = await this.productLotRepository
+      .createQueryBuilder('lot')
+      .innerJoin('lot.product', 'product')
+      .where('product.store_id = :storeId', { storeId })
+      .andWhere('lot.expiration_date IS NOT NULL')
+      .andWhere('lot.expiration_date <= :expirationLimit', { expirationLimit })
+      .andWhere('lot.expiration_date >= :now', { now: now.toISOString().split('T')[0] })
+      .andWhere('lot.remaining_quantity > 0')
+      .orderBy('lot.expiration_date', 'ASC')
+      .getMany();
+
+    const productMap = new Map<
+      string,
+      {
+        product_name: string;
+        lots_count: number;
+        total_quantity: number;
+        expiration_dates: Array<{
+          lot_number: string;
+          expiration_date: Date;
+          quantity: number;
+          days_until_expiration: number;
+        }>;
+      }
+    >();
+
+    let total_quantity = 0;
+    let total_value_bs = 0;
+    let total_value_usd = 0;
+
+    for (const lot of lots) {
+      const product = await this.productRepository.findOne({
+        where: { id: lot.product_id },
+        select: ['id', 'name'],
+      });
+
+      if (!product) continue;
+
+      const daysUntilExpiration = Math.ceil(
+        (lot.expiration_date!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+      );
+
+      if (!productMap.has(lot.product_id)) {
+        productMap.set(lot.product_id, {
+          product_name: product.name,
+          lots_count: 0,
+          total_quantity: 0,
+          expiration_dates: [],
+        });
+      }
+
+      const productData = productMap.get(lot.product_id)!;
+      productData.lots_count++;
+      productData.total_quantity += lot.remaining_quantity;
+      productData.expiration_dates.push({
+        lot_number: lot.lot_number,
+        expiration_date: lot.expiration_date!,
+        quantity: lot.remaining_quantity,
+        days_until_expiration: daysUntilExpiration,
+      });
+
+      total_quantity += lot.remaining_quantity;
+      total_value_bs += Number(lot.unit_cost_bs || 0) * lot.remaining_quantity;
+      total_value_usd += Number(lot.unit_cost_usd || 0) * lot.remaining_quantity;
+    }
+
+    return {
+      total_lots: lots.length,
+      total_quantity,
+      total_value_bs,
+      total_value_usd,
+      by_product: Array.from(productMap.entries()).map(([product_id, data]) => ({
+        product_id,
+        ...data,
+      })),
+    };
+  }
+
+  /**
+   * Reporte de seriales vendidos
+   */
+  async getSerialsReport(
+    storeId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<{
+    total_serials: number;
+    sold_serials: number;
+    available_serials: number;
+    by_product: Array<{
+      product_id: string;
+      product_name: string;
+      total_serials: number;
+      sold_serials: number;
+      available_serials: number;
+    }>;
+    serials: Array<{
+      serial_id: string;
+      product_id: string;
+      product_name: string;
+      serial_number: string;
+      status: string;
+      sold_at: Date | null;
+      sale_id: string | null;
+    }>;
+  }> {
+    const query = this.productSerialRepository
+      .createQueryBuilder('serial')
+      .innerJoin('serial.product', 'product')
+      .where('product.store_id = :storeId', { storeId });
+
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      query.andWhere('serial.sold_at >= :startDate', { startDate: start });
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query.andWhere('serial.sold_at <= :endDate', { endDate: end });
+    }
+
+    const serials = await query
+      .leftJoinAndSelect('serial.sale', 'sale')
+      .orderBy('serial.sold_at', 'DESC')
+      .getMany();
+
+    const productMap = new Map<
+      string,
+      {
+        product_name: string;
+        total_serials: number;
+        sold_serials: number;
+        available_serials: number;
+      }
+    >();
+
+    let sold_serials = 0;
+    let available_serials = 0;
+
+    const serialsData: Array<{
+      serial_id: string;
+      product_id: string;
+      product_name: string;
+      serial_number: string;
+      status: string;
+      sold_at: Date | null;
+      sale_id: string | null;
+    }> = [];
+
+    for (const serial of serials) {
+      const product = await this.productRepository.findOne({
+        where: { id: serial.product_id },
+        select: ['id', 'name'],
+      });
+
+      if (!product) continue;
+
+      if (!productMap.has(serial.product_id)) {
+        productMap.set(serial.product_id, {
+          product_name: product.name,
+          total_serials: 0,
+          sold_serials: 0,
+          available_serials: 0,
+        });
+      }
+
+      const productData = productMap.get(serial.product_id)!;
+      productData.total_serials++;
+
+      if (serial.status === 'sold') {
+        productData.sold_serials++;
+        sold_serials++;
+      } else if (serial.status === 'available') {
+        productData.available_serials++;
+        available_serials++;
+      }
+
+      serialsData.push({
+        serial_id: serial.id,
+        product_id: serial.product_id,
+        product_name: product.name,
+        serial_number: serial.serial_number,
+        status: serial.status,
+        sold_at: serial.sold_at,
+        sale_id: serial.sale_id,
+      });
+    }
+
+    return {
+      total_serials: serials.length,
+      sold_serials,
+      available_serials,
+      by_product: Array.from(productMap.entries()).map(([product_id, data]) => ({
+        product_id,
+        ...data,
+      })),
+      serials: serialsData,
+    };
+  }
+
+  /**
+   * Reporte de rotación de productos
+   */
+  async getRotationReport(
+    storeId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<{
+    by_product: Array<{
+      product_id: string;
+      product_name: string;
+      quantity_sold: number;
+      revenue_bs: number;
+      revenue_usd: number;
+      cost_bs: number;
+      cost_usd: number;
+      profit_bs: number;
+      profit_usd: number;
+      profit_margin: number;
+      rotation_rate: number; // Ventas / Stock promedio
+    }>;
+  }> {
+    const query = this.saleItemRepository
+      .createQueryBuilder('item')
+      .innerJoin(Sale, 'sale', 'sale.id = item.sale_id')
+      .where('sale.store_id = :storeId', { storeId });
+
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      query.andWhere('sale.sold_at >= :startDate', { startDate: start });
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query.andWhere('sale.sold_at <= :endDate', { endDate: end });
+    }
+
+    const items = await query.getMany();
+
+    const productMap = new Map<
+      string,
+      {
+        product_name: string;
+        quantity_sold: number;
+        revenue_bs: number;
+        revenue_usd: number;
+        cost_bs: number;
+        cost_usd: number;
+      }
+    >();
+
+    for (const item of items) {
+      const product = await this.productRepository.findOne({
+        where: { id: item.product_id },
+        select: ['id', 'name', 'cost_bs', 'cost_usd'],
+      });
+
+      if (!product) continue;
+
+      if (!productMap.has(item.product_id)) {
+        productMap.set(item.product_id, {
+          product_name: product.name,
+          quantity_sold: 0,
+          revenue_bs: 0,
+          revenue_usd: 0,
+          cost_bs: 0,
+          cost_usd: 0,
+        });
+      }
+
+      const productData = productMap.get(item.product_id)!;
+      productData.quantity_sold += item.qty;
+      productData.revenue_bs += Number(item.unit_price_bs || 0) * item.qty - Number(item.discount_bs || 0);
+      productData.revenue_usd += Number(item.unit_price_usd || 0) * item.qty - Number(item.discount_usd || 0);
+      productData.cost_bs += Number(product.cost_bs || 0) * item.qty;
+      productData.cost_usd += Number(product.cost_usd || 0) * item.qty;
+    }
+
+    return {
+      by_product: Array.from(productMap.entries()).map(([product_id, data]) => {
+        const profit_bs = data.revenue_bs - data.cost_bs;
+        const profit_usd = data.revenue_usd - data.cost_usd;
+        const profit_margin = data.revenue_usd > 0
+          ? (profit_usd / data.revenue_usd) * 100
+          : 0;
+        
+        // Rotación aproximada (ventas / 1, asumiendo stock promedio de 1)
+        // En producción, se debería calcular el stock promedio real
+        const rotation_rate = data.quantity_sold;
+
+        return {
+          product_id,
+          ...data,
+          profit_bs,
+          profit_usd,
+          profit_margin,
+          rotation_rate,
+        };
+      }).sort((a, b) => b.rotation_rate - a.rotation_rate),
+    };
   }
 }
 

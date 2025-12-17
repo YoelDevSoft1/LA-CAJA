@@ -8,14 +8,20 @@ import {
   HttpStatus,
   Header,
   BadRequestException,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ReportsService } from './reports.service';
+import { PdfService } from './pdf.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('reports')
 @UseGuards(JwtAuthGuard)
 export class ReportsController {
-  constructor(private readonly reportsService: ReportsService) {}
+  constructor(
+    private readonly reportsService: ReportsService,
+    private readonly pdfService: PdfService,
+  ) {}
 
   private parseDateParam(value?: string): Date | undefined {
     if (!value) return undefined;
@@ -76,5 +82,135 @@ export class ReportsController {
     const end = this.parseDateParam(endDate);
     const csv = await this.reportsService.exportSalesCSV(storeId, start, end);
     return csv;
+  }
+
+  @Get('shifts')
+  async getShiftsReport(
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
+    @Query('cashier_id') cashierId?: string,
+    @Request() req?: any,
+  ) {
+    const storeId = req.user.store_id;
+    const start = this.parseDateParam(startDate);
+    const end = this.parseDateParam(endDate);
+    return this.reportsService.getShiftsReport(storeId, start, end, cashierId);
+  }
+
+  @Get('arqueos')
+  async getArqueosReport(
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
+    @Request() req?: any,
+  ) {
+    const storeId = req.user.store_id;
+    const start = this.parseDateParam(startDate);
+    const end = this.parseDateParam(endDate);
+    return this.reportsService.getArqueosReport(storeId, start, end);
+  }
+
+  @Get('expiring-products')
+  async getExpiringProductsReport(
+    @Query('days_ahead') daysAhead?: string,
+    @Request() req?: any,
+  ) {
+    const storeId = req.user.store_id;
+    const days = daysAhead ? parseInt(daysAhead, 10) : 30;
+    return this.reportsService.getExpiringProductsReport(storeId, days);
+  }
+
+  @Get('serials')
+  async getSerialsReport(
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
+    @Request() req?: any,
+  ) {
+    const storeId = req.user.store_id;
+    const start = this.parseDateParam(startDate);
+    const end = this.parseDateParam(endDate);
+    return this.reportsService.getSerialsReport(storeId, start, end);
+  }
+
+  @Get('rotation')
+  async getRotationReport(
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
+    @Request() req?: any,
+  ) {
+    const storeId = req.user.store_id;
+    const start = this.parseDateParam(startDate);
+    const end = this.parseDateParam(endDate);
+    return this.reportsService.getRotationReport(storeId, start, end);
+  }
+
+  @Get('sales/by-day/export/pdf')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'attachment; filename=sales-by-day.pdf')
+  async exportSalesByDayPDF(
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
+    @Request() req?: any,
+    @Res() res?: Response,
+  ) {
+    const storeId = req.user.store_id;
+    const start = this.parseDateParam(startDate);
+    const end = this.parseDateParam(endDate);
+    const pdf = await this.pdfService.generateSalesByDayPDF(storeId, start, end);
+    res?.setHeader('Content-Type', 'application/pdf');
+    res?.setHeader('Content-Disposition', 'attachment; filename=sales-by-day.pdf');
+    res?.send(pdf);
+  }
+
+  @Get('shifts/export/pdf')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'attachment; filename=shifts-report.pdf')
+  async exportShiftsPDF(
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
+    @Query('cashier_id') cashierId?: string,
+    @Request() req?: any,
+    @Res() res?: Response,
+  ) {
+    const storeId = req.user.store_id;
+    const start = this.parseDateParam(startDate);
+    const end = this.parseDateParam(endDate);
+    const pdf = await this.pdfService.generateShiftsPDF(storeId, start, end, cashierId);
+    res?.setHeader('Content-Type', 'application/pdf');
+    res?.setHeader('Content-Disposition', 'attachment; filename=shifts-report.pdf');
+    res?.send(pdf);
+  }
+
+  @Get('arqueos/export/pdf')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'attachment; filename=arqueos-report.pdf')
+  async exportArqueosPDF(
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
+    @Request() req?: any,
+    @Res() res?: Response,
+  ) {
+    const storeId = req.user.store_id;
+    const start = this.parseDateParam(startDate);
+    const end = this.parseDateParam(endDate);
+    const pdf = await this.pdfService.generateArqueosPDF(storeId, start, end);
+    res?.setHeader('Content-Type', 'application/pdf');
+    res?.setHeader('Content-Disposition', 'attachment; filename=arqueos-report.pdf');
+    res?.send(pdf);
+  }
+
+  @Get('expiring-products/export/pdf')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'attachment; filename=expiring-products.pdf')
+  async exportExpiringProductsPDF(
+    @Query('days_ahead') daysAhead?: string,
+    @Request() req?: any,
+    @Res() res?: Response,
+  ) {
+    const storeId = req.user.store_id;
+    const days = daysAhead ? parseInt(daysAhead, 10) : 30;
+    const pdf = await this.pdfService.generateExpiringProductsPDF(storeId, days);
+    res?.setHeader('Content-Type', 'application/pdf');
+    res?.setHeader('Content-Disposition', 'attachment; filename=expiring-products.pdf');
+    res?.send(pdf);
   }
 }

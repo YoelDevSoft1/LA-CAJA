@@ -7,6 +7,36 @@
 
 ---
 
+## 📊 Estado Actual de Implementación
+
+**Última actualización:** Enero 2025
+
+### ✅ Completado (Backend)
+- **Fase 1: Paridad Funcional** - ✅ 100% completada
+  - Turnos y cortes X/Z
+  - Multipagos con topes
+  - Descuentos con autorización
+  - Modo caja rápida
+- **Fase 2: Funcionalidades Avanzadas** - ✅ 100% completada
+  - Variantes de productos
+  - Lotes y vencimientos
+  - Seriales
+  - Múltiples consecutivos de factura
+  - Cuentas abiertas (mesas y órdenes)
+  - Periféricos y productos con peso
+  - Listas de precio y promociones (integración end-to-end)
+
+**Ver detalles completos:** `docs/ESTADO_IMPLEMENTACION_ACTUAL.md`
+
+### 🔄 Pendiente
+- Frontend para todas las funcionalidades
+- Integración frontend con periféricos (balanzas, impresoras, scanners)
+- Reportes avanzados y exportación PDF
+- Tasa BCV + fallback manual
+- IA/ML y Analytics avanzados
+
+---
+
 ## 📋 Tabla de Contenidos
 
 1. [Análisis del Estado Actual](#análisis-del-estado-actual)
@@ -51,17 +81,21 @@
 ### 1.2 Gaps Identificados vs Competencia
 
 #### Funcionalidades Básicas Faltantes
-- ❌ Turnos de cajeros con corte X/Z
-- ❌ Multipagos con topes y restricciones
-- ❌ Descuentos con autorización por PIN/rol
-- ❌ Modo caja rápida (teclas rápidas, límite de ítems)
-- ❌ Variantes de productos (talla, color)
-- ❌ Lotes y vencimientos
-- ❌ Seriales de productos
-- ❌ Integración con balanzas
-- ❌ Cuentas abiertas (mesas para restaurantes)
-- ❌ Reportes avanzados y exportación
-- ❌ Integración con periféricos (scanner, impresoras, gavetas)
+- ✅ **COMPLETADO** Turnos de cajeros con corte X/Z (Migración: `13_shifts_and_cuts.sql`)
+- ✅ **COMPLETADO** Multipagos con topes y restricciones (Migración: `14_payment_methods_and_cash_movements.sql`)
+- ✅ **COMPLETADO** Descuentos con autorización por PIN/rol (Migración: `15_discounts_and_authorizations.sql`)
+- ✅ **COMPLETADO** Modo caja rápida (teclas rápidas, límite de ítems) (Migración: `16_fast_checkout_configs.sql`)
+- ✅ **COMPLETADO** Variantes de productos (talla, color) (Migración: `17_product_variants.sql`)
+- ✅ **COMPLETADO** Lotes y vencimientos (Migración: `18_product_lots.sql`)
+- ✅ **COMPLETADO** Seriales de productos (Migración: `19_product_serials.sql`)
+- ✅ **COMPLETADO** Múltiples consecutivos de factura (Migración: `20_invoice_series.sql`)
+- ✅ **COMPLETADO** Cuentas abiertas (mesas para restaurantes) (Migración: `21_tables_and_orders.sql`)
+- ✅ **COMPLETADO** Configuración de periféricos (scanner, impresoras, gavetas, balanzas) (Migración: `22_peripherals_and_weight.sql`)
+- ✅ **COMPLETADO** Listas de precio y ofertas con vigencia (Migración: `23_price_lists_and_promotions.sql`)
+- 🔄 Integración frontend con balanzas (Web Serial API) - Pendiente
+- 🔄 Integración frontend con impresoras (ESC/POS) - Pendiente
+- 🔄 Integración frontend con scanners (Web Serial/HID) - Pendiente
+- ❌ Reportes avanzados y exportación PDF - Pendiente
 
 #### Funcionalidades Avanzadas Faltantes
 - ❌ IA/ML para predicciones y recomendaciones
@@ -274,18 +308,18 @@
 - ✅ Reportes de productos próximos a vencer
 
 #### Sprint 2.3: Seriales y Balanzas (Semana 7)
-- ✅ Gestión de seriales
-- ✅ Trazabilidad completa
-- ✅ Integración con balanzas (peso-precio)
-- ✅ Códigos de barras de balanza
-- ✅ Validación de seriales únicos
+- ✅ **COMPLETADO** Gestión de seriales (Backend completo, Migración: `19_product_serials.sql`)
+- ✅ **COMPLETADO** Trazabilidad completa (Backend completo)
+- ✅ **COMPLETADO** Configuración de balanzas y productos con peso (Backend completo, Migración: `22_peripherals_and_weight.sql`)
+- 🔄 Integración frontend con balanzas (Web Serial API) - Pendiente
+- ✅ **COMPLETADO** Validación de seriales únicos (Backend completo)
 
 #### Sprint 2.4: Cuentas Abiertas (Semana 8)
-- ✅ Gestión de mesas/órdenes
-- ✅ Pausar/reanudar órdenes
-- ✅ Mover/fusionar órdenes
-- ✅ Recibos parciales
-- ✅ Cierre de cuentas
+- ✅ **COMPLETADO** Gestión de mesas/órdenes (Backend completo, Migración: `21_tables_and_orders.sql`)
+- ✅ **COMPLETADO** Pausar/reanudar órdenes (Backend completo)
+- ✅ **COMPLETADO** Mover/fusionar órdenes (Backend completo)
+- ✅ **COMPLETADO** Recibos parciales (Backend completo)
+- ✅ **COMPLETADO** Cierre de cuentas (Backend completo, integrado con SalesService)
 
 **Entregable**: Sistema POS con funcionalidades avanzadas superiores
 
@@ -583,19 +617,21 @@
 
 ### 8.1 Priorización (Matriz de Impacto vs Esfuerzo)
 
-#### Alta Prioridad (Alto Impacto, Bajo Esfuerzo)
-1. ✅ Turnos y cortes X/Z
-2. ✅ Multipagos con topes
-3. ✅ Descuentos con autorización
-4. ✅ Modo caja rápida
-5. ✅ Variantes básicas
+#### Alta Prioridad (Alto Impacto, Bajo Esfuerzo) - ✅ COMPLETADO
+1. ✅ **COMPLETADO** Turnos y cortes X/Z (Backend completo)
+2. ✅ **COMPLETADO** Multipagos con topes (Backend completo)
+3. ✅ **COMPLETADO** Descuentos con autorización (Backend completo)
+4. ✅ **COMPLETADO** Modo caja rápida (Backend completo)
+5. ✅ **COMPLETADO** Variantes básicas (Backend completo)
 
-#### Media Prioridad (Alto Impacto, Medio Esfuerzo)
-1. ⚠️ Lotes y vencimientos
-2. ⚠️ Seriales
-3. ⚠️ Integración con balanzas
-4. ⚠️ Cuentas abiertas
-5. ⚠️ Dashboard ejecutivo
+#### Media Prioridad (Alto Impacto, Medio Esfuerzo) - ✅ COMPLETADO
+1. ✅ **COMPLETADO** Lotes y vencimientos (Backend completo)
+2. ✅ **COMPLETADO** Seriales (Backend completo)
+3. ✅ **COMPLETADO** Configuración de balanzas y productos con peso (Backend completo)
+4. ✅ **COMPLETADO** Cuentas abiertas (Backend completo)
+5. ✅ **COMPLETADO** Múltiples consecutivos de factura (Backend completo)
+6. ✅ **COMPLETADO** Listas de precio y promociones (Backend completo, integración end-to-end)
+7. ⚠️ Dashboard ejecutivo - Pendiente
 
 #### Baja Prioridad (Alto Impacto, Alto Esfuerzo)
 1. 🔄 IA/ML completo
@@ -690,21 +726,42 @@
 
 ### 10.3 Próximos Pasos Inmediatos
 
-1. **Semana 1**: Implementar turnos y cortes X/Z
-2. **Semana 2**: Multipagos con topes
-3. **Semana 3**: Descuentos con autorización
-4. **Semana 4**: Modo caja rápida
-5. **Mes 2**: Funcionalidades avanzadas (variantes, lotes, seriales)
-6. **Mes 3**: IA/ML básico (predicciones, recomendaciones)
-7. **Mes 4**: Analytics avanzados y dashboard ejecutivo
+#### ✅ Completado (Backend)
+1. ✅ **COMPLETADO** Turnos y cortes X/Z (Migración: `13_shifts_and_cuts.sql`)
+2. ✅ **COMPLETADO** Multipagos con topes (Migración: `14_payment_methods_and_cash_movements.sql`)
+3. ✅ **COMPLETADO** Descuentos con autorización (Migración: `15_discounts_and_authorizations.sql`)
+4. ✅ **COMPLETADO** Modo caja rápida (Migración: `16_fast_checkout_configs.sql`)
+5. ✅ **COMPLETADO** Variantes de productos (Migración: `17_product_variants.sql`)
+6. ✅ **COMPLETADO** Lotes y vencimientos (Migración: `18_product_lots.sql`)
+7. ✅ **COMPLETADO** Seriales (Migración: `19_product_serials.sql`)
+8. ✅ **COMPLETADO** Múltiples consecutivos de factura (Migración: `20_invoice_series.sql`)
+9. ✅ **COMPLETADO** Cuentas abiertas (Migración: `21_tables_and_orders.sql`)
+10. ✅ **COMPLETADO** Periféricos y productos con peso (Migración: `22_peripherals_and_weight.sql`)
+11. ✅ **COMPLETADO** Listas de precio y promociones (Migración: `23_price_lists_and_promotions.sql`)
+
+#### 🔄 Pendiente (Frontend)
+- UI para todas las funcionalidades implementadas
+- Integración frontend con balanzas (Web Serial API)
+- Integración frontend con impresoras (ESC/POS)
+- Integración frontend con scanners (Web Serial/HID)
+
+#### 🔄 Pendiente (Backend)
+- Tasa BCV + fallback manual
+- Reportes avanzados (por turno/cajero, margen, rotación, etc.)
+- Exportación PDF
+
+#### 🔄 Pendiente (Futuro)
+- IA/ML básico (predicciones, recomendaciones)
+- Analytics avanzados y dashboard ejecutivo
 
 ### 10.4 Recomendaciones Estratégicas
 
 #### Corto Plazo (1-3 meses)
-- ✅ Completar paridad funcional básica
-- ✅ Mejorar UX/UI significativamente
-- ✅ Implementar reportes básicos
-- ✅ Testing exhaustivo
+- ✅ **COMPLETADO** Paridad funcional básica (Backend)
+- ✅ **COMPLETADO** Funcionalidades avanzadas (Backend)
+- 🔄 Mejorar UX/UI significativamente (Frontend pendiente)
+- 🔄 Implementar reportes avanzados (Pendiente)
+- 🔄 Testing exhaustivo (Pendiente)
 
 #### Medio Plazo (3-6 meses)
 - ⚠️ Implementar IA/ML diferenciadores

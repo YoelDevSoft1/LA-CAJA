@@ -154,20 +154,25 @@ export default function TablesGrid({ onTableClick, onCreateOrder }: TablesGridPr
     let totalBs = 0
     let totalUsd = 0
 
-    order.items.forEach((item) => {
-      const itemTotalBs =
-        Number(item.unit_price_bs) * item.qty - Number(item.discount_bs || 0)
-      const itemTotalUsd =
-        Number(item.unit_price_usd) * item.qty - Number(item.discount_usd || 0)
-      totalBs += itemTotalBs
-      totalUsd += itemTotalUsd
-    })
+    // Verificar que items exista y sea un array
+    if (order.items && Array.isArray(order.items)) {
+      order.items.forEach((item) => {
+        const itemTotalBs =
+          Number(item.unit_price_bs) * item.qty - Number(item.discount_bs || 0)
+        const itemTotalUsd =
+          Number(item.unit_price_usd) * item.qty - Number(item.discount_usd || 0)
+        totalBs += itemTotalBs
+        totalUsd += itemTotalUsd
+      })
+    }
 
-    // Restar pagos parciales
-    order.payments.forEach((payment) => {
-      totalBs -= Number(payment.amount_bs)
-      totalUsd -= Number(payment.amount_usd)
-    })
+    // Restar pagos parciales (verificar que payments exista y sea un array)
+    if (order.payments && Array.isArray(order.payments)) {
+      order.payments.forEach((payment) => {
+        totalBs -= Number(payment.amount_bs)
+        totalUsd -= Number(payment.amount_usd)
+      })
+    }
 
     return { bs: Math.max(0, totalBs), usd: Math.max(0, totalUsd) }
   }

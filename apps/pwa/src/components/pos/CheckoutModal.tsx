@@ -7,6 +7,8 @@ import { customersService } from '@/services/customers.service'
 import { paymentsService } from '@/services/payments.service'
 import { fastCheckoutService } from '@/services/fast-checkout.service'
 import { invoiceSeriesService } from '@/services/invoice-series.service'
+import { priceListsService } from '@/services/price-lists.service'
+import { promotionsService } from '@/services/promotions.service'
 import { calculateRoundedChange, roundToNearestDenomination, calculateChange, formatChangeBreakdown } from '@/utils/vzla-denominations'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,6 +48,8 @@ interface CheckoutModalProps {
     customer_note?: string
     serials?: Record<string, string[]> // product_id -> serial_numbers[]
     invoice_series_id?: string | null // ID de la serie de factura a usar
+    price_list_id?: string | null // ID de la lista de precio a usar
+    promotion_id?: string | null // ID de la promoción a aplicar
   }) => void
   isLoading?: boolean
 }
@@ -129,7 +133,34 @@ export default function CheckoutModal({
     enabled: isOpen,
   })
 
+  // Obtener listas de precio
+  const { data: priceLists } = useQuery({
+    queryKey: ['price-lists'],
+    queryFn: () => priceListsService.getAll(),
+    staleTime: 1000 * 60 * 5, // 5 minutos
+    enabled: isOpen,
+  })
+
+  // Obtener lista por defecto
+  const { data: defaultPriceList } = useQuery({
+    queryKey: ['price-lists', 'default'],
+    queryFn: () => priceListsService.getDefault(),
+    staleTime: 1000 * 60 * 5, // 5 minutos
+    enabled: isOpen,
+  })
+
+  // Obtener promociones activas
+  const { data: activePromotions } = useQuery({
+    queryKey: ['promotions', 'active'],
+    queryFn: () => promotionsService.getActive(),
+    staleTime: 1000 * 60 * 2, // 2 minutos (más frecuente porque cambian más)
+    enabled: isOpen,
+  })
+
   const [selectedInvoiceSeriesId, setSelectedInvoiceSeriesId] = useState<string | null>(null)
+  const [selectedPriceListId, setSelectedPriceListId] = useState<string | null>(null)
+  const [selectedPromotionId, setSelectedPromotionId] = useState<string | null>(null)
+  const [promotionCode, setPromotionCode] = useState<string>('')
 
   // Prellenar la tasa cuando se obtiene del backend
   useEffect(() => {
@@ -144,6 +175,13 @@ export default function CheckoutModal({
       setSelectedInvoiceSeriesId(defaultSeries.id)
     }
   }, [isOpen, defaultSeries, selectedInvoiceSeriesId])
+
+  // Prellenar lista de precio por defecto
+  useEffect(() => {
+    if (isOpen && defaultPriceList && !selectedPriceListId) {
+      setSelectedPriceListId(defaultPriceList.id)
+    }
+  }, [isOpen, defaultPriceList, selectedPriceListId])
 
   // Buscar clientes cuando se escribe en el campo de búsqueda
   const { data: customerSearchResults = [], isLoading: isLoadingCustomers } = useQuery({
@@ -168,6 +206,9 @@ export default function CheckoutModal({
       setGiveChangeInBs(false)
       setReceivedBs(0)
       setSelectedInvoiceSeriesId(null)
+      setSelectedPriceListId(null)
+      setSelectedPromotionId(null)
+      setPromotionCode('')
       setSelectedSerials({})
       setSerialSelectorItem(null)
     }
@@ -440,8 +481,32 @@ export default function CheckoutModal({
       customer_phone: customerPhone.trim() || undefined,
       customer_note: customerNote.trim() || undefined,
       serials: Object.keys(selectedSerials).length > 0 ? selectedSerials : undefined,
+      invoice_series_id: selectedInvoiceSeriesId,
+      price_list_id: selectedPriceListId,
+      promotion_id: selectedPromotionId,
     })
     setError('')
+  }
+
+  // Handler para buscar promoción por código
+  const handlePromotionCodeSearch = async () => {
+    if (!promotionCode.trim()) {
+      setError('Ingresa un código de promoción')
+      return
+    }
+
+    try {
+      const promotion = await promotionsService.getByCode(promotionCode.trim().toUpperCase())
+      setSelectedPromotionId(promotion.id)
+      setPromotionCode('')
+      setError('')
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        setError('Promoción no encontrada')
+      } else {
+        setError('Error al buscar promoción')
+      }
+    }
   }
 
   const handleSerialSelect = (serialNumbers: string[]) => {
@@ -826,6 +891,124 @@ export default function CheckoutModal({
               </p>
             </div>
           )}
+
+          {/* Lista de Precio (Opcional) */}
+          {priceLists && priceLists.length > 0 && (
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2">
+                Lista de Precio (Opcional)
+              </label>
+              <Select
+                value={selectedPriceListId || 'default'}
+                onValueChange={(value) => {
+                  setSelectedPriceListId(value === 'default' ? null : value)
+                  setError('')
+                }}
+                disabled={isLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Usar lista por defecto" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Usar lista por defecto</SelectItem>
+                  {priceLists
+                    .filter((list) => list.is_active)
+                    .map((list) => (
+                      <SelectItem key={list.id} value={list.id}>
+                        {list.name} {list.is_default && '(Por defecto)'}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Si no se selecciona, se usará la lista por defecto activa
+              </p>
+            </div>
+          )}
+
+          {/* Promoción (Opcional) */}
+          <div>
+            <label className="block text-sm font-semibold text-foreground mb-2">
+              Promoción (Opcional)
+            </label>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  value={promotionCode}
+                  onChange={(e) => {
+                    setPromotionCode(e.target.value.toUpperCase())
+                    setError('')
+                  }}
+                  placeholder="Código de promoción (ej: DESC20)"
+                  className="flex-1"
+                  disabled={isLoading}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handlePromotionCodeSearch()
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePromotionCodeSearch}
+                  disabled={isLoading || !promotionCode.trim()}
+                >
+                  Buscar
+                </Button>
+              </div>
+              {activePromotions && activePromotions.length > 0 && (
+                <Select
+                  value={selectedPromotionId || 'none'}
+                  onValueChange={(value) => {
+                    setSelectedPromotionId(value === 'none' ? null : value)
+                    setError('')
+                  }}
+                  disabled={isLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar promoción" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin promoción</SelectItem>
+                    {activePromotions.map((promotion) => (
+                      <SelectItem key={promotion.id} value={promotion.id}>
+                        {promotion.name} {promotion.code && `(${promotion.code})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {selectedPromotionId && activePromotions && (
+                <div className="text-xs text-muted-foreground">
+                  {(() => {
+                    const promotion = activePromotions.find((p) => p.id === selectedPromotionId)
+                    if (!promotion) return null
+                    return (
+                      <div className="p-2 bg-primary/5 rounded border border-primary/20">
+                        <p className="font-medium text-foreground">{promotion.name}</p>
+                        {promotion.description && (
+                          <p className="text-muted-foreground mt-1">{promotion.description}</p>
+                        )}
+                        {promotion.promotion_type === 'percentage' && promotion.discount_percentage && (
+                          <p className="text-primary font-semibold mt-1">
+                            Descuento: {promotion.discount_percentage}%
+                          </p>
+                        )}
+                        {promotion.promotion_type === 'fixed_amount' && (
+                          <p className="text-primary font-semibold mt-1">
+                            Descuento: {promotion.discount_amount_usd ? `$${promotion.discount_amount_usd} USD` : `Bs. ${promotion.discount_amount_bs}`}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Tasa de cambio */}
           <div>

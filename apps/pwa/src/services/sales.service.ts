@@ -52,6 +52,8 @@ export interface CreateSaleRequest {
   cash_session_id?: string
   note?: string | null
   invoice_series_id?: string | null // ID de la serie de factura a usar
+  price_list_id?: string | null // ID de la lista de precio a usar
+  promotion_id?: string | null // ID de la promoción a aplicar
   // Para modo offline
   store_id?: string
   user_id?: string

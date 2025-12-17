@@ -346,6 +346,10 @@ export default function POSPage() {
       received_usd: number
       change_bs?: number
     }
+    cash_payment_bs?: {
+      received_bs: number
+      change_bs?: number
+    }
     customer_id?: string
     customer_name?: string
     customer_document_id?: string
@@ -353,6 +357,8 @@ export default function POSPage() {
     customer_note?: string
     serials?: Record<string, string[]> // product_id -> serial_numbers[]
     invoice_series_id?: string | null // ID de la serie de factura
+    price_list_id?: string | null // ID de la lista de precio
+    promotion_id?: string | null // ID de la promoción
   }) => {
     const saleItems = items.map((item) => ({
       product_id: item.product_id,
@@ -390,6 +396,8 @@ export default function POSPage() {
       customer_note: checkoutData.customer_note,
       note: null,
       invoice_series_id: checkoutData.invoice_series_id || undefined,
+      price_list_id: checkoutData.price_list_id || undefined,
+      promotion_id: checkoutData.promotion_id || undefined,
       // Datos para modo offline
       store_id: user?.store_id,
       user_id: user?.user_id,

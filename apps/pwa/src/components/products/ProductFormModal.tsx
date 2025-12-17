@@ -11,7 +11,16 @@ import { useAuth } from '@/stores/auth.store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
 
 const productSchema = z.object({
   name: z.string().min(1, 'El nombre es requerido'),
@@ -23,6 +32,14 @@ const productSchema = z.object({
   cost_bs: z.number().min(0, 'El costo debe ser mayor o igual a 0'),
   cost_usd: z.number().min(0, 'El costo debe ser mayor o igual a 0'),
   low_stock_threshold: z.number().min(0, 'El umbral debe ser mayor o igual a 0').optional(),
+  is_weight_product: z.boolean().optional(),
+  weight_unit: z.enum(['kg', 'g', 'lb', 'oz']).nullable().optional(),
+  price_per_weight_bs: z.number().min(0).nullable().optional(),
+  price_per_weight_usd: z.number().min(0).nullable().optional(),
+  min_weight: z.number().min(0).nullable().optional(),
+  max_weight: z.number().min(0).nullable().optional(),
+  scale_plu: z.string().nullable().optional(),
+  scale_department: z.number().min(1).nullable().optional(),
 })
 
 type ProductFormData = z.infer<typeof productSchema>
@@ -76,6 +93,9 @@ export default function ProductFormModal({
   // Observar cambios en price_usd y cost_usd para calcular automáticamente los valores en Bs
   const priceUsd = useWatch({ control, name: 'price_usd' })
   const costUsd = useWatch({ control, name: 'cost_usd' })
+  const isWeightProduct = useWatch({ control, name: 'is_weight_product' })
+  const pricePerWeightUsd = useWatch({ control, name: 'price_per_weight_usd' })
+  const weightUnit = useWatch({ control, name: 'weight_unit' })
 
   // Calcular automáticamente price_bs y cost_bs cuando cambian los valores USD
   useEffect(() => {
@@ -93,8 +113,14 @@ export default function ProductFormModal({
         const calculatedCostBs = Math.round((costUsd * exchangeRate) * 100) / 100
         setValue('cost_bs', calculatedCostBs, { shouldValidate: false })
       }
+
+      // Calcular price_per_weight_bs desde price_per_weight_usd
+      if (pricePerWeightUsd !== undefined && pricePerWeightUsd !== null) {
+        const calculatedPricePerWeightBs = Math.round((pricePerWeightUsd * exchangeRate) * 100) / 100
+        setValue('price_per_weight_bs', calculatedPricePerWeightBs, { shouldValidate: false })
+      }
     }
-  }, [priceUsd, costUsd, bcvRateData, setValue])
+  }, [priceUsd, costUsd, pricePerWeightUsd, bcvRateData, setValue])
 
   // Cargar datos del producto si está en modo edición
   useEffect(() => {
@@ -109,6 +135,18 @@ export default function ProductFormModal({
         cost_bs: Number(product.cost_bs),
         cost_usd: Number(product.cost_usd),
         low_stock_threshold: product.low_stock_threshold || 0,
+        is_weight_product: product.is_weight_product || false,
+        weight_unit: product.weight_unit || null,
+        price_per_weight_bs: product.price_per_weight_bs
+          ? Number(product.price_per_weight_bs)
+          : null,
+        price_per_weight_usd: product.price_per_weight_usd
+          ? Number(product.price_per_weight_usd)
+          : null,
+        min_weight: product.min_weight ? Number(product.min_weight) : null,
+        max_weight: product.max_weight ? Number(product.max_weight) : null,
+        scale_plu: product.scale_plu || null,
+        scale_department: product.scale_department || null,
       })
     } else {
       reset({
@@ -121,6 +159,14 @@ export default function ProductFormModal({
         cost_bs: 0,
         cost_usd: 0,
         low_stock_threshold: 0,
+        is_weight_product: false,
+        weight_unit: null,
+        price_per_weight_bs: null,
+        price_per_weight_usd: null,
+        min_weight: null,
+        max_weight: null,
+        scale_plu: null,
+        scale_department: null,
       })
     }
   }, [product, reset])
@@ -154,17 +200,33 @@ export default function ProductFormModal({
   })
 
   const onSubmit = (data: ProductFormData) => {
+    const submitData: Partial<Product> = {
+      name: data.name,
+      category: data.category || null,
+      sku: data.sku || null,
+      barcode: data.barcode || null,
+      price_usd: data.price_usd,
+      cost_usd: data.cost_usd,
+      low_stock_threshold: data.low_stock_threshold || 0,
+      is_weight_product: data.is_weight_product || false,
+      weight_unit: data.is_weight_product ? (data.weight_unit || null) : null,
+      price_per_weight_bs: data.is_weight_product
+        ? (data.price_per_weight_bs || null)
+        : null,
+      price_per_weight_usd: data.is_weight_product
+        ? (data.price_per_weight_usd || null)
+        : null,
+      min_weight: data.is_weight_product ? (data.min_weight || null) : null,
+      max_weight: data.is_weight_product ? (data.max_weight || null) : null,
+      scale_plu: data.is_weight_product ? (data.scale_plu || null) : null,
+      scale_department: data.is_weight_product ? (data.scale_department || null) : null,
+    }
+
     if (isEditing) {
       // Al actualizar, solo enviar price_usd y cost_usd, el backend calculará los Bs
-      const updateData = {
-        ...data,
-        // No enviar price_bs ni cost_bs, el backend los calculará desde USD
-        price_bs: undefined,
-        cost_bs: undefined,
-      }
-      updateMutation.mutate(updateData)
+      updateMutation.mutate(submitData)
     } else {
-      createMutation.mutate(data)
+      createMutation.mutate(submitData)
     }
   }
 
@@ -343,6 +405,174 @@ export default function ProductFormModal({
               Se mostrará una alerta cuando el stock esté por debajo de este valor
             </p>
           </div>
+
+          <Separator className="my-4" />
+
+          {/* Producto con peso */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="is_weight_product" className="text-base font-semibold">
+                Producto con Peso
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Activa esta opción si el producto se vende por peso (ej: carne, frutas, verduras)
+              </p>
+            </div>
+            <Switch
+              id="is_weight_product"
+              checked={isWeightProduct || false}
+              onCheckedChange={(checked) => setValue('is_weight_product', checked)}
+              disabled={isLoading}
+            />
+          </div>
+
+          {/* Campos de peso (solo si is_weight_product está activado) */}
+          {isWeightProduct && (
+            <div className="space-y-4 border border-primary/20 rounded-lg p-4 bg-primary/5">
+              <h3 className="font-semibold text-foreground">Configuración de Peso</h3>
+
+              {/* Unidad de peso */}
+              <div>
+                <Label htmlFor="weight_unit" className="text-sm font-semibold">
+                  Unidad de Peso <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={weightUnit || 'kg'}
+                  onValueChange={(value) =>
+                    setValue('weight_unit', value as 'kg' | 'g' | 'lb' | 'oz')
+                  }
+                  disabled={isLoading}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="kg">Kilogramos (kg)</SelectItem>
+                    <SelectItem value="g">Gramos (g)</SelectItem>
+                    <SelectItem value="lb">Libras (lb)</SelectItem>
+                    <SelectItem value="oz">Onzas (oz)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Precio por peso */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="price_per_weight_usd" className="text-sm font-semibold">
+                    Precio por Peso USD <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="price_per_weight_usd"
+                    type="number"
+                    step="0.01"
+                    {...register('price_per_weight_usd', { valueAsNumber: true })}
+                    className="mt-2 text-base"
+                    placeholder="0.00"
+                  />
+                  {errors.price_per_weight_usd && (
+                    <p className="mt-1 text-xs text-destructive">
+                      {errors.price_per_weight_usd.message}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="price_per_weight_bs" className="text-sm font-semibold">
+                    Precio por Peso Bs <span className="text-destructive">*</span>
+                    <span className="text-xs font-normal text-muted-foreground ml-2">
+                      (Calculado automáticamente)
+                    </span>
+                  </Label>
+                  <Input
+                    id="price_per_weight_bs"
+                    type="number"
+                    step="0.01"
+                    {...register('price_per_weight_bs', { valueAsNumber: true })}
+                    className="mt-2 text-base bg-muted cursor-not-allowed"
+                    placeholder="0.00"
+                    readOnly
+                  />
+                  {errors.price_per_weight_bs && (
+                    <p className="mt-1 text-xs text-destructive">
+                      {errors.price_per_weight_bs.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Peso mínimo y máximo */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="min_weight" className="text-sm font-semibold">
+                    Peso Mínimo
+                  </Label>
+                  <Input
+                    id="min_weight"
+                    type="number"
+                    step="0.001"
+                    {...register('min_weight', { valueAsNumber: true })}
+                    className="mt-2 text-base"
+                    placeholder="0.000"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Peso mínimo permitido para la venta
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="max_weight" className="text-sm font-semibold">
+                    Peso Máximo
+                  </Label>
+                  <Input
+                    id="max_weight"
+                    type="number"
+                    step="0.001"
+                    {...register('max_weight', { valueAsNumber: true })}
+                    className="mt-2 text-base"
+                    placeholder="0.000"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Peso máximo permitido para la venta
+                  </p>
+                </div>
+              </div>
+
+              {/* PLU y Departamento para balanza */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="scale_plu" className="text-sm font-semibold">
+                    PLU de Balanza
+                  </Label>
+                  <Input
+                    id="scale_plu"
+                    type="text"
+                    {...register('scale_plu')}
+                    className="mt-2 text-base"
+                    placeholder="Ej: 001"
+                    maxLength={50}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Código PLU para identificar el producto en la balanza
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="scale_department" className="text-sm font-semibold">
+                    Departamento de Balanza
+                  </Label>
+                  <Input
+                    id="scale_department"
+                    type="number"
+                    step="1"
+                    min="1"
+                    {...register('scale_department', { valueAsNumber: true })}
+                    className="mt-2 text-base"
+                    placeholder="1"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Número de departamento para la balanza
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           </CardContent>
 
           {/* Botones - Fijos en la parte inferior */}

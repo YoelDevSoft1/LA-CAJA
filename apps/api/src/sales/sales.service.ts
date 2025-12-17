@@ -24,6 +24,8 @@ import { InventoryRulesService } from '../product-lots/inventory-rules.service';
 import { ProductSerial } from '../database/entities/product-serial.entity';
 import { ProductSerialsService } from '../product-serials/product-serials.service';
 import { InvoiceSeriesService } from '../invoice-series/invoice-series.service';
+import { PriceListsService } from '../price-lists/price-lists.service';
+import { PromotionsService } from '../promotions/promotions.service';
 
 @Injectable()
 export class SalesService {
@@ -53,6 +55,8 @@ export class SalesService {
     private inventoryRulesService: InventoryRulesService,
     private productSerialsService: ProductSerialsService,
     private invoiceSeriesService: InvoiceSeriesService,
+    private priceListsService: PriceListsService,
+    private promotionsService: PromotionsService,
   ) {}
 
   async create(storeId: string, dto: CreateSaleDto, userId?: string): Promise<Sale> {
@@ -302,9 +306,25 @@ export class SalesService {
           }
         }
 
-        // Calcular precios (usar precio de variante si existe, sino del producto)
-        const priceBs = variant?.price_bs ?? product.price_bs;
-        const priceUsd = variant?.price_usd ?? product.price_usd;
+        // Calcular precios
+        // Primero intentar obtener precio de lista de precio
+        let priceBs = variant?.price_bs ?? product.price_bs;
+        let priceUsd = variant?.price_usd ?? product.price_usd;
+
+        if (dto.price_list_id) {
+          const listPrice = await this.priceListsService.getProductPrice(
+            storeId,
+            product.id,
+            variant?.id || null,
+            cartItem.qty,
+            dto.price_list_id,
+          );
+
+          if (listPrice) {
+            priceBs = listPrice.price_bs;
+            priceUsd = listPrice.price_usd;
+          }
+        }
 
         const itemDiscountBs = cartItem.discount_bs || 0;
         const itemDiscountUsd = cartItem.discount_usd || 0;
@@ -333,9 +353,49 @@ export class SalesService {
         items.push(saleItem);
       }
 
+      // Aplicar promoción si se especifica
+      let promotionDiscountBs = 0;
+      let promotionDiscountUsd = 0;
+
+      if (dto.promotion_id) {
+        const promotion = await this.promotionsService.getPromotionById(
+          storeId,
+          dto.promotion_id,
+        );
+
+        // Validar promoción
+        const validation = await this.promotionsService.validatePromotion(
+          storeId,
+          dto.promotion_id,
+          subtotalBs,
+          subtotalUsd,
+          finalCustomerId,
+        );
+
+        if (!validation.valid) {
+          throw new BadRequestException(
+            validation.error || 'La promoción no puede aplicarse',
+          );
+        }
+
+        // Calcular descuento de promoción
+        const promotionDiscount = this.promotionsService.calculatePromotionDiscount(
+          promotion,
+          subtotalBs,
+          subtotalUsd,
+        );
+
+        promotionDiscountBs = promotionDiscount.discount_bs;
+        promotionDiscountUsd = promotionDiscount.discount_usd;
+
+        // Agregar descuento de promoción a los descuentos totales
+        discountBs += promotionDiscountBs;
+        discountUsd += promotionDiscountUsd;
+      }
+
       // Calcular totales
-      const totalBs = subtotalBs;
-      const totalUsd = subtotalUsd;
+      const totalBs = subtotalBs - discountBs;
+      const totalUsd = subtotalUsd - discountUsd;
 
       // Validar descuentos si hay alguno
       if (discountBs > 0 || discountUsd > 0) {
@@ -446,6 +506,17 @@ export class SalesService {
 
       // Guardar items
       await manager.save(SaleItem, items);
+
+      // Registrar uso de promoción si se aplicó
+      if (dto.promotion_id && (promotionDiscountBs > 0 || promotionDiscountUsd > 0)) {
+        await this.promotionsService.recordPromotionUsage(
+          dto.promotion_id,
+          savedSale.id,
+          finalCustomerId,
+          promotionDiscountBs,
+          promotionDiscountUsd,
+        );
+      }
 
       // Crear movimientos de inventario (descontar stock)
       // Solo si el producto NO tiene lotes (los lotes ya se manejaron arriba)
