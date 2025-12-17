@@ -9,6 +9,7 @@ import { fastCheckoutService } from '@/services/fast-checkout.service'
 import { invoiceSeriesService } from '@/services/invoice-series.service'
 import { priceListsService } from '@/services/price-lists.service'
 import { promotionsService } from '@/services/promotions.service'
+import { warehousesService } from '@/services/warehouses.service'
 import { calculateRoundedChange, roundToNearestDenomination, calculateChange, formatChangeBreakdown } from '@/utils/vzla-denominations'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,6 +51,7 @@ interface CheckoutModalProps {
     invoice_series_id?: string | null // ID de la serie de factura a usar
     price_list_id?: string | null // ID de la lista de precio a usar
     promotion_id?: string | null // ID de la promoción a aplicar
+    warehouse_id?: string | null // ID de la bodega de donde se vende
   }) => void
   isLoading?: boolean
 }
@@ -157,10 +159,27 @@ export default function CheckoutModal({
     enabled: isOpen,
   })
 
+  // Obtener bodegas
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: () => warehousesService.getAll(),
+    staleTime: 1000 * 60 * 5, // 5 minutos
+    enabled: isOpen,
+  })
+
+  // Obtener bodega por defecto
+  const { data: defaultWarehouse } = useQuery({
+    queryKey: ['warehouses', 'default'],
+    queryFn: () => warehousesService.getDefault(),
+    staleTime: 1000 * 60 * 5, // 5 minutos
+    enabled: isOpen,
+  })
+
   const [selectedInvoiceSeriesId, setSelectedInvoiceSeriesId] = useState<string | null>(null)
   const [selectedPriceListId, setSelectedPriceListId] = useState<string | null>(null)
   const [selectedPromotionId, setSelectedPromotionId] = useState<string | null>(null)
   const [promotionCode, setPromotionCode] = useState<string>('')
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null)
 
   // Prellenar la tasa cuando se obtiene del backend
   useEffect(() => {
@@ -182,6 +201,13 @@ export default function CheckoutModal({
       setSelectedPriceListId(defaultPriceList.id)
     }
   }, [isOpen, defaultPriceList, selectedPriceListId])
+
+  // Prellenar bodega por defecto
+  useEffect(() => {
+    if (isOpen && defaultWarehouse && !selectedWarehouseId) {
+      setSelectedWarehouseId(defaultWarehouse.id)
+    }
+  }, [isOpen, defaultWarehouse, selectedWarehouseId])
 
   // Buscar clientes cuando se escribe en el campo de búsqueda
   const { data: customerSearchResults = [], isLoading: isLoadingCustomers } = useQuery({
@@ -209,6 +235,7 @@ export default function CheckoutModal({
       setSelectedPriceListId(null)
       setSelectedPromotionId(null)
       setPromotionCode('')
+      setSelectedWarehouseId(null)
       setSelectedSerials({})
       setSerialSelectorItem(null)
     }
@@ -484,6 +511,7 @@ export default function CheckoutModal({
       invoice_series_id: selectedInvoiceSeriesId,
       price_list_id: selectedPriceListId,
       promotion_id: selectedPromotionId,
+      warehouse_id: selectedWarehouseId,
     })
     setError('')
   }
@@ -1009,6 +1037,40 @@ export default function CheckoutModal({
               )}
             </div>
           </div>
+
+          {/* Bodega (Opcional) */}
+          {warehouses.length > 0 && (
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2">
+                Bodega de Venta (Opcional)
+              </label>
+              <Select
+                value={selectedWarehouseId || 'default'}
+                onValueChange={(value) => {
+                  setSelectedWarehouseId(value === 'default' ? null : value)
+                  setError('')
+                }}
+                disabled={isLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Usar bodega por defecto" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Usar bodega por defecto</SelectItem>
+                  {warehouses
+                    .filter((w) => w.is_active)
+                    .map((w) => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.name} {w.is_default && '(Por defecto)'}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Si no se selecciona, se usará la bodega por defecto para descontar el stock
+              </p>
+            </div>
+          )}
 
           {/* Tasa de cambio */}
           <div>

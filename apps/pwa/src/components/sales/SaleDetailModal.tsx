@@ -1,5 +1,8 @@
-import { FileText, Package, DollarSign, Calendar, User, CreditCard, UserCircle, Receipt } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { FileText, Package, DollarSign, Calendar, User, CreditCard, UserCircle, Receipt, ReceiptText, ExternalLink } from 'lucide-react'
 import { Sale } from '@/services/sales.service'
+import { fiscalInvoicesService, FiscalInvoice } from '@/services/fiscal-invoices.service'
 import { format } from 'date-fns'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -7,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
+import CreateFiscalInvoiceFromSaleModal from '@/components/fiscal/CreateFiscalInvoiceFromSaleModal'
+import { useNavigate } from 'react-router-dom'
 
 interface SaleDetailModalProps {
   isOpen: boolean
@@ -35,9 +40,34 @@ export default function SaleDetailModal({
   onClose,
   sale,
 }: SaleDetailModalProps) {
+  const navigate = useNavigate()
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [fiscalInvoice, setFiscalInvoice] = useState<FiscalInvoice | null>(null)
+
+  // Obtener factura fiscal si existe
+  const { data: fiscalInvoiceData } = useQuery({
+    queryKey: ['fiscal-invoices', 'by-sale', sale?.id],
+    queryFn: () => fiscalInvoicesService.findBySale(sale!.id),
+    enabled: !!sale?.id && isOpen,
+    staleTime: 1000 * 60 * 2, // 2 minutos
+  })
+
+  useEffect(() => {
+    if (fiscalInvoiceData) {
+      setFiscalInvoice(fiscalInvoiceData)
+    } else {
+      setFiscalInvoice(null)
+    }
+  }, [fiscalInvoiceData])
+
   if (!sale) return null
 
   const totalItems = sale.items.reduce((sum, item) => sum + item.qty, 0)
+
+  const handleCreateSuccess = () => {
+    // Refrescar la factura fiscal
+    setShowCreateModal(false)
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -448,6 +478,81 @@ export default function SaleDetailModal({
                 </CardContent>
               </Card>
 
+              {/* Sección: Factura Fiscal */}
+              <div>
+                <h3 className="text-sm sm:text-base font-semibold text-foreground mb-3 flex items-center">
+                  <ReceiptText className="w-4 h-4 mr-2" />
+                  Factura Fiscal
+                </h3>
+                {fiscalInvoice ? (
+                  <Card className="bg-primary/5 border-primary/50">
+                    <CardContent className="p-3 sm:p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              fiscalInvoice.status === 'issued'
+                                ? 'bg-green-100 text-green-800'
+                                : fiscalInvoice.status === 'draft'
+                                ? 'bg-gray-100 text-gray-800'
+                                : 'bg-red-100 text-red-800'
+                            )}
+                          >
+                            {fiscalInvoice.status === 'issued'
+                              ? 'Emitida'
+                              : fiscalInvoice.status === 'draft'
+                              ? 'Borrador'
+                              : 'Cancelada'}
+                          </Badge>
+                          <span className="font-semibold text-foreground">
+                            {fiscalInvoice.invoice_number}
+                          </span>
+                          {fiscalInvoice.fiscal_number && (
+                            <span className="text-xs text-muted-foreground">
+                              Fiscal: {fiscalInvoice.fiscal_number}
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            navigate(`/fiscal-invoices/${fiscalInvoice.id}`)
+                            onClose()
+                          }}
+                        >
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Ver Factura
+                        </Button>
+                      </div>
+                      {fiscalInvoice.issued_at && (
+                        <p className="text-xs text-muted-foreground">
+                          Emitida el: {new Date(fiscalInvoice.issued_at).toLocaleString()}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="bg-muted/50 border-border">
+                    <CardContent className="p-3 sm:p-4">
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Esta venta no tiene factura fiscal asociada.
+                      </p>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => setShowCreateModal(true)}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <ReceiptText className="w-4 h-4 mr-2" />
+                        Generar Factura Fiscal
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
               {/* Nota */}
               {sale.note && (
                 <Card className="bg-warning/5 border-warning/50">
@@ -469,6 +574,16 @@ export default function SaleDetailModal({
           </Button>
         </div>
       </DialogContent>
+
+      {/* Modal para crear factura fiscal */}
+      {sale && (
+        <CreateFiscalInvoiceFromSaleModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          saleId={sale.id}
+          onSuccess={handleCreateSuccess}
+        />
+      )}
     </Dialog>
   )
 }

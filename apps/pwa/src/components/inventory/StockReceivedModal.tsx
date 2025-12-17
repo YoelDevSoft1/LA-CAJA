@@ -5,6 +5,7 @@ import { inventoryService, StockReceivedRequest, StockStatus } from '@/services/
 import { productsService, Product } from '@/services/products.service'
 import { productsCacheService } from '@/services/products-cache.service'
 import { exchangeService } from '@/services/exchange.service'
+import { warehousesService } from '@/services/warehouses.service'
 import { useAuth } from '@/stores/auth.store'
 import { Plus, Trash2, Search } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -15,6 +16,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface StockReceivedModalProps {
   isOpen: boolean
@@ -45,6 +53,7 @@ export default function StockReceivedModal({
   const [supplier, setSupplier] = useState('')
   const [invoice, setInvoice] = useState('')
   const [note, setNote] = useState('')
+  const [warehouseId, setWarehouseId] = useState<string | null>(null)
 
   // Obtener productos para selección (con cache offline persistente)
   const { data: productsData } = useQuery({
@@ -81,6 +90,27 @@ export default function StockReceivedModal({
     gcTime: Infinity, // Nunca eliminar
     enabled: isOpen,
   })
+
+  // Obtener bodegas
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: () => warehousesService.getAll(),
+    enabled: isOpen && !!user?.store_id,
+  })
+
+  // Obtener bodega por defecto
+  const { data: defaultWarehouse } = useQuery({
+    queryKey: ['warehouses', 'default'],
+    queryFn: () => warehousesService.getDefault(),
+    enabled: isOpen && !!user?.store_id,
+  })
+
+  // Prellenar bodega por defecto
+  useEffect(() => {
+    if (isOpen && defaultWarehouse && !warehouseId) {
+      setWarehouseId(defaultWarehouse.id)
+    }
+  }, [isOpen, defaultWarehouse, warehouseId])
 
   const products = (productsData?.products || initialProducts?.products || []) as any[]
   const exchangeRate = bcvRateData?.rate || 36
@@ -125,6 +155,7 @@ export default function StockReceivedModal({
       setNote('')
       setSearchQuery('')
       setShowProductSearch(false)
+      setWarehouseId(null)
     }
   }, [isOpen])
 
@@ -205,6 +236,7 @@ export default function StockReceivedModal({
       unit_cost_bs: item.unit_cost_bs,
       unit_cost_usd: item.unit_cost_usd,
       note: note || undefined,
+      warehouse_id: warehouseId || undefined,
       ref:
         supplier || invoice
           ? {
@@ -386,9 +418,39 @@ export default function StockReceivedModal({
                 </div>
               )}
 
-              {/* Información compartida (Proveedor, Factura, Nota) */}
+              {/* Información compartida (Bodega, Proveedor, Factura, Nota) */}
               {productItems.length > 0 && (
                 <div className="border-t border-border pt-4 space-y-4">
+                  {/* Selector de bodega */}
+                  {warehouses.length > 0 && (
+                    <div>
+                      <Label htmlFor="warehouse">Bodega (Opcional)</Label>
+                      <Select
+                        value={warehouseId || 'default'}
+                        onValueChange={(value) =>
+                          setWarehouseId(value === 'default' ? null : value)
+                        }
+                      >
+                        <SelectTrigger className="mt-2">
+                          <SelectValue placeholder="Usar bodega por defecto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">Usar bodega por defecto</SelectItem>
+                          {warehouses
+                            .filter((w) => w.is_active)
+                            .map((w) => (
+                              <SelectItem key={w.id} value={w.id}>
+                                {w.name} {w.is_default && '(Por defecto)'}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Si no se selecciona, se usará la bodega por defecto
+                      </p>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="supplier">Proveedor</Label>

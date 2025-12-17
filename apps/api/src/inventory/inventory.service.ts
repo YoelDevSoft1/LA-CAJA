@@ -5,6 +5,7 @@ import { InventoryMovement, MovementType } from '../database/entities/inventory-
 import { Product } from '../database/entities/product.entity';
 import { StockReceivedDto } from './dto/stock-received.dto';
 import { StockAdjustedDto } from './dto/stock-adjusted.dto';
+import { WarehousesService } from '../warehouses/warehouses.service';
 import { randomUUID } from 'crypto';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class InventoryService {
     private movementRepository: Repository<InventoryMovement>,
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
+    private warehousesService: WarehousesService,
   ) {}
 
   async stockReceived(
@@ -31,6 +33,21 @@ export class InventoryService {
       throw new NotFoundException('Producto no encontrado');
     }
 
+    // Determinar bodega destino
+    let warehouseId: string | null = null;
+    if (dto.warehouse_id) {
+      // Validar que la bodega existe y pertenece a la tienda
+      await this.warehousesService.findOne(storeId, dto.warehouse_id);
+      warehouseId = dto.warehouse_id;
+    } else {
+      // Usar bodega por defecto si no se especifica
+      const defaultWarehouse = await this.warehousesService.getDefault(storeId);
+      if (defaultWarehouse) {
+        warehouseId = defaultWarehouse.id;
+      }
+    }
+
+    // Crear movimiento de inventario
     const movement = this.movementRepository.create({
       id: randomUUID(),
       store_id: storeId,
@@ -39,6 +56,7 @@ export class InventoryService {
       qty_delta: dto.qty,
       unit_cost_bs: dto.unit_cost_bs,
       unit_cost_usd: dto.unit_cost_usd,
+      warehouse_id: warehouseId,
       note: dto.note || null,
       ref: dto.ref || null,
       happened_at: new Date(),
@@ -48,7 +66,19 @@ export class InventoryService {
       approved_at: role === 'owner' ? new Date() : null,
     });
 
-    return this.movementRepository.save(movement);
+    const savedMovement = await this.movementRepository.save(movement);
+
+    // Actualizar stock de la bodega si se especificó
+    if (warehouseId) {
+      await this.warehousesService.updateStock(
+        warehouseId,
+        dto.product_id,
+        null, // variant_id se puede obtener del ref si es necesario
+        dto.qty,
+      );
+    }
+
+    return savedMovement;
   }
 
   async stockAdjusted(
@@ -65,8 +95,37 @@ export class InventoryService {
       throw new NotFoundException('Producto no encontrado');
     }
 
-    // Verificar que no se ajuste a negativo (opcional, puedes remover esta validación)
-    if (dto.qty_delta < 0) {
+    // Determinar bodega
+    let warehouseId: string | null = null;
+    if (dto.warehouse_id) {
+      // Validar que la bodega existe y pertenece a la tienda
+      await this.warehousesService.findOne(storeId, dto.warehouse_id);
+      warehouseId = dto.warehouse_id;
+    } else {
+      // Usar bodega por defecto si no se especifica
+      const defaultWarehouse = await this.warehousesService.getDefault(storeId);
+      if (defaultWarehouse) {
+        warehouseId = defaultWarehouse.id;
+      }
+    }
+
+    // Verificar que no se ajuste a negativo en la bodega específica
+    if (dto.qty_delta < 0 && warehouseId) {
+      const warehouseStock = await this.warehousesService.getStock(
+        storeId,
+        warehouseId,
+        dto.product_id,
+      );
+      const currentStock = warehouseStock.reduce((sum, s) => sum + s.stock, 0);
+      if (currentStock + dto.qty_delta < 0) {
+        throw new BadRequestException(
+          'No se puede ajustar el stock a negativo en esta bodega',
+        );
+      }
+    }
+
+    // Verificar que no se ajuste a negativo globalmente (si no hay bodega específica)
+    if (dto.qty_delta < 0 && !warehouseId) {
       const currentStock = await this.getCurrentStock(storeId, dto.product_id);
       if (currentStock + dto.qty_delta < 0) {
         throw new BadRequestException('No se puede ajustar el stock a negativo');
@@ -81,8 +140,9 @@ export class InventoryService {
       qty_delta: dto.qty_delta,
       unit_cost_bs: 0, // Los ajustes no tienen costo
       unit_cost_usd: 0,
+      warehouse_id: warehouseId,
       note: dto.note || null,
-      ref: null,
+      ref: { reason: dto.reason },
       happened_at: new Date(),
       approved: true,
       requested_by: userId,
@@ -90,7 +150,19 @@ export class InventoryService {
       approved_at: new Date(),
     });
 
-    return this.movementRepository.save(movement);
+    const savedMovement = await this.movementRepository.save(movement);
+
+    // Actualizar stock de la bodega si se especificó
+    if (warehouseId) {
+      await this.warehousesService.updateStock(
+        warehouseId,
+        dto.product_id,
+        null,
+        dto.qty_delta,
+      );
+    }
+
+    return savedMovement;
   }
 
   async getCurrentStock(storeId: string, productId: string): Promise<number> {

@@ -26,6 +26,8 @@ import { ProductSerialsService } from '../product-serials/product-serials.servic
 import { InvoiceSeriesService } from '../invoice-series/invoice-series.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
 import { PromotionsService } from '../promotions/promotions.service';
+import { WarehousesService } from '../warehouses/warehouses.service';
+import { FiscalInvoicesService } from '../fiscal-invoices/fiscal-invoices.service';
 
 @Injectable()
 export class SalesService {
@@ -57,6 +59,8 @@ export class SalesService {
     private invoiceSeriesService: InvoiceSeriesService,
     private priceListsService: PriceListsService,
     private promotionsService: PromotionsService,
+    private warehousesService: WarehousesService,
+    private fiscalInvoicesService: FiscalInvoicesService,
   ) {}
 
   async create(storeId: string, dto: CreateSaleDto, userId?: string): Promise<Sale> {
@@ -518,6 +522,20 @@ export class SalesService {
         );
       }
 
+      // Determinar bodega de venta
+      let warehouseId: string | null = null;
+      if (dto.warehouse_id) {
+        // Validar que la bodega existe y pertenece a la tienda
+        await this.warehousesService.findOne(storeId, dto.warehouse_id);
+        warehouseId = dto.warehouse_id;
+      } else {
+        // Usar bodega por defecto si no se especifica
+        const defaultWarehouse = await this.warehousesService.getDefault(storeId);
+        if (defaultWarehouse) {
+          warehouseId = defaultWarehouse.id;
+        }
+      }
+
       // Crear movimientos de inventario (descontar stock)
       // Solo si el producto NO tiene lotes (los lotes ya se manejaron arriba)
       for (const item of items) {
@@ -533,13 +551,24 @@ export class SalesService {
             qty_delta: -item.qty, // Negativo para descontar
             unit_cost_bs: 0,
             unit_cost_usd: 0,
+            warehouse_id: warehouseId,
             note: `Venta ${saleId}`,
-            ref: { sale_id: saleId },
+            ref: { sale_id: saleId, warehouse_id: warehouseId },
             happened_at: soldAt,
             approved: true, // Las ventas se aprueban automáticamente
           });
 
           await manager.save(InventoryMovement, movement);
+
+          // Actualizar stock de la bodega si se especificó
+          if (warehouseId) {
+            await this.warehousesService.updateStock(
+              warehouseId,
+              item.product_id,
+              item.variant_id || null,
+              -item.qty, // Negativo para descontar
+            );
+          }
         }
       }
 
@@ -603,6 +632,10 @@ export class SalesService {
         }
       }
 
+      // Agregar información de factura fiscal si existe (después de la transacción)
+      // Nota: La factura fiscal se crea después de la venta, así que aquí será null
+      saleWithDebt.fiscal_invoice = null;
+
       return saleWithDebt;
     });
   }
@@ -650,6 +683,22 @@ export class SalesService {
       saleWithDebt.debt.total_paid_usd = totalPaidUsd;
       saleWithDebt.debt.remaining_bs = Number(saleWithDebt.debt.amount_bs || 0) - totalPaidBs;
       saleWithDebt.debt.remaining_usd = Number(saleWithDebt.debt.amount_usd || 0) - totalPaidUsd;
+    }
+
+    // Agregar información de factura fiscal si existe
+    try {
+      const fiscalInvoice = await this.fiscalInvoicesService.findBySale(storeId, saleId);
+      if (fiscalInvoice) {
+        saleWithDebt.fiscal_invoice = {
+          id: fiscalInvoice.id,
+          invoice_number: fiscalInvoice.invoice_number,
+          fiscal_number: fiscalInvoice.fiscal_number,
+          status: fiscalInvoice.status,
+          issued_at: fiscalInvoice.issued_at,
+        };
+      }
+    } catch (error) {
+      // Si no existe factura fiscal, simplemente no se agrega
     }
 
     return saleWithDebt;

@@ -1,10 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { inventoryService, StockAdjustedRequest, StockStatus } from '@/services/inventory.service'
+import { warehousesService } from '@/services/warehouses.service'
+import { useAuth } from '@/stores/auth.store'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,6 +48,30 @@ export default function StockAdjustModal({
   product,
   onSuccess,
 }: StockAdjustModalProps) {
+  const { user } = useAuth()
+  const [warehouseId, setWarehouseId] = useState<string | null>(null)
+
+  // Obtener bodegas
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: () => warehousesService.getAll(),
+    enabled: isOpen && !!user?.store_id,
+  })
+
+  // Obtener bodega por defecto
+  const { data: defaultWarehouse } = useQuery({
+    queryKey: ['warehouses', 'default'],
+    queryFn: () => warehousesService.getDefault(),
+    enabled: isOpen && !!user?.store_id,
+  })
+
+  // Prellenar bodega por defecto
+  useEffect(() => {
+    if (isOpen && defaultWarehouse && !warehouseId) {
+      setWarehouseId(defaultWarehouse.id)
+    }
+  }, [isOpen, defaultWarehouse, warehouseId])
+
   const {
     register,
     handleSubmit,
@@ -74,8 +100,13 @@ export default function StockAdjustModal({
         reason: 'other',
         note: '',
       })
+      if (defaultWarehouse) {
+        setWarehouseId(defaultWarehouse.id)
+      }
+    } else {
+      setWarehouseId(null)
     }
-  }, [isOpen, reset])
+  }, [isOpen, reset, defaultWarehouse])
 
   const stockAdjustMutation = useMutation({
     mutationFn: (data: StockAdjustedRequest) => {
@@ -83,6 +114,7 @@ export default function StockAdjustModal({
       return inventoryService.stockAdjusted({
         ...data,
         product_id: product.product_id,
+        warehouse_id: warehouseId || undefined,
       })
     },
     onSuccess: () => {
@@ -174,6 +206,38 @@ export default function StockAdjustModal({
                   Usa valores positivos para aumentar y negativos para reducir el stock
                 </p>
               </div>
+
+              {/* Bodega */}
+              {warehouses.length > 0 && (
+                <div>
+                  <Label htmlFor="warehouse" className="mb-2">
+                    Bodega (Opcional)
+                  </Label>
+                  <Select
+                    value={warehouseId || 'default'}
+                    onValueChange={(value) =>
+                      setWarehouseId(value === 'default' ? null : value)
+                    }
+                  >
+                    <SelectTrigger id="warehouse">
+                      <SelectValue placeholder="Usar bodega por defecto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Usar bodega por defecto</SelectItem>
+                      {warehouses
+                        .filter((w) => w.is_active)
+                        .map((w) => (
+                          <SelectItem key={w.id} value={w.id}>
+                            {w.name} {w.is_default && '(Por defecto)'}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Si no se selecciona, se usará la bodega por defecto
+                  </p>
+                </div>
+              )}
 
               {/* Razón */}
               <div>

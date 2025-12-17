@@ -11,6 +11,10 @@ export class StockAdjustedDto {
   @IsIn(['loss', 'damage', 'count', 'other'])
   reason: 'loss' | 'damage' | 'count' | 'other';
 
+  @IsUUID()
+  @IsOptional()
+  warehouse_id?: string;
+
   @IsString()
   @IsOptional()
   note?: string;

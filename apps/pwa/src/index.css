@@ -2,6 +2,116 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Estilos para impresión de facturas fiscales */
+@media print {
+  /* Ocultar elementos no deseados */
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Ocultar header, nav, footer, sidebar del layout */
+  header,
+  nav,
+  aside,
+  footer {
+    display: none !important;
+  }
+  
+  /* Ocultar el wrapper del layout y sidebar */
+  body > div > div > div:first-child,
+  body > div > div > aside {
+    display: none !important;
+  }
+  
+  /* Ocultar el wrapper del layout */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+  
+  /* Ocultar animaciones y transiciones */
+  [class*="motion"] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  
+  /* Estilos para el contenedor de factura */
+  .invoice-print-container {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    background: white !important;
+    position: relative !important;
+  }
+  
+  /* Asegurar que las tablas se muestren correctamente */
+  .invoice-print-container table {
+    display: table !important;
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .invoice-print-container tr {
+    display: table-row !important;
+  }
+  
+  .invoice-print-container td,
+  .invoice-print-container th {
+    display: table-cell !important;
+  }
+  
+  .print-break {
+    page-break-after: always;
+  }
+  
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  .bg-white {
+    background: white !important;
+  }
+  
+  .print\\:shadow-none {
+    box-shadow: none !important;
+  }
+  
+  .print\\:border-0 {
+    border: 0 !important;
+  }
+  
+  /* Asegurar que las tablas se impriman correctamente */
+  .invoice-print-container table {
+    page-break-inside: avoid;
+  }
+  
+  /* Evitar cortes de página en elementos importantes */
+  .invoice-print-container > * {
+    page-break-inside: avoid;
+  }
+  
+  /* Asegurar que el QR se imprima correctamente */
+  .invoice-print-container img {
+    max-width: 100%;
+    height: auto;
+    display: block !important;
+  }
+  
+  /* Asegurar que los textos se impriman en negro */
+  .invoice-print-container {
+    color: black !important;
+  }
+  
+  .invoice-print-container * {
+    color: black !important;
+  }
+}
+
 @layer base {
   :root {
     /* Backgrounds - Clean white base */

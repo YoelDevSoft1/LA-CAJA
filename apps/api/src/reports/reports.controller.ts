@@ -213,4 +213,29 @@ export class ReportsController {
     res?.setHeader('Content-Disposition', 'attachment; filename=expiring-products.pdf');
     res?.send(pdf);
   }
+
+  @Get('purchases/by-supplier')
+  async getPurchasesBySupplier(
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
+    @Request() req?: any,
+  ) {
+    const storeId = req.user.store_id;
+    const start = this.parseDateParam(startDate);
+    const end = this.parseDateParam(endDate);
+    return this.reportsService.getPurchasesBySupplier(storeId, start, end);
+  }
+
+  @Get('fiscal-invoices')
+  async getFiscalInvoicesReport(
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
+    @Query('status') status?: string,
+    @Request() req?: any,
+  ) {
+    const storeId = req.user.store_id;
+    const start = this.parseDateParam(startDate);
+    const end = this.parseDateParam(endDate);
+    return this.reportsService.getFiscalInvoicesReport(storeId, start, end, status);
+  }
 }

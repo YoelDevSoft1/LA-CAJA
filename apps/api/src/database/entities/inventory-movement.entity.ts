@@ -1,7 +1,8 @@
-import { Entity, Column, PrimaryColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Store } from './store.entity';
 import { Product } from './product.entity';
 import { ProductVariant } from './product-variant.entity';
+import { Warehouse } from './warehouse.entity';
 
 export type MovementType = 'received' | 'adjust' | 'sold';
 
@@ -60,6 +61,14 @@ export class InventoryMovement {
 
   @Column({ type: 'jsonb', nullable: true })
   ref: Record<string, any> | null;
+
+  @ManyToOne(() => Warehouse, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'warehouse_id' })
+  warehouse: Warehouse | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  @Index()
+  warehouse_id: string | null;
 
   @Column({ type: 'timestamptz' })
   happened_at: Date;

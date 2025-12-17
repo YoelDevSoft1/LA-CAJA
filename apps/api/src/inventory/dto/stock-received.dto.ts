@@ -16,15 +16,16 @@ export class StockReceivedDto {
   @Min(0)
   unit_cost_usd: number;
 
+  @IsUUID()
+  @IsOptional()
+  warehouse_id?: string;
+
   @IsString()
   @IsOptional()
   note?: string;
 
   @IsObject()
   @IsOptional()
-  ref?: {
-    supplier?: string;
-    invoice?: string;
-  };
+  ref?: Record<string, any>;
 }
 

@@ -21,6 +21,16 @@ import TablesPage from './pages/TablesPage'
 import PeripheralsPage from './pages/PeripheralsPage'
 import PriceListsPage from './pages/PriceListsPage'
 import PromotionsPage from './pages/PromotionsPage'
+import WarehousesPage from './pages/WarehousesPage'
+import TransfersPage from './pages/TransfersPage'
+import SuppliersPage from './pages/SuppliersPage'
+import FiscalConfigPage from './pages/FiscalConfigPage'
+import FiscalInvoicesPage from './pages/FiscalInvoicesPage'
+import FiscalInvoiceDetailPage from './pages/FiscalInvoiceDetailPage'
+import DashboardPage from './pages/DashboardPage'
+import MLDashboardPage from './pages/MLDashboardPage'
+import DemandPredictionsPage from './pages/DemandPredictionsPage'
+import AnomaliesPage from './pages/AnomaliesPage'
 import LicenseBlockedPage from './pages/LicenseBlockedPage'
 import AdminPage from './pages/AdminPage'
 import { useOnline } from './hooks/use-online'
@@ -78,7 +88,8 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/pos" replace />} />
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
           <Route path="pos" element={<POSPage />} />
           <Route path="products" element={<ProductsPage />} />
           <Route path="inventory" element={<InventoryPage />} />
@@ -94,6 +105,15 @@ function App() {
           <Route path="peripherals" element={<PeripheralsPage />} />
           <Route path="price-lists" element={<PriceListsPage />} />
           <Route path="promotions" element={<PromotionsPage />} />
+          <Route path="warehouses" element={<WarehousesPage />} />
+          <Route path="transfers" element={<TransfersPage />} />
+          <Route path="suppliers" element={<SuppliersPage />} />
+          <Route path="fiscal-config" element={<FiscalConfigPage />} />
+          <Route path="fiscal-invoices" element={<FiscalInvoicesPage />} />
+          <Route path="fiscal-invoices/:id" element={<FiscalInvoiceDetailPage />} />
+          <Route path="ml" element={<MLDashboardPage />} />
+          <Route path="ml/predictions" element={<DemandPredictionsPage />} />
+          <Route path="ml/anomalies" element={<AnomaliesPage />} />
           <Route path="customers" element={<CustomersPage />} />
           <Route path="debts" element={<DebtsPage />} />
           <Route path="reports" element={<ReportsPage />} />

@@ -14,6 +14,11 @@ import { ShiftCut } from '../database/entities/shift-cut.entity';
 import { Profile } from '../database/entities/profile.entity';
 import { ProductLot } from '../database/entities/product-lot.entity';
 import { ProductSerial } from '../database/entities/product-serial.entity';
+import { Supplier } from '../database/entities/supplier.entity';
+import { PurchaseOrder } from '../database/entities/purchase-order.entity';
+import { PurchaseOrderItem } from '../database/entities/purchase-order-item.entity';
+import { FiscalInvoice } from '../database/entities/fiscal-invoice.entity';
+import { FiscalInvoiceItem } from '../database/entities/fiscal-invoice-item.entity';
 
 @Module({
   imports: [
@@ -29,6 +34,11 @@ import { ProductSerial } from '../database/entities/product-serial.entity';
       Profile,
       ProductLot,
       ProductSerial,
+      Supplier,
+      PurchaseOrder,
+      PurchaseOrderItem,
+      FiscalInvoice,
+      FiscalInvoiceItem,
     ]),
   ],
   controllers: [ReportsController],

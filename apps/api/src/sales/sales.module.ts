@@ -20,6 +20,8 @@ import { ProductSerialsModule } from '../product-serials/product-serials.module'
 import { InvoiceSeriesModule } from '../invoice-series/invoice-series.module';
 import { PriceListsModule } from '../price-lists/price-lists.module';
 import { PromotionsModule } from '../promotions/promotions.module';
+import { WarehousesModule } from '../warehouses/warehouses.module';
+import { FiscalInvoicesModule } from '../fiscal-invoices/fiscal-invoices.module';
 
 @Module({
   imports: [
@@ -43,6 +45,8 @@ import { PromotionsModule } from '../promotions/promotions.module';
     InvoiceSeriesModule,
     PriceListsModule,
     PromotionsModule,
+    WarehousesModule,
+    FiscalInvoicesModule,
   ],
   controllers: [SalesController],
   providers: [SalesService],

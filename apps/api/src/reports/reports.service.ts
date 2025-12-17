@@ -13,6 +13,11 @@ import { ShiftCut } from '../database/entities/shift-cut.entity';
 import { Profile } from '../database/entities/profile.entity';
 import { ProductLot } from '../database/entities/product-lot.entity';
 import { ProductSerial } from '../database/entities/product-serial.entity';
+import { Supplier } from '../database/entities/supplier.entity';
+import { PurchaseOrder } from '../database/entities/purchase-order.entity';
+import { PurchaseOrderItem } from '../database/entities/purchase-order-item.entity';
+import { FiscalInvoice } from '../database/entities/fiscal-invoice.entity';
+import { FiscalInvoiceItem } from '../database/entities/fiscal-invoice-item.entity';
 
 @Injectable()
 export class ReportsService {
@@ -39,6 +44,16 @@ export class ReportsService {
     private productLotRepository: Repository<ProductLot>,
     @InjectRepository(ProductSerial)
     private productSerialRepository: Repository<ProductSerial>,
+    @InjectRepository(Supplier)
+    private supplierRepository: Repository<Supplier>,
+    @InjectRepository(PurchaseOrder)
+    private purchaseOrderRepository: Repository<PurchaseOrder>,
+    @InjectRepository(PurchaseOrderItem)
+    private purchaseOrderItemRepository: Repository<PurchaseOrderItem>,
+    @InjectRepository(FiscalInvoice)
+    private fiscalInvoiceRepository: Repository<FiscalInvoice>,
+    @InjectRepository(FiscalInvoiceItem)
+    private fiscalInvoiceItemRepository: Repository<FiscalInvoiceItem>,
   ) {}
 
   async getSalesByDay(
@@ -1130,6 +1145,219 @@ export class ReportsService {
           rotation_rate,
         };
       }).sort((a, b) => b.rotation_rate - a.rotation_rate),
+    };
+  }
+
+  /**
+   * Reporte de compras por proveedor
+   */
+  async getPurchasesBySupplier(
+    storeId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<{
+    total_orders: number;
+    total_amount_bs: number;
+    total_amount_usd: number;
+    by_supplier: Array<{
+      supplier_id: string;
+      supplier_name: string;
+      supplier_code: string | null;
+      orders_count: number;
+      total_amount_bs: number;
+      total_amount_usd: number;
+      completed_orders: number;
+      pending_orders: number;
+    }>;
+  }> {
+    const query = this.purchaseOrderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.supplier', 'supplier')
+      .where('order.store_id = :storeId', { storeId });
+
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      query.andWhere('order.created_at >= :startDate', { startDate: start });
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query.andWhere('order.created_at <= :endDate', { endDate: end });
+    }
+
+    const orders = await query.getMany();
+
+    const supplierMap = new Map<
+      string,
+      {
+        supplier_id: string;
+        supplier_name: string;
+        supplier_code: string | null;
+        orders_count: number;
+        total_amount_bs: number;
+        total_amount_usd: number;
+        completed_orders: number;
+        pending_orders: number;
+      }
+    >();
+
+    let total_amount_bs = 0;
+    let total_amount_usd = 0;
+
+    for (const order of orders) {
+      const supplierId = order.supplier_id;
+      const supplier = order.supplier;
+
+      if (!supplierMap.has(supplierId)) {
+        supplierMap.set(supplierId, {
+          supplier_id: supplierId,
+          supplier_name: supplier.name,
+          supplier_code: supplier.code,
+          orders_count: 0,
+          total_amount_bs: 0,
+          total_amount_usd: 0,
+          completed_orders: 0,
+          pending_orders: 0,
+        });
+      }
+
+      const supplierData = supplierMap.get(supplierId)!;
+      supplierData.orders_count++;
+      supplierData.total_amount_bs += Number(order.total_amount_bs);
+      supplierData.total_amount_usd += Number(order.total_amount_usd);
+
+      if (order.status === 'completed') {
+        supplierData.completed_orders++;
+      } else if (['draft', 'sent', 'confirmed', 'partial'].includes(order.status)) {
+        supplierData.pending_orders++;
+      }
+
+      total_amount_bs += Number(order.total_amount_bs);
+      total_amount_usd += Number(order.total_amount_usd);
+    }
+
+    return {
+      total_orders: orders.length,
+      total_amount_bs,
+      total_amount_usd,
+      by_supplier: Array.from(supplierMap.values()).sort(
+        (a, b) => b.total_amount_bs - a.total_amount_bs,
+      ),
+    };
+  }
+
+  /**
+   * Reporte de facturas fiscales emitidas
+   */
+  async getFiscalInvoicesReport(
+    storeId: string,
+    startDate?: Date,
+    endDate?: Date,
+    status?: string,
+  ): Promise<{
+    total_invoices: number;
+    total_amount_bs: number;
+    total_amount_usd: number;
+    total_tax_bs: number;
+    total_tax_usd: number;
+    by_status: Record<string, number>;
+    by_type: Record<string, number>;
+    daily: Array<{
+      date: string;
+      invoices_count: number;
+      total_bs: number;
+      total_usd: number;
+      tax_bs: number;
+      tax_usd: number;
+    }>;
+  }> {
+    const query = this.fiscalInvoiceRepository
+      .createQueryBuilder('invoice')
+      .where('invoice.store_id = :storeId', { storeId });
+
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      query.andWhere('invoice.issued_at >= :startDate', { startDate: start });
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query.andWhere('invoice.issued_at <= :endDate', { endDate: end });
+    }
+    if (status) {
+      query.andWhere('invoice.status = :status', { status });
+    }
+
+    // Solo facturas emitidas
+    query.andWhere('invoice.status = :issuedStatus', { issuedStatus: 'issued' });
+
+    const invoices = await query.getMany();
+
+    let total_amount_bs = 0;
+    let total_amount_usd = 0;
+    let total_tax_bs = 0;
+    let total_tax_usd = 0;
+    const by_status: Record<string, number> = {};
+    const by_type: Record<string, number> = {};
+    const dailyMap = new Map<
+      string,
+      {
+        invoices_count: number;
+        total_bs: number;
+        total_usd: number;
+        tax_bs: number;
+        tax_usd: number;
+      }
+    >();
+
+    for (const invoice of invoices) {
+      total_amount_bs += Number(invoice.total_bs);
+      total_amount_usd += Number(invoice.total_usd);
+      total_tax_bs += Number(invoice.tax_amount_bs);
+      total_tax_usd += Number(invoice.tax_amount_usd);
+
+      by_status[invoice.status] = (by_status[invoice.status] || 0) + 1;
+      by_type[invoice.invoice_type] = (by_type[invoice.invoice_type] || 0) + 1;
+
+      if (invoice.issued_at) {
+        const dateKey = invoice.issued_at.toISOString().split('T')[0];
+        if (!dailyMap.has(dateKey)) {
+          dailyMap.set(dateKey, {
+            invoices_count: 0,
+            total_bs: 0,
+            total_usd: 0,
+            tax_bs: 0,
+            tax_usd: 0,
+          });
+        }
+
+        const dayData = dailyMap.get(dateKey)!;
+        dayData.invoices_count++;
+        dayData.total_bs += Number(invoice.total_bs);
+        dayData.total_usd += Number(invoice.total_usd);
+        dayData.tax_bs += Number(invoice.tax_amount_bs);
+        dayData.tax_usd += Number(invoice.tax_amount_usd);
+      }
+    }
+
+    const daily = Array.from(dailyMap.entries())
+      .map(([date, data]) => ({
+        date,
+        ...data,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      total_invoices: invoices.length,
+      total_amount_bs,
+      total_amount_usd,
+      total_tax_bs,
+      total_tax_usd,
+      by_status,
+      by_type,
+      daily,
     };
   }
 }

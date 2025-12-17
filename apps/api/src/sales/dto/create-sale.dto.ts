@@ -87,5 +87,9 @@ export class CreateSaleDto {
   @IsUUID()
   @IsOptional()
   promotion_id?: string; // Promoción a aplicar (opcional)
+
+  @IsUUID()
+  @IsOptional()
+  warehouse_id?: string; // Bodega de donde se vende (NULL = bodega por defecto)
 }
 

@@ -28,6 +28,7 @@ export interface StockReceivedRequest {
   unit_cost_bs: number
   unit_cost_usd: number
   note?: string
+  warehouse_id?: string | null
   ref?: {
     supplier?: string
     invoice?: string
@@ -39,6 +40,7 @@ export interface StockAdjustedRequest {
   qty_delta: number
   reason: 'loss' | 'damage' | 'count' | 'other'
   note?: string
+  warehouse_id?: string | null
 }
 
 export interface ProductStock {

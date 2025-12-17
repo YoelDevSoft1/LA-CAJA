@@ -54,6 +54,7 @@ export interface CreateSaleRequest {
   invoice_series_id?: string | null // ID de la serie de factura a usar
   price_list_id?: string | null // ID de la lista de precio a usar
   promotion_id?: string | null // ID de la promoción a aplicar
+  warehouse_id?: string | null // ID de la bodega de donde se vende (opcional, usa bodega por defecto)
   // Para modo offline
   store_id?: string
   user_id?: string
@@ -128,6 +129,13 @@ export interface Sale {
   invoice_series_id?: string | null
   invoice_number?: string | null
   invoice_full_number?: string | null
+  fiscal_invoice?: {
+    id: string
+    invoice_number: string
+    fiscal_number?: string | null
+    status: 'draft' | 'issued' | 'cancelled' | 'rejected'
+    issued_at?: string | null
+  } | null
 }
 
 // Función auxiliar para generar device_id

@@ -30,6 +30,14 @@ import { DebtsModule } from './debts/debts.module';
 import { ReportsModule } from './reports/reports.module';
 import { BackupModule } from './backup/backup.module';
 import { ExchangeModule } from './exchange/exchange.module';
+import { WarehousesModule } from './warehouses/warehouses.module';
+import { TransfersModule } from './transfers/transfers.module';
+import { SuppliersModule } from './suppliers/suppliers.module';
+import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
+import { FiscalConfigsModule } from './fiscal-configs/fiscal-configs.module';
+import { FiscalInvoicesModule } from './fiscal-invoices/fiscal-invoices.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { MLModule } from './ml/ml.module';
 import { AdminController } from './admin/admin.controller';
 import { LicenseWatcherService } from './admin/license-watcher.service';
 import { Store } from './database/entities/store.entity';
@@ -67,6 +75,20 @@ import { Customer } from './database/entities/customer.entity';
 import { Debt } from './database/entities/debt.entity';
 import { DebtPayment } from './database/entities/debt-payment.entity';
 import { ExchangeRate } from './database/entities/exchange-rate.entity';
+import { Warehouse } from './database/entities/warehouse.entity';
+import { WarehouseStock } from './database/entities/warehouse-stock.entity';
+import { Transfer } from './database/entities/transfer.entity';
+import { TransferItem } from './database/entities/transfer-item.entity';
+import { Supplier } from './database/entities/supplier.entity';
+import { PurchaseOrder } from './database/entities/purchase-order.entity';
+import { PurchaseOrderItem } from './database/entities/purchase-order-item.entity';
+import { FiscalInvoice } from './database/entities/fiscal-invoice.entity';
+import { FiscalInvoiceItem } from './database/entities/fiscal-invoice-item.entity';
+import { FiscalConfig } from './database/entities/fiscal-config.entity';
+import { DemandPrediction } from './database/entities/demand-prediction.entity';
+import { ProductRecommendation } from './database/entities/product-recommendation.entity';
+import { DetectedAnomaly } from './database/entities/detected-anomaly.entity';
+import { MLModelMetric } from './database/entities/ml-model-metric.entity';
 import { Event } from './database/entities/event.entity';
 import { LicenseGuard } from './auth/guards/license.guard';
 import { DatabaseErrorInterceptor } from './common/interceptors/database-error.interceptor';
@@ -111,7 +133,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
           username: url.username,
           password: decodeURIComponent(url.password), // Decodificar contraseña URL-encoded
           database: url.pathname.slice(1), // Remover el '/' inicial
-          entities: [Store, Profile, StoreMember, Product, ProductVariant, ProductLot, LotMovement, ProductSerial, InvoiceSeries, Table, Order, OrderItem, OrderPayment, PeripheralConfig, PriceList, PriceListItem, Promotion, PromotionProduct, PromotionUsage, InventoryMovement, Sale, SaleItem, CashSession, Shift, ShiftCut, PaymentMethodConfig, CashMovement, DiscountConfig, DiscountAuthorization, FastCheckoutConfig, QuickProduct, Customer, Debt, DebtPayment, ExchangeRate, Event],
+          entities: [Store, Profile, StoreMember, Product, ProductVariant, ProductLot, LotMovement, ProductSerial, InvoiceSeries, Table, Order, OrderItem, OrderPayment, PeripheralConfig, PriceList, PriceListItem, Promotion, PromotionProduct, PromotionUsage, InventoryMovement, Sale, SaleItem, CashSession, Shift, ShiftCut, PaymentMethodConfig, CashMovement, DiscountConfig, DiscountAuthorization, FastCheckoutConfig, QuickProduct, Customer, Debt, DebtPayment, ExchangeRate, Warehouse, WarehouseStock, Transfer, TransferItem, Supplier, PurchaseOrder, PurchaseOrderItem, FiscalInvoice, FiscalInvoiceItem, FiscalConfig, DemandPrediction, ProductRecommendation, DetectedAnomaly, MLModelMetric, Event],
           synchronize: false, // Usamos migraciones SQL manuales
           logging: configService.get<string>('NODE_ENV') === 'development',
           // Configuración robusta del pool de conexiones para Render/Cloud
@@ -164,7 +186,15 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
         DebtsModule,
         ReportsModule,
         BackupModule,
-    ExchangeModule,
+        ExchangeModule,
+        WarehousesModule,
+        TransfersModule,
+        SuppliersModule,
+        PurchaseOrdersModule,
+        FiscalConfigsModule,
+        FiscalInvoicesModule,
+        DashboardModule,
+        MLModule,
   ],
   controllers: [AppController, AdminController],
   providers: [

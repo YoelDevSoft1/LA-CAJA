@@ -12,6 +12,7 @@ import { printService } from '@/services/print.service'
 import { fastCheckoutService, QuickProduct } from '@/services/fast-checkout.service'
 import { productVariantsService, ProductVariant } from '@/services/product-variants.service'
 import { productSerialsService } from '@/services/product-serials.service'
+import { warehousesService } from '@/services/warehouses.service'
 import toast from 'react-hot-toast'
 import CheckoutModal from '@/components/pos/CheckoutModal'
 import QuickProductsGrid from '@/components/fast-checkout/QuickProductsGrid'
@@ -37,6 +38,7 @@ export default function POSPage() {
     name: string
   } | null>(null)
   const [pendingSerials, setPendingSerials] = useState<Record<string, string[]>>({})
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null)
   const { items, addItem, updateItem, removeItem, clear, getTotal } = useCart()
   const lastCartSnapshot = useRef<CartItem[]>([])
 
@@ -53,6 +55,20 @@ export default function POSPage() {
     queryFn: () => fastCheckoutService.getFastCheckoutConfig(),
     staleTime: 1000 * 60 * 5, // 5 minutos
   })
+
+  // Obtener bodega por defecto
+  const { data: defaultWarehouse } = useQuery({
+    queryKey: ['warehouses', 'default'],
+    queryFn: () => warehousesService.getDefault(),
+    staleTime: 1000 * 60 * 5, // 5 minutos
+  })
+
+  // Prellenar bodega por defecto
+  useEffect(() => {
+    if (defaultWarehouse && !selectedWarehouseId) {
+      setSelectedWarehouseId(defaultWarehouse.id)
+    }
+  }, [defaultWarehouse, selectedWarehouseId])
 
   // Handler para productos rápidos
   const handleQuickProductClick = async (quickProduct: QuickProduct) => {
@@ -359,6 +375,7 @@ export default function POSPage() {
     invoice_series_id?: string | null // ID de la serie de factura
     price_list_id?: string | null // ID de la lista de precio
     promotion_id?: string | null // ID de la promoción
+    warehouse_id?: string | null // ID de la bodega de donde se vende
   }) => {
     const saleItems = items.map((item) => ({
       product_id: item.product_id,
@@ -398,6 +415,7 @@ export default function POSPage() {
       invoice_series_id: checkoutData.invoice_series_id || undefined,
       price_list_id: checkoutData.price_list_id || undefined,
       promotion_id: checkoutData.promotion_id || undefined,
+      warehouse_id: checkoutData.warehouse_id || undefined,
       // Datos para modo offline
       store_id: user?.store_id,
       user_id: user?.user_id,

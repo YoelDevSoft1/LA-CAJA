@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/stores/auth.store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -29,6 +29,12 @@ import {
   Cpu,
   DollarSign as DollarSignIcon,
   Tag,
+  Warehouse,
+  Truck,
+  Building2,
+  ReceiptText,
+  Brain,
+  TrendingUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -53,26 +59,94 @@ import { useOnline } from '@/hooks/use-online'
 import { inventoryService } from '@/services/inventory.service'
 import { cashService } from '@/services/cash.service'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
-const navItems = [
+type NavItem = {
+  path: string
+  label: string
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
+  badge: string | null
+}
+
+type NavSection = {
+  id: string
+  label: string
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
+  items: NavItem[]
+  defaultOpen?: boolean
+}
+
+const navSections: NavSection[] = [
+  {
+    id: 'sales',
+    label: 'Ventas',
+    icon: ShoppingCart,
+    items: [
   { path: '/pos', label: 'Punto de Venta', icon: ShoppingCart, badge: null },
+      { path: '/fast-checkout', label: 'Caja Rápida', icon: Zap, badge: null },
+      { path: '/sales', label: 'Ventas', icon: FileText, badge: null },
+      { path: '/tables', label: 'Mesas y Órdenes', icon: Square, badge: null },
+    ],
+  },
+  {
+    id: 'products',
+    label: 'Productos e Inventario',
+    icon: Package,
+    items: [
   { path: '/products', label: 'Productos', icon: Package, badge: null },
   { path: '/inventory', label: 'Inventario', icon: Boxes, badge: null },
-  { path: '/sales', label: 'Ventas', icon: FileText, badge: null },
+      { path: '/warehouses', label: 'Bodegas', icon: Warehouse, badge: null },
+      { path: '/transfers', label: 'Transferencias', icon: Truck, badge: null },
+      { path: '/suppliers', label: 'Proveedores', icon: Building2, badge: null },
+      { path: '/lots', label: 'Lotes', icon: Calendar, badge: null },
+    ],
+  },
+  {
+    id: 'configuration',
+    label: 'Configuración',
+    icon: Settings,
+    items: [
   { path: '/cash', label: 'Caja', icon: DollarSign, badge: null },
   { path: '/shifts', label: 'Turnos', icon: Clock, badge: null },
   { path: '/payments', label: 'Pagos', icon: Settings, badge: null },
   { path: '/discounts', label: 'Descuentos', icon: Percent, badge: null },
-  { path: '/fast-checkout', label: 'Caja Rápida', icon: Zap, badge: null },
-  { path: '/lots', label: 'Lotes', icon: Calendar, badge: null },
-  { path: '/invoice-series', label: 'Series de Factura', icon: Receipt, badge: null },
-  { path: '/tables', label: 'Mesas y Órdenes', icon: Square, badge: null },
-  { path: '/peripherals', label: 'Periféricos', icon: Cpu, badge: null },
-  { path: '/price-lists', label: 'Listas de Precio', icon: DollarSignIcon, badge: null },
-  { path: '/promotions', label: 'Promociones', icon: Tag, badge: null },
+      { path: '/promotions', label: 'Promociones', icon: Tag, badge: null },
+      { path: '/price-lists', label: 'Listas de Precio', icon: DollarSignIcon, badge: null },
+      { path: '/invoice-series', label: 'Series de Factura', icon: Receipt, badge: null },
+      { path: '/fiscal-config', label: 'Configuración Fiscal', icon: FileText, badge: null },
+      { path: '/fiscal-invoices', label: 'Facturas Fiscales', icon: ReceiptText, badge: null },
+      { path: '/peripherals', label: 'Periféricos', icon: Cpu, badge: null },
+    ],
+  },
+  {
+    id: 'customers',
+    label: 'Clientes',
+    icon: Users,
+    items: [
   { path: '/customers', label: 'Clientes', icon: Users, badge: null },
   { path: '/debts', label: 'Fiao', icon: Users, badge: 'Beta' },
-  { path: '/reports', label: 'Reportes', icon: BarChart3, badge: null },
+    ],
+  },
+  {
+    id: 'reports',
+    label: 'Reportes',
+    icon: BarChart3,
+    items: [
+      { path: '/dashboard', label: 'Dashboard', icon: BarChart3, badge: null },
+      { path: '/reports', label: 'Reportes', icon: BarChart3, badge: null },
+    ],
+  },
+  {
+    id: 'ml',
+    label: 'Machine Learning',
+    icon: Brain,
+    items: [
+      { path: '/ml', label: 'ML Dashboard', icon: Brain, badge: null },
+      { path: '/ml/predictions', label: 'Predicciones', icon: TrendingUp, badge: null },
+      { path: '/ml/anomalies', label: 'Anomalías', icon: AlertTriangle, badge: null },
+    ],
+  },
 ]
 
 export default function MainLayout() {
@@ -200,6 +274,30 @@ export default function MainLayout() {
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
 
+  // Encontrar la sección que contiene la ruta activa
+  const activeSectionId = useMemo(() => {
+    const activeSection = navSections.find((section) =>
+      section.items.some((item) => isActive(item.path))
+    )
+    return activeSection?.id
+  }, [location.pathname])
+
+  // Estado controlado para las secciones abiertas
+  const [openSections, setOpenSections] = useState<string[]>([])
+
+  // Actualizar secciones abiertas cuando cambia la ruta activa
+  useEffect(() => {
+    if (activeSectionId) {
+      setOpenSections((prev) => {
+        // Solo actualizar si la sección activa no está ya abierta
+        if (!prev.includes(activeSectionId)) {
+          return [activeSectionId]
+        }
+        return prev
+      })
+    }
+  }, [activeSectionId])
+
   const handleNavClick = (path: string) => {
     navigate(path)
     setMobileOpen(false)
@@ -216,7 +314,127 @@ export default function MainLayout() {
   }
 
   // Sidebar Content Component
-  const SidebarContent = ({ isMobile = false }: { isMobile?: boolean }) => (
+  const SidebarContent = ({ isMobile = false }: { isMobile?: boolean }): JSX.Element => {
+    // Estado para controlar qué popover está abierto
+    const [openPopover, setOpenPopover] = useState<string | null>(null)
+
+    // Cuando está colapsado, mostrar secciones con popovers
+    if (sidebarCollapsed && !isMobile) {
+      return (
+        <div className="flex flex-col h-full min-h-0">
+          <ScrollArea className="flex-1 min-h-0 px-2 py-4">
+            <nav className="space-y-1">
+              {navSections.map((section) => {
+                const SectionIcon = section.icon
+                const hasActiveItem = section.items.some((item) => isActive(item.path))
+                const isOpen = openPopover === section.id
+
+                return (
+                  <Popover
+                    key={section.id}
+                    open={isOpen}
+                    onOpenChange={(open) => setOpenPopover(open ? section.id : null)}
+                    modal={false}
+                  >
+                    <TooltipProvider delayDuration={0}>
+                      <Tooltip delayDuration={300} disableHoverableContent>
+                        <TooltipTrigger asChild>
+                          <PopoverTrigger asChild>
+                            <button
+                              className={cn(
+                                "w-full flex items-center justify-center px-2 py-2.5 rounded-lg text-sm font-medium transition-all",
+                                hasActiveItem
+                                  ? "bg-primary text-primary-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                              )}
+                            >
+                              <SectionIcon className="w-5 h-5 flex-shrink-0" strokeWidth={2} />
+                            </button>
+                          </PopoverTrigger>
+                        </TooltipTrigger>
+                        {!isOpen && (
+                          <TooltipContent side="right">
+                            <p>{section.label}</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
+                    <PopoverContent side="right" align="start" className="w-56 p-1">
+                      <div className="space-y-0.5">
+                        <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          {section.label}
+                        </div>
+                        {section.items.map((item) => {
+                          const Icon = item.icon
+                          const active = isActive(item.path)
+
+                          return (
+                            <button
+                              key={item.path}
+                              onClick={() => {
+                                handleNavClick(item.path)
+                                setOpenPopover(null) // Cerrar popover al hacer click
+                              }}
+                              className={cn(
+                                "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                                active
+                                  ? "bg-primary text-primary-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                              )}
+                            >
+                              <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
+                              <span className="flex-1 text-left truncate">{item.label}</span>
+                              {item.badge && (
+                                <Badge variant="secondary" className="text-xs flex-shrink-0">
+                                  {item.badge}
+                                </Badge>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )
+              })}
+            </nav>
+          </ScrollArea>
+
+          {/* Collapse Button (Desktop only) */}
+          {!isMobile && (
+            <>
+              <Separator className="flex-shrink-0" />
+              <div className="p-3 flex-shrink-0">
+                <TooltipProvider delayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                        className="w-full hover:bg-accent hover:shadow-sm transition-shadow px-2 justify-center"
+                      >
+                        <ChevronLeft
+                          className={cn(
+                            "w-4 h-4 transition-transform",
+                            sidebarCollapsed && "rotate-180"
+                          )}
+                        />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      <p>Expandir</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </>
+          )}
+        </div>
+      )
+    }
+
+    return (
     <div className="flex flex-col h-full min-h-0">
       {/* Logo - Only show in mobile sidebar */}
       {isMobile && (
@@ -233,50 +451,67 @@ export default function MainLayout() {
         </div>
       )}
 
-      {/* Navigation */}
+        {/* Navigation with Collapsible Sections */}
       <ScrollArea className="flex-1 min-h-0 px-3 py-4">
-        <nav className={cn("space-y-1", isMobile && "space-y-0.5")}>
-          {navItems.map((item) => {
+          <nav className="space-y-1">
+            <Accordion
+              type="multiple"
+              value={openSections}
+              onValueChange={setOpenSections}
+              className="w-full"
+            >
+              {navSections.map((section) => {
+                const SectionIcon = section.icon
+                const hasActiveItem = section.items.some((item) => isActive(item.path))
+
+                return (
+                  <AccordionItem key={section.id} value={section.id} className="border-0">
+                    <AccordionTrigger
+                      className={cn(
+                        "px-3 py-2.5 rounded-lg text-sm font-medium transition-all hover:no-underline",
+                        hasActiveItem
+                          ? "bg-accent text-foreground"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                      )}
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <SectionIcon className="w-5 h-5 flex-shrink-0" strokeWidth={2} />
+                        <span className="flex-1 text-left">{section.label}</span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-1 pb-2">
+                      <div className="space-y-0.5 pl-8">
+                        {section.items.map((item) => {
             const Icon = item.icon
             const active = isActive(item.path)
 
             return (
-              <TooltipProvider key={item.path} delayDuration={0}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
                     <button
+                              key={item.path}
                       onClick={() => handleNavClick(item.path)}
                       className={cn(
-                        "w-full flex items-center gap-3 px-3 rounded-lg text-sm font-medium transition-all",
-                        isMobile ? "py-2" : "py-2.5",
+                                "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
                         active
                           ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground hover:bg-accent",
-                        sidebarCollapsed && !isMobile && "justify-center px-2"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
                       )}
                     >
-                      <Icon className={cn("flex-shrink-0", isMobile ? "w-4 h-4" : "w-5 h-5")} strokeWidth={2} />
-                      {(!sidebarCollapsed || isMobile) && (
-                        <>
+                              <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
                           <span className="flex-1 text-left truncate">{item.label}</span>
                           {item.badge && (
                             <Badge variant="secondary" className="text-xs flex-shrink-0">
                               {item.badge}
                             </Badge>
-                          )}
-                        </>
                       )}
                     </button>
-                  </TooltipTrigger>
-                  {sidebarCollapsed && !isMobile && (
-                    <TooltipContent side="right">
-                      <p>{item.label}</p>
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-              </TooltipProvider>
-            )
-          })}
+                          )
+                        })}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                )
+              })}
+            </Accordion>
         </nav>
       </ScrollArea>
 
@@ -307,6 +542,7 @@ export default function MainLayout() {
       )}
     </div>
   )
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -339,7 +575,9 @@ export default function MainLayout() {
           {/* Page Title (Mobile) */}
           <div className="flex-1 lg:hidden">
             <h1 className="text-lg font-semibold">
-              {navItems.find((item) => isActive(item.path))?.label || 'LA CAJA'}
+              {navSections
+                .flatMap((section) => section.items)
+                .find((item) => isActive(item.path))?.label || 'LA CAJA'}
             </h1>
           </div>
 
