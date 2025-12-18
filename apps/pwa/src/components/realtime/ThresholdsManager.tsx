@@ -76,7 +76,7 @@ export default function ThresholdsManager() {
   const { data: thresholds = [], isLoading } = useQuery({
     queryKey: ['alert-thresholds'],
     queryFn: () => realtimeAnalyticsService.getThresholds(),
-    staleTime: 1000 * 60 * 5, // 5 minutos
+    staleTime: 1000 * 60 * 2, // 2 minutos - más frecuente porque es rápido con vistas materializadas
   })
 
   const queryClient = useQueryClient()

@@ -143,7 +143,6 @@ export default function DashboardPage() {
     data: trends,
     isLoading: trendsLoading,
     isFetching: trendsFetching,
-    dataUpdatedAt: trendsUpdatedAt,
   } = useQuery({
     queryKey: ['dashboard', 'trends'],
     queryFn: () => dashboardService.getTrends(),

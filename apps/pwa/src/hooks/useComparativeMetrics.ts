@@ -27,7 +27,7 @@ export function useComparativeMetrics(
     queryKey: ['comparative-metrics', params],
     queryFn: () => realtimeAnalyticsService.getComparativeMetrics(params),
     enabled: !!metricType,
-    staleTime: 1000 * 60 * 10, // 10 minutos
+    staleTime: 1000 * 60 * 2, // 2 minutos - más frecuente porque es rápido con vistas materializadas
   })
 }
 

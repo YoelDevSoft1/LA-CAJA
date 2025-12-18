@@ -22,8 +22,8 @@ export function useRealtimeAlerts(params?: {
   } = useQuery({
     queryKey: ['realtime-alerts', params],
     queryFn: () => realtimeAnalyticsService.getAlerts(params),
-    staleTime: 1000 * 60 * 5, // 5 minutos
-    refetchInterval: 1000 * 60 * 5, // Refrescar cada 5 minutos como fallback
+    staleTime: 1000 * 60 * 2, // 2 minutos - más frecuente porque es rápido con vistas materializadas
+    refetchInterval: 1000 * 60 * 2, // Refrescar cada 2 minutos como fallback (más frecuente)
   })
 
   // Callback para nuevas alertas

@@ -119,11 +119,11 @@ export class RealTimeAnalyticsService {
     yesterday.setDate(yesterday.getDate() - 1);
 
     // Calcular métricas de ventas del día actual
+    // NOTA: sales no tiene columna status, todas las ventas están completadas
     const todaySales = await this.saleRepository
       .createQueryBuilder('sale')
       .where('sale.store_id = :storeId', { storeId })
       .andWhere('sale.sold_at >= :today', { today })
-      .andWhere('sale.status = :status', { status: 'completed' })
       .getMany();
 
     const todayRevenueBs = todaySales.reduce(
@@ -142,7 +142,6 @@ export class RealTimeAnalyticsService {
       .where('sale.store_id = :storeId', { storeId })
       .andWhere('sale.sold_at >= :yesterday', { yesterday })
       .andWhere('sale.sold_at < :today', { today })
-      .andWhere('sale.status = :status', { status: 'completed' })
       .getMany();
 
     const yesterdayRevenueBs = yesterdaySales.reduce(
@@ -221,12 +220,26 @@ export class RealTimeAnalyticsService {
     );
 
     // Calcular productos con stock bajo
-    const lowStockProducts = await this.productRepository
+    // NOTA: current_stock no existe como columna, se calcula desde inventory_movements
+    const productsWithStock = await this.productRepository
       .createQueryBuilder('product')
+      .leftJoin(
+        'inventory_movements',
+        'movement',
+        'movement.product_id = product.id AND movement.store_id = product.store_id',
+      )
       .where('product.store_id = :storeId', { storeId })
-      .andWhere('product.current_stock <= product.low_stock_threshold')
       .andWhere('product.low_stock_threshold > 0')
-      .getCount();
+      .andWhere('product.is_active = true')
+      .select('product.id')
+      .addSelect('product.low_stock_threshold')
+      .addSelect('COALESCE(SUM(movement.qty_delta), 0)', 'current_stock')
+      .groupBy('product.id')
+      .getRawMany();
+
+    const lowStockProducts = productsWithStock.filter(
+      (p) => Number(p.current_stock) <= p.low_stock_threshold,
+    ).length;
 
     metricsToSave.push(
       this.metricRepository.create({
@@ -406,12 +419,26 @@ export class RealTimeAnalyticsService {
 
     // Si no existe métrica, calcularla dinámicamente
     if (metricName === 'low_stock_products_count') {
-      return await this.productRepository
+      // NOTA: current_stock se calcula desde inventory_movements
+      const productsWithStock = await this.productRepository
         .createQueryBuilder('product')
+        .leftJoin(
+          'inventory_movements',
+          'movement',
+          'movement.product_id = product.id AND movement.store_id = product.store_id',
+        )
         .where('product.store_id = :storeId', { storeId })
-        .andWhere('product.current_stock <= product.low_stock_threshold')
         .andWhere('product.low_stock_threshold > 0')
-        .getCount();
+        .andWhere('product.is_active = true')
+        .select('product.id')
+        .addSelect('product.low_stock_threshold')
+        .addSelect('COALESCE(SUM(movement.qty_delta), 0)', 'current_stock')
+        .groupBy('product.id')
+        .getRawMany();
+
+      return productsWithStock.filter(
+        (p) => Number(p.current_stock) <= p.low_stock_threshold,
+      ).length;
     }
 
     if (metricName === 'daily_revenue_bs') {
@@ -421,7 +448,6 @@ export class RealTimeAnalyticsService {
         .createQueryBuilder('sale')
         .where('sale.store_id = :storeId', { storeId })
         .andWhere('sale.sold_at >= :today', { today })
-        .andWhere('sale.status = :status', { status: 'completed' })
         .getMany();
 
       return sales.reduce(
@@ -578,7 +604,6 @@ export class RealTimeAnalyticsService {
       .where('sale.store_id = :storeId', { storeId })
       .andWhere('sale.sold_at >= :start', { start: startOfDay })
       .andWhere('sale.sold_at <= :end', { end: endOfDay })
-      .andWhere('sale.status = :status', { status: 'completed' })
       .getMany();
 
     // Calcular agregaciones por hora
@@ -740,7 +765,6 @@ export class RealTimeAnalyticsService {
         .where('sale.store_id = :storeId', { storeId })
         .andWhere('sale.sold_at >= :start', { start: currentPeriodStart })
         .andWhere('sale.sold_at <= :end', { end: currentPeriodEnd })
-        .andWhere('sale.status = :status', { status: 'completed' })
         .getMany();
 
       const previousSales = await this.saleRepository
@@ -748,7 +772,6 @@ export class RealTimeAnalyticsService {
         .where('sale.store_id = :storeId', { storeId })
         .andWhere('sale.sold_at >= :start', { start: previousPeriodStart })
         .andWhere('sale.sold_at <= :end', { end: previousPeriodEnd })
-        .andWhere('sale.status = :status', { status: 'completed' })
         .getMany();
 
       if (dto.metric_type === DtoMetricType.REVENUE) {

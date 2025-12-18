@@ -21,7 +21,7 @@ export function useSalesHeatmap(startDate: Date, endDate: Date) {
     queryKey: ['sales-heatmap', startDateStr, endDateStr],
     queryFn: () =>
       realtimeAnalyticsService.getSalesHeatmap(startDateStr, endDateStr),
-    staleTime: 1000 * 60 * 5, // 5 minutos
+    staleTime: 1000 * 60 * 2, // 2 minutos - más frecuente porque es rápido con vistas materializadas
   })
 
   // Estado local para datos actualizados vía WebSocket

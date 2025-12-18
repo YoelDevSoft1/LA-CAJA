@@ -16,6 +16,7 @@ export const realtimeAnalyticsService = {
    * Obtiene métricas en tiempo real
    */
   async getMetrics(metricTypes?: string[]): Promise<RealTimeMetricsResponse> {
+    const startTime = performance.now()
     const params: any = {}
     if (metricTypes && metricTypes.length > 0) {
       params.metric_types = metricTypes.join(',')
@@ -23,6 +24,11 @@ export const realtimeAnalyticsService = {
     const response = await api.get<RealTimeMetricsResponse>(
       '/realtime-analytics/metrics',
       { params },
+    )
+    const endTime = performance.now()
+    console.log(
+      `[Realtime Analytics] Metrics loaded in ${(endTime - startTime).toFixed(2)}ms`,
+      metricTypes && metricTypes.length > 0 ? `(types: ${metricTypes.join(', ')})` : '(all types)'
     )
     return response.data
   },
@@ -118,6 +124,7 @@ export const realtimeAnalyticsService = {
     startDate: string,
     endDate: string,
   ): Promise<SalesHeatmapResponse> {
+    const startTime = performance.now()
     const response = await api.get<SalesHeatmapResponse>(
       '/realtime-analytics/heatmap',
       {
@@ -126,6 +133,11 @@ export const realtimeAnalyticsService = {
           end_date: endDate,
         },
       },
+    )
+    const endTime = performance.now()
+    console.log(
+      `[Realtime Analytics] Heatmap loaded in ${(endTime - startTime).toFixed(2)}ms`,
+      `(${startDate} to ${endDate})`
     )
     return response.data
   },
@@ -136,9 +148,15 @@ export const realtimeAnalyticsService = {
   async getComparativeMetrics(
     params: GetComparativeMetricsRequest,
   ): Promise<ComparativeMetricsResponse> {
+    const startTime = performance.now()
     const response = await api.get<ComparativeMetricsResponse>(
       '/realtime-analytics/comparative',
       { params },
+    )
+    const endTime = performance.now()
+    console.log(
+      `[Realtime Analytics] Comparative metrics loaded in ${(endTime - startTime).toFixed(2)}ms`,
+      `(type: ${params.metric_type}, period: ${params.period})`
     )
     return response.data
   },
