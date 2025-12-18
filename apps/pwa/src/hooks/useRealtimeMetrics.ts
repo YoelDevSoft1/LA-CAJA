@@ -16,8 +16,8 @@ export function useRealtimeMetrics(metricTypes?: MetricType[]) {
   } = useQuery({
     queryKey: ['realtime-metrics', metricTypes],
     queryFn: () => realtimeAnalyticsService.getMetrics(metricTypes),
-    staleTime: 1000 * 60, // 1 minuto
-    refetchInterval: 1000 * 60 * 5, // Refrescar cada 5 minutos como fallback
+    staleTime: 1000 * 30, // 30 segundos - más frecuente porque es rápido con vistas materializadas
+    refetchInterval: 1000 * 60 * 2, // Refrescar cada 2 minutos como fallback (más frecuente)
   })
 
   // Estado local para métricas actualizadas vía WebSocket

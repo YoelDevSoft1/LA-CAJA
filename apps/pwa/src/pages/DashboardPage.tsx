@@ -125,7 +125,9 @@ export default function DashboardPage() {
   const {
     data: kpis,
     isLoading: kpisLoading,
+    isFetching: kpisFetching,
     refetch: refetchKPIs,
+    dataUpdatedAt: kpisUpdatedAt,
   } = useQuery({
     queryKey: ['dashboard', 'kpis', startDate, endDate],
     queryFn: () =>
@@ -133,42 +135,53 @@ export default function DashboardPage() {
         startDate || undefined,
         endDate || undefined,
       ),
-    staleTime: 1000 * 60 * 5, // 5 minutos
+    staleTime: 1000 * 60 * 2, // 2 minutos - más frecuente porque las queries son más rápidas con vistas materializadas
+    refetchInterval: 1000 * 60 * 2, // Refrescar cada 2 minutos
   })
 
   // Obtener tendencias
   const {
     data: trends,
     isLoading: trendsLoading,
+    isFetching: trendsFetching,
+    dataUpdatedAt: trendsUpdatedAt,
   } = useQuery({
     queryKey: ['dashboard', 'trends'],
     queryFn: () => dashboardService.getTrends(),
-    staleTime: 1000 * 60 * 5, // 5 minutos
+    staleTime: 1000 * 60 * 2, // 2 minutos
+    refetchInterval: 1000 * 60 * 2, // Refrescar cada 2 minutos
   })
 
-  // Auto-refresh cada 5 minutos
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refetchKPIs()
-    }, 1000 * 60 * 5) // 5 minutos
-
-    return () => clearInterval(interval)
-  }, [refetchKPIs])
-
   const isLoading = kpisLoading || trendsLoading
+  const isFetching = kpisFetching || trendsFetching
 
   return (
     <div className="container mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
-            <BarChart3 className="w-7 h-7 sm:w-8 sm:h-8 text-primary" />
-            Dashboard Ejecutivo
-          </h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Resumen de KPIs y métricas del negocio
-          </p>
+          <div className="flex items-center gap-3">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
+                <BarChart3 className="w-7 h-7 sm:w-8 sm:h-8 text-primary" />
+                Dashboard Ejecutivo
+              </h1>
+              <p className="text-sm sm:text-base text-muted-foreground mt-1">
+                Resumen de KPIs y métricas del negocio
+              </p>
+            </div>
+            {isFetching && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                Actualizando datos...
+              </div>
+            )}
+            {!isFetching && kpisUpdatedAt && (
+              <div className="text-xs text-muted-foreground">
+                Actualizado: {new Date(kpisUpdatedAt).toLocaleTimeString()}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="flex flex-col gap-1">

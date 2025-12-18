@@ -49,13 +49,13 @@ if ('serviceWorker' in navigator) {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 30, // 30 minutos - datos frescos por más tiempo
-      gcTime: 1000 * 60 * 60 * 24, // 24 horas - mantener en caché por mucho tiempo
+      staleTime: 1000 * 60 * 2, // 2 minutos por defecto - aprovechar vistas materializadas para datos más frescos
+      gcTime: 1000 * 60 * 10, // 10 minutos - mantener en caché tiempo razonable
       retry: 2, // Menos reintentos para fallar rápido y usar caché
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-      refetchOnWindowFocus: false, // No refetch automático al cambiar de ventana
+      refetchOnWindowFocus: false, // No refetch automático al cambiar de ventana (evitar refetches innecesarios)
       refetchOnReconnect: true, // Refetch cuando se recupera conexión
-      refetchOnMount: false, // No refetch al montar si hay datos en caché
+      refetchOnMount: false, // No refetch al montar si hay datos en caché (usar cache primero)
     },
     mutations: {
       retry: 1,
