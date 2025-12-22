@@ -22,41 +22,55 @@ export class ExchangeController {
    */
   @Get('bcv')
   async getBCVRate(@Query('force') force?: string, @Request() req?: any) {
-    const storeId = req?.user?.store_id;
+    try {
+      const storeId = req?.user?.store_id;
 
-    // Si force=true, ignorar cache
-    if (force === 'true') {
-      // Limpiar cache forzando nueva búsqueda
+      // Si force=true, ignorar cache
+      if (force === 'true') {
+        // Limpiar cache forzando nueva búsqueda
+        const rate = await this.exchangeService.getBCVRate(storeId);
+        return {
+          rate: rate?.rate || null,
+          source: rate?.source || null,
+          timestamp: rate?.timestamp || null,
+          available: rate !== null,
+        };
+      }
+
+      // Intentar obtener tasa automáticamente
       const rate = await this.exchangeService.getBCVRate(storeId);
+
+      if (rate) {
+        return {
+          rate: rate.rate,
+          source: rate.source,
+          timestamp: rate.timestamp,
+          available: true,
+        };
+      }
+
+      // Si no está disponible automáticamente, retornar null
+      // El frontend deberá solicitar entrada manual
       return {
-        rate: rate?.rate || null,
-        source: rate?.source || null,
-        timestamp: rate?.timestamp || null,
-        available: rate !== null,
+        rate: null,
+        source: null,
+        timestamp: null,
+        available: false,
+        message: 'Tasa BCV no disponible automáticamente. Ingrese manualmente.',
+      };
+    } catch (error) {
+      // Log del error para debugging
+      console.error('Error en getBCVRate:', error);
+
+      // Retornar respuesta con fallback en caso de error
+      return {
+        rate: null,
+        source: null,
+        timestamp: null,
+        available: false,
+        message: 'Error al obtener la tasa de cambio. Intente nuevamente.',
       };
     }
-
-    // Intentar obtener tasa automáticamente
-    const rate = await this.exchangeService.getBCVRate(storeId);
-
-    if (rate) {
-      return {
-        rate: rate.rate,
-        source: rate.source,
-        timestamp: rate.timestamp,
-        available: true,
-      };
-    }
-
-    // Si no está disponible automáticamente, retornar null
-    // El frontend deberá solicitar entrada manual
-    return {
-      rate: null,
-      source: null,
-      timestamp: null,
-      available: false,
-      message: 'Tasa BCV no disponible automáticamente. Ingrese manualmente.',
-    };
   }
 
   /**
@@ -67,17 +81,26 @@ export class ExchangeController {
     @Query('fallback') fallback?: string,
     @Request() req?: any,
   ) {
-    const storeId = req?.user?.store_id;
-    const fallbackRate = fallback ? parseFloat(fallback) : 36;
-    const rate = await this.exchangeService.getCurrentRate(
-      storeId,
-      fallbackRate,
-    );
+    try {
+      const storeId = req?.user?.store_id;
+      const fallbackRate = fallback ? parseFloat(fallback) : 36;
+      const rate = await this.exchangeService.getCurrentRate(
+        storeId,
+        fallbackRate,
+      );
 
-    return {
-      rate,
-      available: true,
-    };
+      return {
+        rate,
+        available: true,
+      };
+    } catch (error) {
+      console.error('Error en getCurrentRate:', error);
+      const fallbackRate = fallback ? parseFloat(fallback) : 36;
+      return {
+        rate: fallbackRate,
+        available: true,
+      };
+    }
   }
 
   /**

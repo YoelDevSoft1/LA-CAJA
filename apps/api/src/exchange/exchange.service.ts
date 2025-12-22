@@ -51,40 +51,63 @@ export class ExchangeService {
    * 3. Si falla API, usa última tasa manual o fallback por defecto
    */
   async getBCVRate(storeId?: string): Promise<BCVRateResponse | null> {
-    // Si hay un cache válido, retornarlo
-    if (this.cachedRate && this.isCacheValid()) {
-      this.logger.debug('Usando tasa BCV del cache');
-      return this.cachedRate;
-    }
-
-    // Si hay storeId, buscar tasa manual activa en BD
-    if (storeId) {
-      const manualRate = await this.getActiveManualRate(storeId);
-      if (manualRate) {
-        this.cachedRate = {
-          rate: Number(manualRate.rate),
-          source: 'manual',
-          timestamp: manualRate.effective_from,
-        };
-        this.logger.log(`Usando tasa manual de BD: ${manualRate.rate}`);
+    try {
+      // Si hay un cache válido, retornarlo
+      if (this.cachedRate && this.isCacheValid()) {
+        this.logger.debug('Usando tasa BCV del cache');
         return this.cachedRate;
       }
-    }
 
-    // Si ya hay un request en progreso, esperar a que termine
-    if (this.fetchPromise) {
-      this.logger.debug('Esperando request de tasa BCV en progreso...');
-      return this.fetchPromise;
-    }
+      // Si hay storeId, buscar tasa manual activa en BD
+      if (storeId) {
+        try {
+          const manualRate = await this.getActiveManualRate(storeId);
+          if (manualRate) {
+            this.cachedRate = {
+              rate: Number(manualRate.rate),
+              source: 'manual',
+              timestamp: manualRate.effective_from,
+            };
+            this.logger.log(`Usando tasa manual de BD: ${manualRate.rate}`);
+            return this.cachedRate;
+          }
+        } catch (dbError) {
+          this.logger.error(
+            'Error al consultar tasa manual en BD',
+            dbError instanceof Error ? dbError.message : String(dbError),
+          );
+          // Continuar con API si falla la BD
+        }
+      }
 
-    // Crear nuevo request
-    this.fetchPromise = this.fetchRate(storeId);
+      // Si ya hay un request en progreso, esperar a que termine
+      if (this.fetchPromise) {
+        this.logger.debug('Esperando request de tasa BCV en progreso...');
+        return this.fetchPromise;
+      }
 
-    try {
-      const result = await this.fetchPromise;
-      return result;
-    } finally {
-      this.fetchPromise = null;
+      // Crear nuevo request
+      this.fetchPromise = this.fetchRate(storeId);
+
+      try {
+        const result = await this.fetchPromise;
+        return result;
+      } finally {
+        this.fetchPromise = null;
+      }
+    } catch (error) {
+      this.logger.error(
+        'Error general en getBCVRate',
+        error instanceof Error ? error.message : String(error),
+      );
+      // Si hay cache expirado, usarlo como último recurso
+      if (this.cachedRate) {
+        this.logger.warn(
+          'Usando cache expirado como último recurso debido a error',
+        );
+        return this.cachedRate;
+      }
+      return null;
     }
   }
 
@@ -273,35 +296,61 @@ export class ExchangeService {
    * Obtiene la tasa manual activa para un store
    */
   async getActiveManualRate(storeId: string): Promise<ExchangeRate | null> {
-    const now = new Date();
+    try {
+      if (!storeId) {
+        this.logger.warn('getActiveManualRate llamado sin storeId');
+        return null;
+      }
 
-    return this.exchangeRateRepository
-      .createQueryBuilder('rate')
-      .where('rate.store_id = :storeId', { storeId })
-      .andWhere('rate.source = :source', { source: 'manual' })
-      .andWhere('rate.is_active = :isActive', { isActive: true })
-      .andWhere('rate.effective_from <= :now', { now })
-      .andWhere(
-        '(rate.effective_until IS NULL OR rate.effective_until >= :now)',
-        { now },
-      )
-      .orderBy('rate.effective_from', 'DESC')
-      .getOne();
+      const now = new Date();
+
+      return await this.exchangeRateRepository
+        .createQueryBuilder('rate')
+        .where('rate.store_id = :storeId', { storeId })
+        .andWhere('rate.source = :source', { source: 'manual' })
+        .andWhere('rate.is_active = :isActive', { isActive: true })
+        .andWhere('rate.effective_from <= :now', { now })
+        .andWhere(
+          '(rate.effective_until IS NULL OR rate.effective_until >= :now)',
+          { now },
+        )
+        .orderBy('rate.effective_from', 'DESC')
+        .getOne();
+    } catch (error) {
+      this.logger.error(
+        'Error en getActiveManualRate',
+        error instanceof Error ? error.stack : String(error),
+      );
+      return null;
+    }
   }
 
   /**
    * Obtiene la última tasa manual (aunque esté inactiva)
    */
   async getLastManualRate(storeId: string): Promise<ExchangeRate | null> {
-    return this.exchangeRateRepository.findOne({
-      where: {
-        store_id: storeId,
-        source: 'manual',
-      },
-      order: {
-        effective_from: 'DESC',
-      },
-    });
+    try {
+      if (!storeId) {
+        this.logger.warn('getLastManualRate llamado sin storeId');
+        return null;
+      }
+
+      return await this.exchangeRateRepository.findOne({
+        where: {
+          store_id: storeId,
+          source: 'manual',
+        },
+        order: {
+          effective_from: 'DESC',
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        'Error en getLastManualRate',
+        error instanceof Error ? error.stack : String(error),
+      );
+      return null;
+    }
   }
 
   /**

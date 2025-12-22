@@ -36,3 +36,6 @@ COMMENT ON COLUMN security_audit_log.details IS 'Información adicional del even
 COMMENT ON COLUMN security_audit_log.ip_address IS 'Dirección IP del cliente (INET para soporte IPv4/IPv6)';
 
 
+
+
+
