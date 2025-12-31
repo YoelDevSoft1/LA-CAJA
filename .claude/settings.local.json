@@ -33,7 +33,10 @@
       "Bash(md5:*)",
       "Bash(git add:*)",
       "Bash(git reset:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(~/Library/Android/sdk/build-tools/35.0.0/apksigner sign:*)",
+      "Bash(keytool:*)",
+      "Bash(~/Library/Android/sdk/build-tools/35.0.0/apksigner verify --verbose LA-CAJA-release-signed.apk)"
     ]
   },
   "enabledMcpjsonServers": [
