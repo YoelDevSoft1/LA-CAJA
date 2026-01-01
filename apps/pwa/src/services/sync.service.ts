@@ -66,6 +66,10 @@ class SyncServiceClass {
   // TODO: Implementar cache L1/L2/L3 para productos/clientes
   // private cacheManager: CacheManager;
 
+  // ===== CALLBACKS PARA INVALIDAR CACHE Y NOTIFICAR =====
+  private onSyncCompleteCallbacks: Array<(syncedCount: number) => void> = [];
+  private onSyncErrorCallbacks: Array<(error: Error) => void> = [];
+
   constructor() {
     this.metrics = new SyncMetricsCollector();
     this.circuitBreaker = new CircuitBreaker();
@@ -296,6 +300,61 @@ class SyncServiceClass {
   }
 
   /**
+   * Registra un callback para ejecutar cuando se completa la sincronización
+   * Útil para invalidar cache de React Query
+   */
+  onSyncComplete(callback: (syncedCount: number) => void): () => void {
+    this.onSyncCompleteCallbacks.push(callback);
+    // Retornar función para desuscribirse
+    return () => {
+      const index = this.onSyncCompleteCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.onSyncCompleteCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Registra un callback para ejecutar cuando hay un error de sincronización
+   */
+  onSyncError(callback: (error: Error) => void): () => void {
+    this.onSyncErrorCallbacks.push(callback);
+    // Retornar función para desuscribirse
+    return () => {
+      const index = this.onSyncErrorCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.onSyncErrorCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Notifica a todos los callbacks registrados que se completó la sincronización
+   */
+  private notifySyncComplete(syncedCount: number): void {
+    this.onSyncCompleteCallbacks.forEach((callback) => {
+      try {
+        callback(syncedCount);
+      } catch (error) {
+        console.error('[SyncService] Error en callback onSyncComplete:', error);
+      }
+    });
+  }
+
+  /**
+   * Notifica a todos los callbacks registrados que hubo un error
+   */
+  private notifySyncError(error: Error): void {
+    this.onSyncErrorCallbacks.forEach((callback) => {
+      try {
+        callback(error);
+      } catch (err) {
+        console.error('[SyncService] Error en callback onSyncError:', err);
+      }
+    });
+  }
+
+  /**
    * Limpia eventos antiguos sincronizados (para liberar espacio)
    */
   async cleanupSyncedEvents(maxAge: number = 7 * 24 * 60 * 60 * 1000): Promise<void> {
@@ -451,6 +510,10 @@ class SyncServiceClass {
         const acceptedIds = response.data.accepted.map((a) => a.event_id);
         await this.markEventsAsSynced(acceptedIds);
         this.syncQueue?.markAsSynced(acceptedIds);
+
+        // 🔔 Notificar que se completó la sincronización para invalidar cache
+        console.log('[SyncService] 🔔 Notificando sincronización completada:', acceptedIds.length, 'eventos');
+        this.notifySyncComplete(acceptedIds.length);
       }
 
       // Manejar eventos rechazados
@@ -490,6 +553,10 @@ class SyncServiceClass {
       if (status && status >= 400 && status < 500) {
         err.name = 'ValidationError';
       }
+
+      // 🔔 Notificar error de sincronización
+      this.notifySyncError(err);
+
       return { success: false, error: err };
     }
   }

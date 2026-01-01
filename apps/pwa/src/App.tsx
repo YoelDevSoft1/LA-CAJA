@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import SimpleLoader from './components/loader/SimpleLoader'
 import LoginPage from './pages/LoginPage'
 import ProtectedRoute from './components/layout/ProtectedRoute'
@@ -51,6 +53,7 @@ function App() {
   const { isOnline, wasOffline } = useOnline()
   const { isSupported, subscribe } = usePushNotifications()
   const [isLoaderComplete, setIsLoaderComplete] = useState(false)
+  const queryClient = useQueryClient()
 
   // Rehidratar el sync service si hay sesión persistida
   useEffect(() => {
@@ -60,6 +63,46 @@ function App() {
       })
     }
   }, [user?.store_id])
+
+  // Escuchar eventos de sincronización para invalidar cache y notificar usuario
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Callback cuando se completa la sincronización
+    const unsubscribeComplete = syncService.onSyncComplete((syncedCount) => {
+      console.log('[App] 🔄 Sincronización completada, invalidando cache...', syncedCount, 'eventos');
+
+      // Invalidar cache de React Query para ventas y otros recursos
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['cash'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+
+      // Mostrar notificación al usuario
+      toast.success(`✅ ${syncedCount} ${syncedCount === 1 ? 'venta sincronizada' : 'ventas sincronizadas'}`, {
+        duration: 3000,
+        icon: '🔄',
+      });
+    });
+
+    // Callback cuando hay error de sincronización
+    const unsubscribeError = syncService.onSyncError((error) => {
+      console.error('[App] ❌ Error de sincronización:', error?.message || error);
+      // Solo mostrar error si no es por falta de conexión
+      if (error?.name !== 'OfflineError' && !error?.message?.includes('Sin conexión')) {
+        toast.error('Error al sincronizar datos', {
+          duration: 4000,
+        });
+      }
+    });
+
+    // Cleanup: desuscribirse cuando el componente se desmonte
+    return () => {
+      unsubscribeComplete();
+      unsubscribeError();
+    };
+  }, [isAuthenticated, queryClient])
 
   // Conectar WebSocket de analytics en tiempo real
   useEffect(() => {
