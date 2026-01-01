@@ -89,26 +89,42 @@ function App() {
     }
   }, [isOnline, wasOffline])
 
-  // Suscribirse a push notifications usando el SW de VitePWA
+  // Suscribirse a push notifications usando el SW de VitePWA (solo una vez al autenticarse)
   useEffect(() => {
-    if (isAuthenticated && isSupported && 'serviceWorker' in navigator) {
-      // Usar el service worker ya registrado por VitePWA
-      navigator.serviceWorker.ready.then(() => {
-        console.log('[PushNotifications] Usando Service Worker de VitePWA')
-        // Intentar suscribirse después de un pequeño delay
-        setTimeout(() => {
+    if (!isAuthenticated || !isSupported || !('serviceWorker' in navigator)) {
+      return
+    }
+
+    let timeoutId: NodeJS.Timeout | null = null
+
+    // Usar el service worker ya registrado por VitePWA
+    navigator.serviceWorker.ready
+      .then(() => {
+        console.log('[PushNotifications] SW listo')
+        // Intentar suscribirse después de un delay (solo una vez)
+        timeoutId = setTimeout(() => {
           subscribe().catch((error) => {
-            // Solo mostrar error si no es por falta de configuración
-            if (import.meta.env.DEV && error?.message && !error.message.includes('VAPID')) {
-              console.error('[PushNotifications] Error al suscribirse:', error)
+            // Silenciar errores - push notifications son opcionales
+            if (import.meta.env.DEV) {
+              console.warn('[PushNotifications] No se pudo suscribir (opcional):', error?.message || error)
             }
           })
-        }, 2000)
-      }).catch((error) => {
-        console.error('[PushNotifications] Service Worker no disponible:', error)
+        }, 3000)
       })
+      .catch((error) => {
+        if (import.meta.env.DEV) {
+          console.error('[PushNotifications] Service Worker no disponible:', error)
+        }
+      })
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
     }
-  }, [isAuthenticated, isSupported, subscribe])
+    // Solo ejecutar cuando cambia isAuthenticated, no cuando cambia subscribe
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, isSupported])
 
   // Set initial loader state
   useEffect(() => {
