@@ -61,9 +61,18 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 401) {
-      // Token inválido o expirado
+      // ✅ OFFLINE-FIRST: Marcar error como no-retriable para React Query
+      error.isAuthError = true;
+
+      // Token inválido o expirado - limpiar y redirigir SOLO UNA VEZ
+      console.warn('[API] 401 Unauthorized - Limpiando sesión');
       localStorage.removeItem('auth_token');
-      window.location.href = '/login';
+
+      // Redirigir solo si no estamos ya en login
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+
       return Promise.reject(error);
     }
 
