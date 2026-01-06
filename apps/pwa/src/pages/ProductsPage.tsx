@@ -13,6 +13,7 @@ import ProductVariantsModal from '@/components/variants/ProductVariantsModal'
 import ProductLotsModal from '@/components/lots/ProductLotsModal'
 import ProductSerialsModal from '@/components/serials/ProductSerialsModal'
 import ImportCSVModal from '@/components/products/ImportCSVModal'
+import CleanDuplicatesModal from '@/components/products/CleanDuplicatesModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -28,6 +29,7 @@ export default function ProductsPage() {
   const [priceProduct, setPriceProduct] = useState<Product | null>(null)
   const [isBulkPriceModalOpen, setIsBulkPriceModalOpen] = useState(false)
   const [isImportCSVOpen, setIsImportCSVOpen] = useState(false)
+  const [isCleanDuplicatesOpen, setIsCleanDuplicatesOpen] = useState(false)
   const [variantsProduct, setVariantsProduct] = useState<Product | null>(null)
   const [lotsProduct, setLotsProduct] = useState<Product | null>(null)
   const [serialsProduct, setSerialsProduct] = useState<Product | null>(null)
@@ -170,6 +172,14 @@ export default function ProductsPage() {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              onClick={() => setIsCleanDuplicatesOpen(true)}
+              variant="outline"
+              className="border-destructive text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="w-5 h-5 mr-2" />
+              Limpiar Duplicados
+            </Button>
             <Button
               onClick={() => setIsImportCSVOpen(true)}
               variant="outline"
@@ -454,6 +464,15 @@ export default function ProductsPage() {
       <ImportCSVModal
         open={isImportCSVOpen}
         onClose={() => setIsImportCSVOpen(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['products'] })
+        }}
+      />
+
+      {/* Modal de limpieza de duplicados */}
+      <CleanDuplicatesModal
+        open={isCleanDuplicatesOpen}
+        onClose={() => setIsCleanDuplicatesOpen(false)}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['products'] })
         }}
