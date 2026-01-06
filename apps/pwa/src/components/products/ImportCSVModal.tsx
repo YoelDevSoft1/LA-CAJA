@@ -353,6 +353,13 @@ export default function ImportCSVModal({ open, onClose, onSuccess }: ImportCSVMo
         if ((i + 1) % 50 === 0) {
           console.log(`[CSV Import] ✅ Progreso: ${i + 1}/${parsedProducts.length} (${successCount} éxitos, ${errorCount} errores, ${skippedCount} omitidos)`)
         }
+
+        // 🚨 RENDER FREE TIER: Pausar después de 95 productos exitosos para evitar límite de 100 req/min
+        if (successCount > 0 && successCount % 95 === 0) {
+          console.warn(`[CSV Import] ⏸️ PAUSA: ${successCount} productos creados. Esperando 65 segundos para reiniciar ventana de rate limit...`)
+          await new Promise(resolve => setTimeout(resolve, 65000)) // 65 segundos de pausa
+          console.log(`[CSV Import] ▶️ Reanudando importación...`)
+        }
       }
 
       console.log('[CSV Import] Importación completada:', {
