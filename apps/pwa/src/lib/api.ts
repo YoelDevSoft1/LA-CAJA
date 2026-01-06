@@ -51,6 +51,9 @@ api.interceptors.request.use(
   }
 );
 
+// Variable para evitar múltiples redirecciones simultáneas
+let isRedirecting = false;
+
 // Interceptor para manejar errores
 api.interceptors.response.use(
   (response) => response,
@@ -64,13 +67,19 @@ api.interceptors.response.use(
       // ✅ OFFLINE-FIRST: Marcar error como no-retriable para React Query
       error.isAuthError = true;
 
-      // Token inválido o expirado - limpiar y redirigir SOLO UNA VEZ
-      console.warn('[API] 401 Unauthorized - Limpiando sesión');
-      localStorage.removeItem('auth_token');
+      // EVITAR BUCLE INFINITO: Solo redirigir UNA VEZ
+      if (!isRedirecting && !window.location.pathname.includes('/login')) {
+        isRedirecting = true;
+        console.warn('[API] 401 Unauthorized - Limpiando sesión y redirigiendo...');
 
-      // Redirigir solo si no estamos ya en login
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
+        // Limpiar estado de autenticación
+        localStorage.removeItem('auth_token');
+        useAuth.getState().logout();
+
+        // Redirigir una sola vez
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 100);
       }
 
       return Promise.reject(error);
