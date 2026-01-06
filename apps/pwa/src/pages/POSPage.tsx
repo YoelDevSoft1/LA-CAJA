@@ -521,9 +521,9 @@ export default function POSPage() {
                     }}
                   >
                     <div className="absolute left-0 top-0 bottom-0 w-0 bg-primary opacity-0 group-hover:opacity-100 group-hover:w-0.5 transition-all duration-200" />
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-start justify-between gap-3 min-w-0">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-sm sm:text-base text-foreground truncate group-hover:text-primary transition-colors">
+                        <h3 className="font-semibold text-sm sm:text-base text-foreground break-words leading-snug group-hover:text-primary transition-colors">
                           {product.name}
                         </h3>
                         {product.category && (
@@ -605,7 +605,7 @@ export default function POSPage() {
                       <div className="flex items-start justify-between mb-2 gap-2 min-w-0">
                         <div className="flex-1 min-w-0">
                           <p
-                            className="font-medium text-xs sm:text-sm text-foreground truncate"
+                            className="font-medium text-xs sm:text-sm text-foreground break-words leading-snug"
                             title={item.product_name}
                           >
                             {item.product_name}

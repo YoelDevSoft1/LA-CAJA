@@ -259,10 +259,10 @@ export default function ProductsPage() {
           </div>
         ) : (
             <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
                 <thead className="bg-muted/50">
                 <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider w-[45%] sm:w-[40%]">
                     Producto
                   </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider hidden sm:table-cell">
@@ -271,16 +271,16 @@ export default function ProductsPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider hidden md:table-cell">
                     SKU
                   </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-foreground uppercase tracking-wider">
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-foreground uppercase tracking-wider w-28 sm:w-32">
                     Precio
                   </th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-foreground uppercase tracking-wider hidden sm:table-cell">
                     Stock
                   </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-foreground uppercase tracking-wider">
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-foreground uppercase tracking-wider w-24">
                     Estado
                   </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-foreground uppercase tracking-wider">
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-foreground uppercase tracking-wider w-40">
                     Acciones
                   </th>
                 </tr>
@@ -293,11 +293,18 @@ export default function ProductsPage() {
                       !product.is_active ? 'opacity-60' : ''
                     }`}
                   >
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="font-semibold text-foreground text-sm sm:text-base">{product.name}</p>
+                    <td className="px-4 py-3 align-top w-[45%] sm:w-[40%]">
+                      <div className="min-w-0 max-w-full">
+                        <p
+                          className="font-semibold text-foreground text-sm sm:text-base break-words"
+                          title={product.name}
+                        >
+                          {product.name}
+                        </p>
                         {product.barcode && (
-                          <p className="text-xs text-muted-foreground mt-0.5">Código: {product.barcode}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 break-words">
+                            Código: {product.barcode}
+                          </p>
                         )}
                       </div>
                     </td>

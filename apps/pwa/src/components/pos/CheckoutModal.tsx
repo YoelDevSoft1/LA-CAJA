@@ -590,7 +590,10 @@ export default function CheckoutModal({
                           )}
                         >
                     <div className="flex-1 min-w-0 mr-2">
-                            <p className="font-medium text-foreground truncate" title={item.product_name}>
+                            <p
+                              className="font-medium text-foreground break-words leading-snug"
+                              title={item.product_name}
+                            >
                               {item.product_name}
                             </p>
                             <p className="text-xs text-muted-foreground">
