@@ -287,7 +287,11 @@ export default function StockReceivedModal({
                     Agregar Producto
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <PopoverContent
+                  className="w-[var(--radix-popover-trigger-width)] p-0"
+                  align="start"
+                  portalled={false}
+                >
                   <div className="sticky top-0 bg-background border-b border-border p-2 z-10">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
