@@ -284,6 +284,10 @@ export default function ImportCSVModal({ open, onClose, onSuccess }: ImportCSVMo
           lastError = err
           const status = err?.response?.status
 
+          // 🔐 Si es 401 (token expirado), el interceptor de API ya manejó el refresh automáticamente
+          // Si llega aquí un 401, significa que el refresh falló y la sesión expiró completamente
+          // En ese caso, el interceptor ya redirigió al login, así que no reintentamos
+
           // Si es 429 (rate limit) o 500 (server error), reintentar con backoff AGRESIVO
           if (status === 429 || status === 500 || err?.code === 'ECONNABORTED') {
             // Backoff exponencial: 2s → 4s → 8s → 16s → 30s (máximo)
@@ -354,9 +358,10 @@ export default function ImportCSVModal({ open, onClose, onSuccess }: ImportCSVMo
           console.log(`[CSV Import] ✅ Progreso: ${i + 1}/${parsedProducts.length} (${successCount} éxitos, ${errorCount} errores, ${skippedCount} omitidos)`)
         }
 
-        // 🚨 RENDER FREE TIER: Pausar después de 95 productos exitosos para evitar límite de 100 req/min
-        if (successCount > 0 && successCount % 95 === 0) {
-          console.warn(`[CSV Import] ⏸️ PAUSA: ${successCount} productos creados. Esperando 65 segundos para reiniciar ventana de rate limit...`)
+        // 🚨 RENDER FREE TIER: Pausar cada 1 minuto (60 productos a 1 req/seg) para evitar rate limit
+        // La pausa permite que la ventana de rate limit se reinicie
+        if (successCount > 0 && successCount % 60 === 0) {
+          console.warn(`[CSV Import] ⏸️ PAUSA AUTOMÁTICA: ${successCount} productos creados. Esperando 65 segundos para reiniciar ventana de rate limit...`)
           await new Promise(resolve => setTimeout(resolve, 65000)) // 65 segundos de pausa
           console.log(`[CSV Import] ▶️ Reanudando importación...`)
         }

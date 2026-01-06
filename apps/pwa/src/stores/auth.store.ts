@@ -13,12 +13,14 @@ export interface AuthUser {
 interface AuthState {
   user: AuthUser | null
   token: string | null
+  refreshToken: string | null
   isAuthenticated: boolean
   showLoader: boolean
-  login: (token: string, user: AuthUser) => void
+  login: (token: string, refreshToken: string, user: AuthUser) => void
   logout: () => void
   setUser: (user: AuthUser) => void
   setShowLoader: (show: boolean) => void
+  setToken: (token: string) => void
 }
 
 export const useAuth = create<AuthState>()(
@@ -26,19 +28,26 @@ export const useAuth = create<AuthState>()(
     (set) => ({
       user: null,
       token: null,
+      refreshToken: null,
       isAuthenticated: false,
       showLoader: false,
-      login: (token, user) => {
+      login: (token, refreshToken, user) => {
         localStorage.setItem('auth_token', token)
-        set({ token, user, isAuthenticated: true, showLoader: true })
+        localStorage.setItem('refresh_token', refreshToken)
+        set({ token, refreshToken, user, isAuthenticated: true, showLoader: true })
       },
       logout: () => {
         localStorage.removeItem('auth_token')
+        localStorage.removeItem('refresh_token')
         sessionStorage.removeItem('hasSeenLoader')
-        set({ token: null, user: null, isAuthenticated: false, showLoader: false })
+        set({ token: null, refreshToken: null, user: null, isAuthenticated: false, showLoader: false })
       },
       setUser: (user) => set({ user }),
       setShowLoader: (show) => set({ showLoader: show }),
+      setToken: (token) => {
+        localStorage.setItem('auth_token', token)
+        set({ token })
+      },
     }),
     {
       name: 'auth-storage',
@@ -46,6 +55,7 @@ export const useAuth = create<AuthState>()(
         user: state.user,
         isAuthenticated: state.isAuthenticated,
         token: state.token,
+        refreshToken: state.refreshToken,
       }),
     }
   )

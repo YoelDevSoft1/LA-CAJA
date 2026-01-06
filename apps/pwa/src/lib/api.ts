@@ -25,7 +25,7 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // Timeout de 10 segundos para todas las peticiones
+  timeout: 30000, // Timeout de 30 segundos (aumentado para importaciones largas)
 });
 
 // Interceptor para agregar token JWT y bloquear peticiones offline
@@ -54,35 +54,110 @@ api.interceptors.request.use(
 // Variable para evitar múltiples redirecciones simultáneas
 let isRedirecting = false;
 
+// Variable para evitar múltiples refresh simultáneos
+let isRefreshing = false;
+let refreshSubscribers: Array<(token: string) => void> = [];
+
+// Función para suscribirse a la resolución del refresh
+function subscribeTokenRefresh(cb: (token: string) => void) {
+  refreshSubscribers.push(cb);
+}
+
+// Función para notificar a todos los suscriptores
+function onRefreshed(token: string) {
+  refreshSubscribers.forEach(cb => cb(token));
+  refreshSubscribers = [];
+}
+
 // Interceptor para manejar errores
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     // Si es un error offline, no hacer nada más (ya fue manejado en el request interceptor)
     if (error.isOffline || error.code === 'ERR_INTERNET_DISCONNECTED') {
       return Promise.reject(error);
     }
 
-    if (error.response?.status === 401) {
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
       // ✅ OFFLINE-FIRST: Marcar error como no-retriable para React Query
       error.isAuthError = true;
 
-      // EVITAR BUCLE INFINITO: Solo redirigir UNA VEZ
-      if (!isRedirecting && !window.location.pathname.includes('/login')) {
-        isRedirecting = true;
-        console.warn('[API] 401 Unauthorized - Limpiando sesión y redirigiendo...');
+      // Marcar que ya intentamos hacer refresh para este request
+      originalRequest._retry = true;
 
-        // Limpiar estado de autenticación
-        localStorage.removeItem('auth_token');
-        useAuth.getState().logout();
+      // 🔄 REFRESH TOKEN: Intentar renovar el token automáticamente
+      const refreshToken = localStorage.getItem('refresh_token');
 
-        // Redirigir una sola vez
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 100);
+      if (!refreshToken) {
+        console.warn('[API] 401 pero no hay refresh_token - redirigiendo a login...');
+        if (!isRedirecting && !window.location.pathname.includes('/login')) {
+          isRedirecting = true;
+          localStorage.removeItem('auth_token');
+          useAuth.getState().logout();
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 100);
+        }
+        return Promise.reject(error);
       }
 
-      return Promise.reject(error);
+      // Si ya hay un refresh en progreso, esperar a que termine
+      if (isRefreshing) {
+        console.log('[API] 🔄 Esperando refresh en progreso...');
+        return new Promise((resolve) => {
+          subscribeTokenRefresh((token: string) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            resolve(api(originalRequest));
+          });
+        });
+      }
+
+      isRefreshing = true;
+      console.log('[API] 🔄 Intentando renovar token con refresh_token...');
+
+      try {
+        // Hacer el refresh sin pasar por el interceptor (para evitar bucle)
+        const response = await axios.post(
+          `${originalRequest.baseURL}/auth/refresh`,
+          { refresh_token: refreshToken }
+        );
+
+        const { access_token, refresh_token: newRefreshToken } = response.data;
+
+        console.log('[API] ✅ Token renovado exitosamente');
+
+        // Actualizar tokens en localStorage y store
+        localStorage.setItem('auth_token', access_token);
+        localStorage.setItem('refresh_token', newRefreshToken);
+        useAuth.getState().setToken(access_token);
+
+        // Notificar a todos los requests que esperaban
+        onRefreshed(access_token);
+
+        // Actualizar el token en el request original y reintentarlo
+        originalRequest.headers.Authorization = `Bearer ${access_token}`;
+
+        isRefreshing = false;
+        return api(originalRequest);
+      } catch (refreshError) {
+        console.error('[API] ❌ Error al renovar token:', refreshError);
+        isRefreshing = false;
+
+        // Si falla el refresh, cerrar sesión
+        if (!isRedirecting && !window.location.pathname.includes('/login')) {
+          isRedirecting = true;
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('refresh_token');
+          useAuth.getState().logout();
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 100);
+        }
+
+        return Promise.reject(error);
+      }
     }
 
     if (error.response?.status === 403) {

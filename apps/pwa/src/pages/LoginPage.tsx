@@ -74,7 +74,7 @@ export default function LoginPage() {
         license_expires_at: response.license_expires_at || null,
       }
       
-      login(response.access_token, user)
+      login(response.access_token, response.refresh_token, user)
 
       try {
         await syncService.ensureInitialized(response.store_id)

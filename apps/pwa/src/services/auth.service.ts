@@ -7,12 +7,14 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   access_token: string
+  refresh_token: string
   user_id: string
   store_id: string
   role: 'owner' | 'cashier'
   full_name: string | null
   license_status?: string
   license_expires_at?: string | null
+  expires_in?: number
 }
 
 export interface Store {
@@ -41,6 +43,14 @@ export const authService = {
 
   async login(data: LoginRequest): Promise<LoginResponse> {
     const response = await api.post<LoginResponse>('/auth/login', data)
+    return response.data
+  },
+
+  async refreshToken(refreshToken: string): Promise<{ access_token: string; refresh_token: string }> {
+    const response = await api.post<{ access_token: string; refresh_token: string }>(
+      '/auth/refresh',
+      { refresh_token: refreshToken }
+    )
     return response.data
   },
 }
