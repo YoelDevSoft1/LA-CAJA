@@ -86,6 +86,7 @@ export default function ImportCSVModal({ open, onClose, onSuccess }: ImportCSVMo
 
       const products: ParsedProduct[] = []
       const validationErrors: ValidationError[] = []
+      let skippedRows = 0
 
       // Parsear cada línea
       for (let i = 1; i < lines.length; i++) {
@@ -137,13 +138,16 @@ export default function ImportCSVModal({ open, onClose, onSuccess }: ImportCSVMo
           }
         })
 
-        // Validaciones
-        if (!product.name) {
+        // Validaciones - SI HAY ERRORES, OMITIR ESTA FILA
+        let hasErrors = false
+
+        if (!product.name || product.name.trim() === '') {
           validationErrors.push({
             row,
             field: 'nombre',
             message: 'El nombre es requerido',
           })
+          hasErrors = true
         }
 
         if (product.price_bs <= 0) {
@@ -152,6 +156,7 @@ export default function ImportCSVModal({ open, onClose, onSuccess }: ImportCSVMo
             field: 'precio_bs',
             message: 'El precio en Bs debe ser mayor a 0',
           })
+          hasErrors = true
         }
 
         if (product.price_usd <= 0) {
@@ -160,9 +165,15 @@ export default function ImportCSVModal({ open, onClose, onSuccess }: ImportCSVMo
             field: 'precio_usd',
             message: 'El precio en USD debe ser mayor a 0',
           })
+          hasErrors = true
         }
 
-        products.push(product)
+        // Solo agregar producto si NO tiene errores
+        if (!hasErrors) {
+          products.push(product)
+        } else {
+          skippedRows++
+        }
       }
 
       setParsedProducts(products)
@@ -171,8 +182,16 @@ export default function ImportCSVModal({ open, onClose, onSuccess }: ImportCSVMo
       if (validationErrors.length === 0) {
         setStep('preview')
         toast.success(`${products.length} productos listos para importar`)
+      } else if (products.length > 0) {
+        // Hay productos válidos Y errores - permitir continuar con los válidos
+        setStep('preview')
+        toast.success(
+          `${products.length} productos válidos listos para importar. ${skippedRows} filas omitidas por errores.`,
+          { duration: 5000 }
+        )
       } else {
-        toast.error(`Se encontraron ${validationErrors.length} errores de validación`)
+        // TODOS los productos tienen errores
+        toast.error(`Todas las filas tienen errores. Revisa el archivo y corrige los errores.`)
       }
     } catch (error) {
       console.error('Error parsing CSV:', error)
