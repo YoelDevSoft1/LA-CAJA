@@ -277,8 +277,8 @@ export default function ImportCSVModal({ open, onClose, onSuccess }: ImportCSVMo
             user.store_id
           )
 
-          // ✅ ÉXITO - Esperar 1 segundo completo antes del siguiente
-          await new Promise(resolve => setTimeout(resolve, 1000))
+          // ✅ ÉXITO - Sin delay entre productos (máxima velocidad)
+          // La pausa de 65s cada 60 productos es suficiente para evitar rate limit
           return true
         } catch (err: any) {
           lastError = err
@@ -358,9 +358,9 @@ export default function ImportCSVModal({ open, onClose, onSuccess }: ImportCSVMo
           console.log(`[CSV Import] ✅ Progreso: ${i + 1}/${parsedProducts.length} (${successCount} éxitos, ${errorCount} errores, ${skippedCount} omitidos)`)
         }
 
-        // 🚨 RENDER FREE TIER: Pausar cada 1 minuto (60 productos a 1 req/seg) para evitar rate limit
-        // La pausa permite que la ventana de rate limit se reinicie
-        if (successCount > 0 && successCount % 60 === 0) {
+        // 🚨 RENDER FREE TIER: Pausar cada 100 productos para evitar rate limit
+        // Render Free Tier permite ~100 req/min, así que pausamos después de 100 creaciones exitosas
+        if (successCount > 0 && successCount % 100 === 0) {
           console.warn(`[CSV Import] ⏸️ PAUSA AUTOMÁTICA: ${successCount} productos creados. Esperando 65 segundos para reiniciar ventana de rate limit...`)
           await new Promise(resolve => setTimeout(resolve, 65000)) // 65 segundos de pausa
           console.log(`[CSV Import] ▶️ Reanudando importación...`)
