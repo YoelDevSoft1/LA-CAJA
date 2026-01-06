@@ -216,15 +216,25 @@ export default function POSPage() {
       ? `${product.name} (${variant.variant_type}: ${variant.variant_value})`
       : product.name
 
-    addItem({
-      product_id: product.id,
-      product_name: productName,
-      qty: 1,
-      unit_price_bs: priceBs,
-      unit_price_usd: priceUsd,
-      variant_id: variant?.id || null,
-      variant_name: variant ? `${variant.variant_type}: ${variant.variant_value}` : null,
-    })
+    const existingItem = items.find(
+      (item) =>
+        item.product_id === product.id &&
+        (item.variant_id ?? null) === (variant?.id ?? null)
+    )
+
+    if (existingItem) {
+      updateItem(existingItem.id, { qty: existingItem.qty + 1 })
+    } else {
+      addItem({
+        product_id: product.id,
+        product_name: productName,
+        qty: 1,
+        unit_price_bs: priceBs,
+        unit_price_usd: priceUsd,
+        variant_id: variant?.id || null,
+        variant_name: variant ? `${variant.variant_type}: ${variant.variant_value}` : null,
+      })
+    }
     toast.success(`${productName} agregado al carrito`)
   }
 
@@ -546,8 +556,8 @@ export default function POSPage() {
 
         {/* Carrito - Sticky en desktop, normal en mobile */}
         <div className="lg:col-span-1">
-          <Card className="lg:sticky lg:top-20 border border-border">
-            <div className="p-3 sm:p-4 border-b border-border flex items-center justify-between">
+          <Card className="lg:sticky lg:top-20 border border-border flex flex-col max-h-[calc(100vh-140px)] overflow-hidden">
+            <div className="p-3 sm:p-4 border-b border-border flex items-center justify-between flex-shrink-0">
               <h2 className="text-base sm:text-lg font-semibold text-foreground flex items-center gap-2">
                 <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
                 Carrito
@@ -570,7 +580,7 @@ export default function POSPage() {
             </div>
 
             {items.length === 0 ? (
-              <div className="p-6 sm:p-8 text-center">
+              <div className="flex-1 p-6 sm:p-8 text-center">
                 <div className="flex flex-col items-center justify-center py-8">
                   <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
                     <ShoppingCart className="w-8 h-8 text-muted-foreground" />
@@ -585,7 +595,7 @@ export default function POSPage() {
               </div>
             ) : (
               <>
-                <div className="h-[300px] sm:h-[400px] lg:h-[calc(100vh-450px)]">
+                <div className="flex-1 min-h-0">
                   <ScrollArea className="h-full">
                     <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
                   {items.map((item) => (
@@ -652,7 +662,7 @@ export default function POSPage() {
                   </ScrollArea>
                 </div>
 
-                <div className="p-3 sm:p-4 border-t border-border space-y-3 sm:space-y-4 bg-muted/30">
+                <div className="flex-shrink-0 p-3 sm:p-4 border-t border-border space-y-3 sm:space-y-4 bg-muted/30">
                   {!hasOpenCash && (
                     <div className="rounded-md border border-amber-500/70 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                       Debes abrir caja para procesar ventas.

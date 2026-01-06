@@ -581,7 +581,7 @@ export default function CheckoutModal({
               <h3 className="font-semibold text-foreground mb-3">Resumen de la venta</h3>
             <div className="space-y-3 text-sm">
               {/* Lista de productos */}
-                <div className="h-48">
+                <div className="h-28 sm:h-32">
                   <ScrollArea className="h-full">
                     <div>
                       {items.map((item, index) => (
@@ -1298,8 +1298,10 @@ export default function CheckoutModal({
             </Card>
           )}
 
-          {/* Botones */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-4 border-t border-border">
+        </CardContent>
+
+        <div className="flex-shrink-0 border-t border-border px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <Button
               variant="outline"
               onClick={onClose}
@@ -1316,7 +1318,7 @@ export default function CheckoutModal({
               {isLoading ? 'Procesando...' : 'Confirmar Venta'}
             </Button>
           </div>
-        </CardContent>
+        </div>
       </Card>
 
       {/* Selector de seriales */}
@@ -1333,4 +1335,3 @@ export default function CheckoutModal({
     </div>
   )
 }
-

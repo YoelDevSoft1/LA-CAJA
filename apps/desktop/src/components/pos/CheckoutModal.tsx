@@ -295,7 +295,7 @@ export default function CheckoutModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between z-10">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900">Procesar Venta</h2>
@@ -309,13 +309,13 @@ export default function CheckoutModal({
         </div>
 
         {/* Content */}
-        <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
           {/* Resumen */}
           <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
             <h3 className="font-semibold text-gray-900 mb-3">Resumen de la venta</h3>
             <div className="space-y-3 text-sm">
               {/* Lista de productos */}
-              <div className="space-y-2 max-h-48 overflow-y-auto">
+              <div className="space-y-2 max-h-32 overflow-y-auto">
                 {items.map((item) => (
                   <div key={item.id} className="flex justify-between items-start pb-2 border-b border-gray-200 last:border-0">
                     <div className="flex-1 min-w-0 mr-2">
@@ -796,8 +796,10 @@ export default function CheckoutModal({
             </div>
           )}
 
-          {/* Botones */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-4 border-t border-gray-200">
+        </div>
+
+        <div className="flex-shrink-0 border-t border-gray-200 px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <button
               onClick={onClose}
               disabled={isLoading}
@@ -818,4 +820,3 @@ export default function CheckoutModal({
     </div>
   )
 }
-

@@ -35,13 +35,19 @@ export default function POSPage() {
   const products = productsData?.products || []
 
   const handleAddToCart = (product: any) => {
-    addItem({
-      product_id: product.id,
-      product_name: product.name,
-      qty: 1,
-      unit_price_bs: Number(product.price_bs),
-      unit_price_usd: Number(product.price_usd),
-    })
+    const existingItem = items.find((item) => item.product_id === product.id)
+
+    if (existingItem) {
+      updateItem(existingItem.id, { qty: existingItem.qty + 1 })
+    } else {
+      addItem({
+        product_id: product.id,
+        product_name: product.name,
+        qty: 1,
+        unit_price_bs: Number(product.price_bs),
+        unit_price_usd: Number(product.price_usd),
+      })
+    }
     toast.success(`${product.name} agregado al carrito`)
   }
 
@@ -192,8 +198,8 @@ export default function POSPage() {
 
         {/* Carrito - Sticky en desktop, normal en mobile */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm lg:sticky lg:top-20">
-            <div className="p-3 sm:p-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm lg:sticky lg:top-20 flex flex-col max-h-[calc(100vh-140px)] overflow-hidden">
+            <div className="p-3 sm:p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center">
                 <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                 Carrito ({items.length})
@@ -209,70 +215,72 @@ export default function POSPage() {
             </div>
 
             {items.length === 0 ? (
-              <div className="p-6 sm:p-8 text-center text-gray-500">
+              <div className="flex-1 p-6 sm:p-8 text-center text-gray-500">
                 <ShoppingCart className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />
                 <p className="text-sm sm:text-base">El carrito está vacío</p>
               </div>
             ) : (
               <>
-                <div className="p-3 sm:p-4 space-y-2 sm:space-y-3 max-h-[300px] sm:max-h-[400px] lg:max-h-[calc(100vh-450px)] overflow-y-auto">
-                  {items.map((item) => (
-                    <div key={item.id} className="bg-gray-50 rounded-lg p-2.5 sm:p-3">
-                      <div className="flex items-start justify-between mb-2 gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-xs sm:text-sm text-gray-900 truncate">
-                            {item.product_name}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            ${item.unit_price_usd.toFixed(2)} c/u
-                          </p>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            removeItem(item.id)
-                          }}
-                          className="text-red-500 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors flex-shrink-0 touch-manipulation"
-                          aria-label="Eliminar producto"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center space-x-2">
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
+                    {items.map((item) => (
+                      <div key={item.id} className="bg-gray-50 rounded-lg p-2.5 sm:p-3">
+                        <div className="flex items-start justify-between mb-2 gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-xs sm:text-sm text-gray-900 truncate">
+                              {item.product_name}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              ${item.unit_price_usd.toFixed(2)} c/u
+                            </p>
+                          </div>
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              handleUpdateQty(item.id, item.qty - 1)
+                              removeItem(item.id)
                             }}
-                            className="p-1.5 rounded bg-white border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation"
-                            aria-label="Disminuir cantidad"
+                            className="text-red-500 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors flex-shrink-0 touch-manipulation"
+                            aria-label="Eliminar producto"
                           >
-                            <Minus className="w-4 h-4" />
-                          </button>
-                          <span className="w-8 text-center font-semibold text-sm sm:text-base">
-                            {item.qty}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleUpdateQty(item.id, item.qty + 1)
-                            }}
-                            className="p-1.5 rounded bg-white border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation"
-                            aria-label="Aumentar cantidad"
-                          >
-                            <Plus className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                        <p className="font-semibold text-sm sm:text-base text-gray-900">
-                          ${(item.qty * item.unit_price_usd).toFixed(2)}
-                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleUpdateQty(item.id, item.qty - 1)
+                              }}
+                              className="p-1.5 rounded bg-white border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation"
+                              aria-label="Disminuir cantidad"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <span className="w-8 text-center font-semibold text-sm sm:text-base">
+                              {item.qty}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleUpdateQty(item.id, item.qty + 1)
+                              }}
+                              className="p-1.5 rounded bg-white border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation"
+                              aria-label="Aumentar cantidad"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <p className="font-semibold text-sm sm:text-base text-gray-900">
+                            ${(item.qty * item.unit_price_usd).toFixed(2)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
 
-                <div className="p-3 sm:p-4 border-t border-gray-200 space-y-2 sm:space-y-3 bg-gray-50">
+                <div className="flex-shrink-0 p-3 sm:p-4 border-t border-gray-200 space-y-2 sm:space-y-3 bg-gray-50">
                   <div className="flex justify-between text-base sm:text-lg">
                     <span className="font-semibold text-gray-700">Total USD:</span>
                     <span className="font-bold text-gray-900">${total.usd.toFixed(2)}</span>
@@ -307,4 +315,3 @@ export default function POSPage() {
     </div>
   )
 }
-
