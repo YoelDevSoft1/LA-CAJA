@@ -3,8 +3,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/stores/auth.store'
 import { Search, Package, AlertTriangle, Plus, TrendingUp, TrendingDown, History } from 'lucide-react'
 import { inventoryService, StockStatus } from '@/services/inventory.service'
-import { productsService } from '@/services/products.service'
-import { productsCacheService } from '@/services/products-cache.service'
 import StockReceivedModal from '@/components/inventory/StockReceivedModal'
 import StockAdjustModal from '@/components/inventory/StockAdjustModal'
 import MovementsModal from '@/components/inventory/MovementsModal'
@@ -30,76 +28,60 @@ export default function InventoryPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(50)
   const [showLowStockOnly, setShowLowStockOnly] = useState(false)
   const [isStockReceivedModalOpen, setIsStockReceivedModalOpen] = useState(false)
   const [isStockAdjustModalOpen, setIsStockAdjustModalOpen] = useState(false)
   const [isMovementsModalOpen, setIsMovementsModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<StockStatus | null>(null)
 
-  // Obtener todos los productos activos para buscar por nombre (con cache offline persistente)
-  const [initialProducts, setInitialProducts] = useState<{ products: any[]; total: number } | undefined>(undefined);
-  
   useEffect(() => {
-    if (user?.store_id) {
-      productsCacheService.getProductsFromCache(user.store_id, { limit: 1000 })
-        .then(cached => {
-          if (cached.length > 0) {
-            setInitialProducts({ products: cached, total: cached.length });
-          }
-        })
-        .catch(error => {
-          console.warn('[InventoryPage] Error cargando cache:', error);
-        });
-    }
-  }, [user?.store_id]);
+    setCurrentPage(1)
+  }, [searchQuery, showLowStockOnly])
 
-  const { data: productsData } = useQuery({
-    queryKey: ['products', 'list', user?.store_id],
-    queryFn: () => productsService.search({ limit: 1000 }, user?.store_id),
+  const offset = (currentPage - 1) * pageSize
+
+  // Obtener estado del stock con paginación y búsqueda en servidor
+  const { data: stockStatusData, isLoading } = useQuery({
+    queryKey: [
+      'inventory',
+      'stock-status',
+      searchQuery,
+      showLowStockOnly,
+      currentPage,
+      pageSize,
+      user?.store_id,
+    ],
+    queryFn: () =>
+      inventoryService.getStockStatusPaged({
+        search: searchQuery || undefined,
+        limit: pageSize,
+        offset,
+        low_stock_only: showLowStockOnly || undefined,
+      }),
     enabled: !!user?.store_id,
-    staleTime: 1000 * 60 * 5, // 5 minutos
-    gcTime: Infinity, // Nunca eliminar del cache
-    placeholderData: initialProducts,
-  })
-
-  // Obtener datos del prefetch como placeholderData
-  const prefetchedStockStatus = queryClient.getQueryData<StockStatus[]>(['inventory', 'status', user?.store_id])
-
-  // Obtener estado del stock
-  const { data: stockStatus, isLoading } = useQuery<StockStatus[]>({
-    queryKey: ['inventory', 'stock-status'],
-    queryFn: () => inventoryService.getStockStatus(),
-    placeholderData: prefetchedStockStatus, // Usar cache del prefetch
     staleTime: 1000 * 60 * 10, // 10 minutos
     gcTime: Infinity, // Nunca eliminar
-    refetchOnMount: false, // Usar cache si existe
   })
 
-  // Filtrar stock según búsqueda y filtro de stock bajo
-  const filteredStock = stockStatus?.filter((item) => {
-    // Filtro de stock bajo
-    if (showLowStockOnly && !item.is_low_stock) {
-      return false
-    }
-
-    // Búsqueda por nombre
-    if (searchQuery) {
-      const product = productsData?.products?.find((p: any) => p.id === item.product_id)
-      if (product) {
-        const searchLower = searchQuery.toLowerCase()
-        return (
-          product.name.toLowerCase().includes(searchLower) ||
-          product.sku?.toLowerCase().includes(searchLower) ||
-          product.barcode?.toLowerCase().includes(searchLower)
-        )
-      }
-      return false
-    }
-
-    return true
+  const { data: lowStockCountData } = useQuery({
+    queryKey: ['inventory', 'low-stock-count', searchQuery, user?.store_id],
+    queryFn: () =>
+      inventoryService.getStockStatusPaged({
+        search: searchQuery || undefined,
+        low_stock_only: true,
+        limit: 1,
+        offset: 0,
+      }),
+    enabled: !!user?.store_id && !showLowStockOnly,
+    staleTime: 1000 * 60 * 10,
+    gcTime: Infinity,
   })
 
-  const lowStockCount = stockStatus?.filter((item) => item.is_low_stock).length || 0
+  const stockItems = stockStatusData?.items || []
+  const total = stockStatusData?.total || 0
+  const lowStockCount = showLowStockOnly ? total : lowStockCountData?.total || 0
 
   const handleReceiveStock = (product: StockStatus) => {
     setSelectedProduct(product)
@@ -138,9 +120,9 @@ export default function InventoryPage() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Gestión de Inventario</h1>
             <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              {filteredStock?.length || 0} productos
+              {total} productos
               {showLowStockOnly && ` con stock bajo`}
-              {lowStockCount > 0 && (
+              {!showLowStockOnly && lowStockCount > 0 && (
                 <span className="text-orange-600 font-semibold ml-2">
                   ({lowStockCount} con stock bajo)
                 </span>
@@ -213,7 +195,7 @@ export default function InventoryPage() {
                 <Skeleton className="h-4 w-32" />
               </div>
           </div>
-        ) : !filteredStock || filteredStock.length === 0 ? (
+        ) : stockItems.length === 0 ? (
             <div className="p-8 text-center">
               <div className="flex flex-col items-center justify-center py-8">
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -244,7 +226,7 @@ export default function InventoryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredStock.map((item) => {
+                  {stockItems.map((item) => {
                     const stockPercentage = getStockPercentage(item)
                     const isLowStock = item.is_low_stock
 
@@ -354,6 +336,38 @@ export default function InventoryPage() {
         )}
         </CardContent>
       </Card>
+
+      {/* Paginación */}
+      {stockItems.length > 0 && total > pageSize && (
+        <div className="mt-4 flex items-center justify-between px-4">
+          <div className="text-sm text-muted-foreground">
+            Mostrando {offset + 1} - {Math.min(offset + pageSize, total)} de {total} productos
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              Anterior
+            </Button>
+            <div className="flex items-center gap-2 px-3">
+              <span className="text-sm">
+                Página {currentPage} de {Math.ceil(total / pageSize)}
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => p + 1)}
+              disabled={currentPage >= Math.ceil(total / pageSize)}
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Modales */}
       <StockReceivedModal

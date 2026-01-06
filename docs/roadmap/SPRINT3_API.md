@@ -75,8 +75,12 @@ Obtiene el estado actual del stock. Si no se especifica `product_id`, devuelve t
 
 **Query Parameters:**
 - `product_id` (opcional): Filtrar por producto específico
+- `search` (opcional): Buscar por nombre, SKU o código de barras
+- `low_stock_only` (opcional): `true` para solo stock bajo
+- `limit` (opcional): Tamaño de página
+- `offset` (opcional): Desplazamiento
 
-**Respuesta:**
+**Respuesta (sin paginación):**
 ```json
 [
   {
@@ -94,6 +98,22 @@ Obtiene el estado actual del stock. Si no se especifica `product_id`, devuelve t
     "is_low_stock": true
   }
 ]
+```
+
+**Respuesta (con paginación):**
+```json
+{
+  "items": [
+    {
+      "product_id": "uuid",
+      "product_name": "Coca Cola 1.5L",
+      "current_stock": 48,
+      "low_stock_threshold": 10,
+      "is_low_stock": false
+    }
+  ],
+  "total": 5227
+}
 ```
 
 ### 4. Productos con Stock Bajo
@@ -224,4 +244,3 @@ Invoke-WebRequest -Uri "http://localhost:3000/inventory/movements?product_id=$pr
     -Headers $headers `
     -UseBasicParsing | Select-Object -ExpandProperty Content | ConvertFrom-Json | ConvertTo-Json
 ```
-

@@ -15,6 +15,7 @@ import { StockReceivedDto } from './dto/stock-received.dto';
 import { StockAdjustedDto } from './dto/stock-adjusted.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApproveStockDto } from './dto/approve-stock.dto';
+import { GetStockStatusDto } from './dto/get-stock-status.dto';
 
 @Controller('inventory')
 @UseGuards(JwtAuthGuard)
@@ -54,11 +55,21 @@ export class InventoryController {
 
   @Get('stock/status')
   async getStockStatus(
-    @Query('product_id') productId: string,
+    @Query() query: GetStockStatusDto,
     @Request() req: any,
   ) {
     const storeId = req.user.store_id;
-    return this.inventoryService.getStockStatus(storeId, productId);
+    const { items, total } = await this.inventoryService.getStockStatus(
+      storeId,
+      query,
+    );
+
+    const isPaginated = query.limit !== undefined || query.offset !== undefined;
+    if (isPaginated) {
+      return { items, total };
+    }
+
+    return items;
   }
 
   @Get('stock/low')

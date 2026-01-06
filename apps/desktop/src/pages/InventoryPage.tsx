@@ -1,15 +1,15 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search, Package, AlertTriangle, Plus, TrendingUp, TrendingDown, History } from 'lucide-react'
 import { inventoryService, StockStatus } from '@/services/inventory.service'
-import { productsService } from '@/services/products.service'
-import toast from 'react-hot-toast'
 import StockReceivedModal from '@/components/inventory/StockReceivedModal'
 import StockAdjustModal from '@/components/inventory/StockAdjustModal'
 import MovementsModal from '@/components/inventory/MovementsModal'
 
 export default function InventoryPage() {
   const [searchQuery, setSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(50)
   const [showLowStockOnly, setShowLowStockOnly] = useState(false)
   const [isStockReceivedModalOpen, setIsStockReceivedModalOpen] = useState(false)
   const [isStockAdjustModalOpen, setIsStockAdjustModalOpen] = useState(false)
@@ -17,43 +17,50 @@ export default function InventoryPage() {
   const [selectedProduct, setSelectedProduct] = useState<StockStatus | null>(null)
   const queryClient = useQueryClient()
 
-  // Obtener todos los productos activos para buscar por nombre
-  const { data: productsData } = useQuery({
-    queryKey: ['products', 'list'],
-    queryFn: () => productsService.search({ limit: 1000 }),
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, showLowStockOnly])
+
+  const offset = (currentPage - 1) * pageSize
+
+  // Obtener estado del stock con paginación y búsqueda en servidor
+  const { data: stockStatusData, isLoading } = useQuery({
+    queryKey: [
+      'inventory',
+      'stock-status',
+      searchQuery,
+      showLowStockOnly,
+      currentPage,
+      pageSize,
+    ],
+    queryFn: () =>
+      inventoryService.getStockStatusPaged({
+        search: searchQuery || undefined,
+        limit: pageSize,
+        offset,
+        low_stock_only: showLowStockOnly || undefined,
+      }),
+    staleTime: 1000 * 60 * 10,
+    gcTime: Infinity,
   })
 
-  // Obtener estado del stock
-  const { data: stockStatus, isLoading } = useQuery({
-    queryKey: ['inventory', 'stock-status'],
-    queryFn: () => inventoryService.getStockStatus(),
+  const { data: lowStockCountData } = useQuery({
+    queryKey: ['inventory', 'low-stock-count', searchQuery],
+    queryFn: () =>
+      inventoryService.getStockStatusPaged({
+        search: searchQuery || undefined,
+        low_stock_only: true,
+        limit: 1,
+        offset: 0,
+      }),
+    enabled: !showLowStockOnly,
+    staleTime: 1000 * 60 * 10,
+    gcTime: Infinity,
   })
 
-  // Filtrar stock según búsqueda y filtro de stock bajo
-  const filteredStock = stockStatus?.filter((item) => {
-    // Filtro de stock bajo
-    if (showLowStockOnly && !item.is_low_stock) {
-      return false
-    }
-
-    // Búsqueda por nombre
-    if (searchQuery) {
-      const product = productsData?.products.find((p) => p.id === item.product_id)
-      if (product) {
-        const searchLower = searchQuery.toLowerCase()
-        return (
-          product.name.toLowerCase().includes(searchLower) ||
-          product.sku?.toLowerCase().includes(searchLower) ||
-          product.barcode?.toLowerCase().includes(searchLower)
-        )
-      }
-      return false
-    }
-
-    return true
-  })
-
-  const lowStockCount = stockStatus?.filter((item) => item.is_low_stock).length || 0
+  const stockItems = stockStatusData?.items || []
+  const total = stockStatusData?.total || 0
+  const lowStockCount = showLowStockOnly ? total : lowStockCountData?.total || 0
 
   const handleReceiveStock = (product: StockStatus) => {
     setSelectedProduct(product)
@@ -85,9 +92,9 @@ export default function InventoryPage() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Gestión de Inventario</h1>
             <p className="text-sm sm:text-base text-gray-600 mt-1">
-              {filteredStock?.length || 0} productos
+              {total} productos
               {showLowStockOnly && ` con stock bajo`}
-              {lowStockCount > 0 && (
+              {!showLowStockOnly && lowStockCount > 0 && (
                 <span className="text-orange-600 font-semibold ml-2">
                   ({lowStockCount} con stock bajo)
                 </span>
@@ -154,7 +161,7 @@ export default function InventoryPage() {
             <Package className="w-12 h-12 mx-auto mb-3 text-gray-300 animate-pulse" />
             <p>Cargando inventario...</p>
           </div>
-        ) : !filteredStock || filteredStock.length === 0 ? (
+        ) : stockItems.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
             <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
             <p className="text-lg font-medium mb-1">
@@ -191,7 +198,7 @@ export default function InventoryPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredStock.map((item) => (
+                {stockItems.map((item) => (
                   <tr
                     key={item.product_id}
                     className={`hover:bg-gray-50 transition-colors ${
@@ -270,6 +277,34 @@ export default function InventoryPage() {
         )}
       </div>
 
+      {/* Paginación */}
+      {stockItems.length > 0 && total > pageSize && (
+        <div className="mt-4 flex items-center justify-between">
+          <div className="text-sm text-gray-600">
+            Mostrando {offset + 1} - {Math.min(offset + pageSize, total)} de {total} productos
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 border-2 border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Anterior
+            </button>
+            <span className="text-sm text-gray-700">
+              Página {currentPage} de {Math.ceil(total / pageSize)}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => p + 1)}
+              disabled={currentPage >= Math.ceil(total / pageSize)}
+              className="px-3 py-1.5 border-2 border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Siguiente
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Modales */}
       <StockReceivedModal
         isOpen={isStockReceivedModalOpen}
@@ -299,4 +334,3 @@ export default function InventoryPage() {
     </div>
   )
 }
-

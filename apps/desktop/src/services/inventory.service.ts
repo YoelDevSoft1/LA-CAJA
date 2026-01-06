@@ -8,6 +8,19 @@ export interface StockStatus {
   is_low_stock: boolean
 }
 
+export interface StockStatusResponse {
+  items: StockStatus[]
+  total: number
+}
+
+export interface StockStatusSearchParams {
+  product_id?: string
+  search?: string
+  low_stock_only?: boolean
+  limit?: number
+  offset?: number
+}
+
 export interface InventoryMovement {
   id: string
   store_id: string
@@ -57,7 +70,20 @@ export const inventoryService = {
    */
   async getStockStatus(productId?: string): Promise<StockStatus[]> {
     const params = productId ? { product_id: productId } : {}
-    const response = await api.get<StockStatus[]>('/inventory/stock/status', { params })
+    const response = await api.get<StockStatus[] | StockStatusResponse>(
+      '/inventory/stock/status',
+      { params }
+    )
+    return Array.isArray(response.data) ? response.data : response.data.items
+  },
+
+  /**
+   * Obtener estado del stock con paginación/filtros
+   */
+  async getStockStatusPaged(
+    params: StockStatusSearchParams
+  ): Promise<StockStatusResponse> {
+    const response = await api.get<StockStatusResponse>('/inventory/stock/status', { params })
     return response.data
   },
 
@@ -105,4 +131,3 @@ export const inventoryService = {
     return response.data
   },
 }
-
