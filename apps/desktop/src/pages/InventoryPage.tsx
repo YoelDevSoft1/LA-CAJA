@@ -209,7 +209,7 @@ export default function InventoryPage() {
                       <div className="flex items-center">
                         <Package className="w-5 h-5 text-gray-400 mr-2 flex-shrink-0" />
                         <div>
-                          <p className="font-semibold text-gray-900 text-sm sm:text-base">
+                          <p className="font-semibold text-gray-900 text-sm sm:text-base break-words">
                             {item.product_name}
                           </p>
                           {item.is_low_stock && (
