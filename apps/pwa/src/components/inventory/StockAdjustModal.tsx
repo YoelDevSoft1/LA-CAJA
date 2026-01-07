@@ -119,6 +119,7 @@ export default function StockAdjustModal({
     },
     onSuccess: () => {
       toast.success('Stock ajustado exitosamente')
+      onClose() // Cerrar modal después de éxito
       onSuccess?.()
     },
     onError: (error: any) => {

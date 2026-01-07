@@ -207,6 +207,7 @@ export default function StockReceivedModal({
       toast.success(
         `Stock recibido exitosamente para ${results.length} producto${results.length > 1 ? 's' : ''}`
       )
+      onClose() // Cerrar modal después de éxito
       onSuccess?.()
     },
     onError: (error: any) => {
@@ -288,9 +289,8 @@ export default function StockReceivedModal({
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent
-                  className="w-[var(--radix-popover-trigger-width)] p-0"
+                  className="w-full sm:w-[500px] p-0"
                   align="start"
-                  portalled={false}
                 >
                   <div className="sticky top-0 bg-background border-b border-border p-2 z-10">
                     <div className="relative">
@@ -316,9 +316,10 @@ export default function StockReceivedModal({
                           <button
                             key={p.id}
                             type="button"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
                               addProduct(p)
-                              setShowProductSearch(false)
                             }}
                             className="w-full px-3 py-2 text-left hover:bg-muted/50 transition-colors"
                           >

@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, IsNull } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Warehouse } from '../database/entities/warehouse.entity';
 import { WarehouseStock } from '../database/entities/warehouse-stock.entity';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
@@ -213,19 +213,19 @@ export class WarehousesService {
     variantId: string | null,
     qtyDelta: number,
   ): Promise<WarehouseStock> {
-    const where: any = {
-      warehouse_id: warehouseId,
-      product_id: productId,
-    };
+    // Usar query builder para evitar problemas con IsNull()
+    const queryBuilder = this.warehouseStockRepository
+      .createQueryBuilder('stock')
+      .where('stock.warehouse_id = :warehouseId', { warehouseId })
+      .andWhere('stock.product_id = :productId', { productId });
+
     if (variantId === null) {
-      where.variant_id = IsNull();
+      queryBuilder.andWhere('stock.variant_id IS NULL');
     } else {
-      where.variant_id = variantId;
+      queryBuilder.andWhere('stock.variant_id = :variantId', { variantId });
     }
 
-    const stock = await this.warehouseStockRepository.findOne({
-      where,
-    });
+    const stock = await queryBuilder.getOne();
 
     if (stock) {
       stock.stock = Math.max(0, stock.stock + qtyDelta);
@@ -252,19 +252,19 @@ export class WarehousesService {
     variantId: string | null,
     quantity: number,
   ): Promise<void> {
-    const where: any = {
-      warehouse_id: warehouseId,
-      product_id: productId,
-    };
+    // Usar query builder para evitar problemas con IsNull()
+    const queryBuilder = this.warehouseStockRepository
+      .createQueryBuilder('stock')
+      .where('stock.warehouse_id = :warehouseId', { warehouseId })
+      .andWhere('stock.product_id = :productId', { productId });
+
     if (variantId === null) {
-      where.variant_id = IsNull();
+      queryBuilder.andWhere('stock.variant_id IS NULL');
     } else {
-      where.variant_id = variantId;
+      queryBuilder.andWhere('stock.variant_id = :variantId', { variantId });
     }
 
-    const stock = await this.warehouseStockRepository.findOne({
-      where,
-    });
+    const stock = await queryBuilder.getOne();
 
     if (!stock || stock.stock < quantity) {
       throw new BadRequestException('Stock insuficiente para reservar');
@@ -284,19 +284,19 @@ export class WarehousesService {
     variantId: string | null,
     quantity: number,
   ): Promise<void> {
-    const where: any = {
-      warehouse_id: warehouseId,
-      product_id: productId,
-    };
+    // Usar query builder para evitar problemas con IsNull()
+    const queryBuilder = this.warehouseStockRepository
+      .createQueryBuilder('stock')
+      .where('stock.warehouse_id = :warehouseId', { warehouseId })
+      .andWhere('stock.product_id = :productId', { productId });
+
     if (variantId === null) {
-      where.variant_id = IsNull();
+      queryBuilder.andWhere('stock.variant_id IS NULL');
     } else {
-      where.variant_id = variantId;
+      queryBuilder.andWhere('stock.variant_id = :variantId', { variantId });
     }
 
-    const stock = await this.warehouseStockRepository.findOne({
-      where,
-    });
+    const stock = await queryBuilder.getOne();
 
     if (!stock || stock.reserved < quantity) {
       throw new BadRequestException('Stock reservado insuficiente');
