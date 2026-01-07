@@ -89,7 +89,6 @@ export class WarehousesService {
   async findOne(storeId: string, warehouseId: string): Promise<Warehouse> {
     const warehouse = await this.warehouseRepository.findOne({
       where: { id: warehouseId, store_id: storeId },
-      relations: ['stock'],
     });
 
     if (!warehouse) {
