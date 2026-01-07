@@ -20,6 +20,7 @@ import { ProductRecommendation } from '../database/entities/product-recommendati
 import { Product } from '../database/entities/product.entity';
 import { User } from '../database/entities/user.entity';
 import { InventoryMovement } from '../database/entities/inventory-movement.entity';
+import { Store } from '../database/entities/store.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
@@ -58,6 +59,7 @@ import { MLNotificationsController } from './ml-notifications.controller';
       Product,
       User,
       InventoryMovement,
+      Store,
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],

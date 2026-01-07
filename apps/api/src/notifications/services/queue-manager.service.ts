@@ -2,6 +2,9 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Store } from '../../database/entities/store.entity';
 
 /**
  * Queue Manager Service
@@ -14,6 +17,8 @@ export class QueueManagerService implements OnModuleInit {
   constructor(
     @InjectQueue('notifications')
     private notificationsQueue: Queue,
+    @InjectRepository(Store)
+    private storeRepository: Repository<Store>,
   ) {}
 
   async onModuleInit() {
@@ -98,10 +103,23 @@ export class QueueManagerService implements OnModuleInit {
    */
   @Cron(CronExpression.EVERY_HOUR)
   async processMLInsightsHourly() {
-    this.logger.log('Hourly ML insights processing triggered');
+    this.logger.log('🤖 Hourly ML insights processing triggered');
 
-    // Por ahora, esto se activará manualmente o por tienda
-    // En producción, deberías obtener lista de tiendas activas
+    try {
+      // Obtener todas las tiendas activas
+      const stores = await this.storeRepository.find();
+
+      this.logger.log(`Processing ML insights for ${stores.length} stores`);
+
+      // Programar procesamiento para cada tienda
+      for (const store of stores) {
+        await this.scheduleMLInsightsProcessing(store.id);
+      }
+
+      this.logger.log(`✅ Scheduled ML insights processing for ${stores.length} stores`);
+    } catch (error) {
+      this.logger.error(`Error in hourly ML insights processing:`, error);
+    }
   }
 
   /**
@@ -109,29 +127,59 @@ export class QueueManagerService implements OnModuleInit {
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async processEmailQueueCron() {
-    this.logger.log('Email queue processing triggered');
+    this.logger.log('📧 Email queue processing triggered');
 
-    await this.notificationsQueue.add(
-      'process-email-queue',
-      {},
-      {
-        removeOnComplete: true,
-        attempts: 1,
-      },
-    );
+    try {
+      await this.notificationsQueue.add(
+        'process-email-queue',
+        {},
+        {
+          removeOnComplete: true,
+          attempts: 1,
+        },
+      );
+
+      this.logger.log('✅ Email queue processing job scheduled');
+    } catch (error) {
+      this.logger.error(`Error scheduling email queue processing:`, error);
+    }
   }
 
   /**
-   * Cron: Genera digests diarios a las 8 AM
+   * Cron: Genera digests diarios a las 8 AM (Hora de Bolivia)
    */
   @Cron('0 8 * * *', {
     timeZone: 'America/La_Paz',
   })
   async generateDailyDigestsCron() {
-    this.logger.log('Daily digests generation triggered');
+    this.logger.log('📊 Daily digests generation triggered (8:00 AM Bolivia)');
 
-    // Por ahora, esto se activará manualmente o por tienda
-    // En producción, deberías obtener lista de tiendas activas
+    try {
+      // Obtener todas las tiendas activas
+      const stores = await this.storeRepository.find();
+
+      this.logger.log(`Generating daily digests for ${stores.length} stores`);
+
+      // Programar digest para cada tienda
+      for (const store of stores) {
+        await this.notificationsQueue.add(
+          'daily-digest',
+          { storeId: store.id },
+          {
+            removeOnComplete: true,
+            attempts: 2,
+            backoff: {
+              type: 'exponential',
+              delay: 30000,
+            },
+          },
+        );
+      }
+
+      this.logger.log(`✅ Scheduled daily digests for ${stores.length} stores`);
+    } catch (error) {
+      this.logger.error(`Error generating daily digests:`, error);
+    }
   }
 
   /**
@@ -166,14 +214,28 @@ export class QueueManagerService implements OnModuleInit {
    */
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async cleanupOldJobs() {
-    this.logger.log('Cleaning up old jobs');
+    this.logger.log('🧹 Cleaning up old jobs (Midnight)');
 
-    // Limpiar trabajos completados más antiguos de 7 días
-    await this.notificationsQueue.clean(7 * 24 * 60 * 60 * 1000, 1000, 'completed');
+    try {
+      // Limpiar trabajos completados más antiguos de 7 días
+      const completedCleaned = await this.notificationsQueue.clean(
+        7 * 24 * 60 * 60 * 1000,
+        1000,
+        'completed',
+      );
 
-    // Limpiar trabajos fallidos más antiguos de 30 días
-    await this.notificationsQueue.clean(30 * 24 * 60 * 60 * 1000, 1000, 'failed');
+      // Limpiar trabajos fallidos más antiguos de 30 días
+      const failedCleaned = await this.notificationsQueue.clean(
+        30 * 24 * 60 * 60 * 1000,
+        1000,
+        'failed',
+      );
 
-    this.logger.log('Old jobs cleanup completed');
+      this.logger.log(
+        `✅ Cleanup completed: ${completedCleaned.length} completed, ${failedCleaned.length} failed jobs removed`,
+      );
+    } catch (error) {
+      this.logger.error(`Error cleaning up old jobs:`, error);
+    }
   }
 }
