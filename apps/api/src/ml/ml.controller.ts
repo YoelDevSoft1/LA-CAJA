@@ -12,6 +12,7 @@ import {
 import { MLService } from './ml.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PredictDemandDto } from './dto/predict-demand.dto';
+import { EvaluateDemandDto } from './dto/evaluate-demand.dto';
 import { GetRecommendationsDto } from './dto/get-recommendations.dto';
 import { DetectAnomaliesDto } from './dto/detect-anomalies.dto';
 import { ResolveAnomalyDto } from './dto/resolve-anomaly.dto';
@@ -29,6 +30,16 @@ export class MLController {
   async predictDemand(@Body() dto: PredictDemandDto, @Request() req: any) {
     const storeId = req.user.store_id;
     return await this.mlService.predictDemand(storeId, dto);
+  }
+
+  /**
+   * Evalúa modelos de predicción de demanda (walk-forward)
+   * POST /ml/evaluate-demand
+   */
+  @Post('evaluate-demand')
+  async evaluateDemand(@Body() dto: EvaluateDemandDto, @Request() req: any) {
+    const storeId = req.user.store_id;
+    return await this.mlService.evaluateDemandForecasting(storeId, dto);
   }
 
   /**

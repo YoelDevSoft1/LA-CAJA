@@ -34,6 +34,7 @@ import FiscalInvoiceDetailPage from './pages/FiscalInvoiceDetailPage'
 import DashboardPage from './pages/DashboardPage'
 import MLDashboardPage from './pages/MLDashboardPage'
 import DemandPredictionsPage from './pages/DemandPredictionsPage'
+import DemandEvaluationPage from './pages/DemandEvaluationPage'
 import AnomaliesPage from './pages/AnomaliesPage'
 import RealtimeAnalyticsPage from './pages/RealtimeAnalyticsPage'
 import LicenseBlockedPage from './pages/LicenseBlockedPage'
@@ -267,6 +268,7 @@ function App() {
           <Route path="fiscal-invoices/:id" element={<FiscalInvoiceDetailPage />} />
           <Route path="ml" element={<MLDashboardPage />} />
           <Route path="ml/predictions" element={<DemandPredictionsPage />} />
+          <Route path="ml/evaluation" element={<DemandEvaluationPage />} />
           <Route path="ml/anomalies" element={<AnomaliesPage />} />
           <Route path="realtime-analytics" element={<RealtimeAnalyticsPage />} />
           <Route path="customers" element={<CustomersPage />} />

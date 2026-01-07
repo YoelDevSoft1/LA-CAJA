@@ -149,6 +149,7 @@ const navSections: NavSection[] = [
     items: [
       { path: '/app/ml', label: 'ML Dashboard', icon: Brain, badge: null },
       { path: '/app/ml/predictions', label: 'Predicciones', icon: TrendingUp, badge: null },
+      { path: '/app/ml/evaluation', label: 'Evaluacion', icon: Brain, badge: 'Nuevo' },
       { path: '/app/ml/anomalies', label: 'Anomalías', icon: AlertTriangle, badge: null },
       { path: '/app/realtime-analytics', label: 'Analytics Tiempo Real', icon: Activity, badge: null },
     ],

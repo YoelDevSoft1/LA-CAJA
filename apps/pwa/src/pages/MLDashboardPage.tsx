@@ -178,12 +178,16 @@ export default function MLDashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Las métricas de evaluación de modelos se muestran junto con cada predicción.
+              Ejecuta la evaluación para comparar modelos y ajustar la demanda.
             </p>
+            <Link to="/app/ml/evaluation">
+              <Button variant="outline" className="w-full mt-4">
+                Ver Evaluacion <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
     </div>
   )
 }
-

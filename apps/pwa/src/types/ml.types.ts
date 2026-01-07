@@ -4,6 +4,8 @@ export interface DemandPrediction {
   predicted_quantity: number
   confidence_score: number
   model_used: string
+  lower_bound?: number
+  upper_bound?: number
 }
 
 export interface PredictDemandResponse {
@@ -65,7 +67,50 @@ export interface ResolveAnomalyRequest {
   resolution_note?: string
 }
 
+export interface DemandModelMetric {
+  model: string
+  mae: number
+  rmse: number
+  mape: number
+  r2: number
+  folds: number
+}
 
+export interface DemandEvaluationResult {
+  product_id: string
+  product_name?: string
+  status: 'ok' | 'insufficient_data' | 'not_found'
+  data_stats: {
+    total_days: number
+    non_zero_days: number
+    zero_ratio: number
+    mean: number
+    recent_mean: number
+  }
+  validation: {
+    min_train_size: number
+    max_folds: number
+    horizon: number
+  }
+  best_model?: string
+  metrics?: {
+    mae: number
+    rmse: number
+    mape: number
+    r2: number
+  }
+  model_metrics?: DemandModelMetric[]
+  note?: string
+}
+
+export interface EvaluateDemandResponse {
+  evaluated_at: string
+  days_back: number
+  horizon: number
+  min_train_size: number
+  max_folds: number
+  evaluations: DemandEvaluationResult[]
+}
 
 
 

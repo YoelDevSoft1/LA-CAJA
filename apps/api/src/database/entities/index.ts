@@ -1,6 +1,7 @@
 // Core entities
 export { Store } from './store.entity';
 export { Profile } from './profile.entity';
+export { User } from './user.entity';
 export { StoreMember } from './store-member.entity';
 export { Event } from './event.entity';
 export { SecurityAuditLog } from './security-audit-log.entity';
@@ -87,6 +88,10 @@ export { NotificationPreference } from './notification-preference.entity';
 export { NotificationSubscription } from './notification-subscription.entity';
 export { NotificationDelivery } from './notification-delivery.entity';
 export { NotificationBadge } from './notification-badge.entity';
+export { NotificationTemplate } from './notification-template.entity';
+export { MLInsight } from './ml-insight.entity';
+export { NotificationAnalytics } from './notification-analytics.entity';
+export { EmailQueue } from './email-queue.entity';
 
 // Accounting entities
 export { ChartOfAccount } from './chart-of-accounts.entity';
@@ -100,6 +105,7 @@ export { AccountingERPSync } from './accounting-erp-sync.entity';
 // Export all entities as an array for TypeORM configuration
 import { Store } from './store.entity';
 import { Profile } from './profile.entity';
+import { User } from './user.entity';
 import { StoreMember } from './store-member.entity';
 import { Product } from './product.entity';
 import { ProductVariant } from './product-variant.entity';
@@ -157,6 +163,10 @@ import { NotificationPreference } from './notification-preference.entity';
 import { NotificationSubscription } from './notification-subscription.entity';
 import { NotificationDelivery } from './notification-delivery.entity';
 import { NotificationBadge } from './notification-badge.entity';
+import { NotificationTemplate } from './notification-template.entity';
+import { MLInsight } from './ml-insight.entity';
+import { NotificationAnalytics } from './notification-analytics.entity';
+import { EmailQueue } from './email-queue.entity';
 import { ChartOfAccount } from './chart-of-accounts.entity';
 import { JournalEntry } from './journal-entry.entity';
 import { JournalEntryLine } from './journal-entry-line.entity';
@@ -176,6 +186,7 @@ import { RefreshToken } from './refresh-token.entity';
 export const ALL_ENTITIES = [
   Store,
   Profile,
+  User,
   StoreMember,
   Product,
   ProductVariant,
@@ -233,6 +244,10 @@ export const ALL_ENTITIES = [
   NotificationSubscription,
   NotificationDelivery,
   NotificationBadge,
+  NotificationTemplate,
+  MLInsight,
+  NotificationAnalytics,
+  EmailQueue,
   ChartOfAccount,
   JournalEntry,
   JournalEntryLine,

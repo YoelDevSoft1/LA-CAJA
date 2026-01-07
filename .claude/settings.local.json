@@ -47,7 +47,10 @@
       "Bash(npx tsc:*)",
       "Bash(git push:*)",
       "Bash(awk:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(lsof:*)"
     ]
   },
   "enabledMcpjsonServers": [

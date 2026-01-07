@@ -181,4 +181,104 @@ export class ModelEvaluationService {
       fold_scores: foldScores,
     };
   }
+
+  /**
+   * Walk-forward validation (time series friendly)
+   */
+  walkForwardValidate(
+    data: Array<{ date: Date; value: number }>,
+    options: {
+      minTrainSize?: number;
+      horizon?: number;
+      maxFolds?: number;
+    } = {},
+    predictFn: (train: Array<{ date: Date; value: number }>) => number,
+  ): {
+    mae: number;
+    rmse: number;
+    mape: number;
+    r2: number;
+    residuals: number[];
+    fold_scores: Array<{
+      fold: number;
+      mae: number;
+      rmse: number;
+      mape: number;
+      r2: number;
+    }>;
+  } {
+    const sorted = [...data].sort(
+      (a, b) => a.date.getTime() - b.date.getTime(),
+    );
+    const horizon = Math.max(1, options.horizon ?? 1);
+    const minTrainSize = Math.max(2, options.minTrainSize ?? 7);
+
+    if (sorted.length < minTrainSize + horizon) {
+      return {
+        mae: 0,
+        rmse: 0,
+        mape: 0,
+        r2: 0,
+        residuals: [],
+        fold_scores: [],
+      };
+    }
+
+    const maxFolds = Math.max(1, options.maxFolds ?? sorted.length);
+    const lastPossibleStart = sorted.length - horizon;
+    const startIndex = Math.max(minTrainSize, lastPossibleStart - maxFolds + 1);
+
+    const actual: number[] = [];
+    const predicted: number[] = [];
+    const residuals: number[] = [];
+    const foldScores: Array<{
+      fold: number;
+      mae: number;
+      rmse: number;
+      mape: number;
+      r2: number;
+    }> = [];
+
+    let fold = 0;
+
+    for (let i = startIndex; i <= lastPossibleStart; i++) {
+      const train = sorted.slice(0, i);
+      const test = sorted.slice(i, i + horizon);
+      if (train.length < minTrainSize || test.length === 0) {
+        continue;
+      }
+
+      fold += 1;
+      const testActual: number[] = [];
+      const testPredicted: number[] = [];
+      let rollingTrain = [...train];
+
+      for (const point of test) {
+        const forecast = predictFn(rollingTrain);
+        testPredicted.push(forecast);
+        testActual.push(point.value);
+        rollingTrain = [
+          ...rollingTrain,
+          { date: point.date, value: forecast },
+        ];
+      }
+
+      actual.push(...testActual);
+      predicted.push(...testPredicted);
+      residuals.push(
+        ...testActual.map((value, idx) => value - testPredicted[idx]),
+      );
+
+      const foldMetrics = this.calculateAllMetrics(testActual, testPredicted);
+      foldScores.push({ fold, ...foldMetrics });
+    }
+
+    const metrics = this.calculateAllMetrics(actual, predicted);
+
+    return {
+      ...metrics,
+      residuals,
+      fold_scores: foldScores,
+    };
+  }
 }

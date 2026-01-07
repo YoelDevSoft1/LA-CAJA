@@ -8,6 +8,7 @@ import {
   EntityType,
   AnomalySeverity,
   ResolveAnomalyRequest,
+  EvaluateDemandResponse,
 } from '@/types/ml.types'
 
 export const mlService = {
@@ -69,8 +70,25 @@ export const mlService = {
     )
     return response.data
   },
-}
 
+  /**
+   * Evalúa modelos de predicción de demanda (walk-forward)
+   */
+  async evaluateDemand(params?: {
+    product_ids?: string[]
+    top_n?: number
+    days_back?: number
+    horizon?: number
+    min_train_size?: number
+    max_folds?: number
+  }): Promise<EvaluateDemandResponse> {
+    const response = await api.post<EvaluateDemandResponse>(
+      '/ml/evaluate-demand',
+      params ?? {},
+    )
+    return response.data
+  },
+}
 
 
 

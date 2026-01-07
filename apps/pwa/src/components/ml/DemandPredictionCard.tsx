@@ -69,6 +69,8 @@ export default function DemandPredictionCard({
     cantidad: Math.round(prediction.predicted_quantity * 100) / 100,
     confianza: Math.round(prediction.confidence_score),
     cantidadFormateada: prediction.predicted_quantity.toFixed(0),
+    lowerBound: prediction.lower_bound,
+    upperBound: prediction.upper_bound,
   }))
 
   const maxQuantity = Math.max(
@@ -92,6 +94,14 @@ export default function DemandPredictionCard({
               <span className="text-muted-foreground text-xs">Predicción:</span>
               <span className="font-semibold text-sm">{data.cantidadFormateada} unidades</span>
             </div>
+            {data.lowerBound !== undefined && data.upperBound !== undefined && (
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-muted-foreground text-xs">Rango:</span>
+                <span className="font-semibold text-sm">
+                  {Math.round(data.lowerBound)} - {Math.round(data.upperBound)} unidades
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-4">
               <span className="text-muted-foreground text-xs">Confianza:</span>
               <Badge
@@ -331,10 +341,20 @@ export default function DemandPredictionCard({
               <div className="flex items-center justify-between text-sm mt-2">
                 <span className="text-muted-foreground">Modelo usado:</span>
                 <span className="font-semibold">
-                  {predictions[0]?.model_used === 'fallback' 
-                    ? 'Promedio Simple (datos insuficientes)' 
+                  {predictions[0]?.model_used === 'fallback'
+                    ? 'Promedio Simple (datos insuficientes)'
                     : predictions[0]?.model_used === 'ensemble'
                     ? 'Ensemble (Exponential Smoothing + ARIMA)'
+                    : predictions[0]?.model_used === 'croston'
+                    ? 'Croston (demanda intermitente)'
+                    : predictions[0]?.model_used === 'croston_ensemble'
+                    ? 'Ensemble + Croston (intermitente)'
+                    : predictions[0]?.model_used === 'cold_start'
+                    ? 'Sin historial (estimación inicial)'
+                    : predictions[0]?.model_used === 'seasonal_naive'
+                    ? 'Naive Estacional (último ciclo)'
+                    : predictions[0]?.model_used === 'moving_avg'
+                    ? 'Media Móvil (últimos días)'
                     : predictions[0]?.model_used || 'N/A'}
                 </span>
               </div>
@@ -345,4 +365,3 @@ export default function DemandPredictionCard({
     </Card>
   )
 }
-

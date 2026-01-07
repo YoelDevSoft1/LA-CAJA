@@ -170,7 +170,10 @@ export class DemandForecastingModel {
       predictions.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) /
       predictions.length;
     const stdDev = Math.sqrt(variance);
-    const confidence = Math.max(0, Math.min(100, 100 - (stdDev / mean) * 100));
+    const confidence =
+      mean > 0
+        ? Math.max(0, Math.min(100, 100 - (stdDev / mean) * 100))
+        : 0;
 
     return {
       forecast,
@@ -181,6 +184,59 @@ export class DemandForecastingModel {
         moving_avg: movingAvg,
       },
     };
+  }
+
+  /**
+   * Pronóstico naive estacional (usa el valor del último ciclo)
+   */
+  seasonalNaive(data: number[], seasonLength: number = 7): number {
+    if (data.length === 0) return 0;
+    if (data.length < seasonLength) {
+      return data[data.length - 1];
+    }
+    return data[data.length - seasonLength];
+  }
+
+  /**
+   * Pronóstico por media móvil simple
+   */
+  movingAverageForecast(data: number[], window: number = 7): number {
+    return this.calculateMovingAverage(data, window);
+  }
+
+  /**
+   * Croston (SBA) para demanda intermitente
+   */
+  crostonForecast(
+    data: number[],
+    alpha: number = 0.1,
+    biasCorrection: boolean = true,
+  ): { forecast: number; demand: number; interval: number } {
+    const nonZero = data
+      .map((value, index) => ({ value, index }))
+      .filter((item) => item.value > 0);
+
+    if (nonZero.length === 0) {
+      return { forecast: 0, demand: 0, interval: 0 };
+    }
+
+    let demand = nonZero[0].value;
+    let interval = nonZero[0].index + 1;
+    let lastIndex = nonZero[0].index;
+
+    for (let i = 1; i < nonZero.length; i++) {
+      const gap = nonZero[i].index - lastIndex;
+      demand = alpha * nonZero[i].value + (1 - alpha) * demand;
+      interval = alpha * gap + (1 - alpha) * interval;
+      lastIndex = nonZero[i].index;
+    }
+
+    let forecast = interval > 0 ? demand / interval : 0;
+    if (biasCorrection) {
+      forecast = forecast * (1 - alpha / 2);
+    }
+
+    return { forecast, demand, interval };
   }
 
   // ========== Métodos auxiliares ==========
