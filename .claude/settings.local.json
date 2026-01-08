@@ -50,7 +50,8 @@
       "Bash(python3:*)",
       "Bash(find:*)",
       "Bash(grep:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(node check-code.js:*)"
     ]
   },
   "enabledMcpjsonServers": [
