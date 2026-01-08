@@ -213,19 +213,25 @@ export class WarehousesService {
     variantId: string | null,
     qtyDelta: number,
   ): Promise<WarehouseStock> {
-    // Usar query builder para evitar problemas con IsNull()
-    const queryBuilder = this.warehouseStockRepository
-      .createQueryBuilder('ws')
-      .where('ws.warehouse_id = :warehouseId', { warehouseId })
-      .andWhere('ws.product_id = :productId', { productId });
+    // Buscar el registro existente
+    let stock: WarehouseStock | null;
 
     if (variantId === null) {
-      queryBuilder.andWhere('ws.variant_id IS NULL');
+      stock = await this.warehouseStockRepository
+        .createQueryBuilder('ws')
+        .where('ws.warehouse_id = :warehouseId', { warehouseId })
+        .andWhere('ws.product_id = :productId', { productId })
+        .andWhere('ws.variant_id IS NULL')
+        .getOne();
     } else {
-      queryBuilder.andWhere('ws.variant_id = :variantId', { variantId });
+      stock = await this.warehouseStockRepository.findOne({
+        where: {
+          warehouse_id: warehouseId,
+          product_id: productId,
+          variant_id: variantId,
+        },
+      });
     }
-
-    const stock = await queryBuilder.getOne();
 
     if (stock) {
       stock.stock = Math.max(0, stock.stock + qtyDelta);
@@ -252,19 +258,25 @@ export class WarehousesService {
     variantId: string | null,
     quantity: number,
   ): Promise<void> {
-    // Usar query builder para evitar problemas con IsNull()
-    const queryBuilder = this.warehouseStockRepository
-      .createQueryBuilder('ws')
-      .where('ws.warehouse_id = :warehouseId', { warehouseId })
-      .andWhere('ws.product_id = :productId', { productId });
+    // Buscar el registro existente
+    let stock: WarehouseStock | null;
 
     if (variantId === null) {
-      queryBuilder.andWhere('ws.variant_id IS NULL');
+      stock = await this.warehouseStockRepository
+        .createQueryBuilder('ws')
+        .where('ws.warehouse_id = :warehouseId', { warehouseId })
+        .andWhere('ws.product_id = :productId', { productId })
+        .andWhere('ws.variant_id IS NULL')
+        .getOne();
     } else {
-      queryBuilder.andWhere('ws.variant_id = :variantId', { variantId });
+      stock = await this.warehouseStockRepository.findOne({
+        where: {
+          warehouse_id: warehouseId,
+          product_id: productId,
+          variant_id: variantId,
+        },
+      });
     }
-
-    const stock = await queryBuilder.getOne();
 
     if (!stock || stock.stock < quantity) {
       throw new BadRequestException('Stock insuficiente para reservar');
@@ -284,19 +296,25 @@ export class WarehousesService {
     variantId: string | null,
     quantity: number,
   ): Promise<void> {
-    // Usar query builder para evitar problemas con IsNull()
-    const queryBuilder = this.warehouseStockRepository
-      .createQueryBuilder('ws')
-      .where('ws.warehouse_id = :warehouseId', { warehouseId })
-      .andWhere('ws.product_id = :productId', { productId });
+    // Buscar el registro existente
+    let stock: WarehouseStock | null;
 
     if (variantId === null) {
-      queryBuilder.andWhere('ws.variant_id IS NULL');
+      stock = await this.warehouseStockRepository
+        .createQueryBuilder('ws')
+        .where('ws.warehouse_id = :warehouseId', { warehouseId })
+        .andWhere('ws.product_id = :productId', { productId })
+        .andWhere('ws.variant_id IS NULL')
+        .getOne();
     } else {
-      queryBuilder.andWhere('ws.variant_id = :variantId', { variantId });
+      stock = await this.warehouseStockRepository.findOne({
+        where: {
+          warehouse_id: warehouseId,
+          product_id: productId,
+          variant_id: variantId,
+        },
+      });
     }
-
-    const stock = await queryBuilder.getOne();
 
     if (!stock || stock.reserved < quantity) {
       throw new BadRequestException('Stock reservado insuficiente');
