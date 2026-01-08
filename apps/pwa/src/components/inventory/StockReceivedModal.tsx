@@ -273,7 +273,13 @@ export default function StockReceivedModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+      <DialogContent
+        className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden"
+        onInteractOutside={(e) => {
+          // Prevenir que el Dialog se cierre al interactuar con elementos internos
+          e.preventDefault()
+        }}
+      >
         <DialogHeader className="px-4 sm:px-6 py-4 border-b border-border flex-shrink-0">
           <DialogTitle className="text-xl">
             Recibir Stock {totalProducts > 0 && `(${totalProducts} productos)`}
