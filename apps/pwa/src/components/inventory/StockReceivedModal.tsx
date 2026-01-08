@@ -168,7 +168,10 @@ export default function StockReceivedModal({
     }
   }, [showProductSearch])
 
-  const addProduct = (product: Product) => {
+  const addProduct = (product: Product, e?: React.MouseEvent) => {
+    e?.preventDefault()
+    e?.stopPropagation()
+
     const newItem: ProductItem = {
       id: `item-${Date.now()}-${Math.random()}`,
       product_id: product.id,
@@ -350,7 +353,7 @@ export default function StockReceivedModal({
                           <button
                             key={p.id}
                             type="button"
-                            onClick={() => addProduct(p)}
+                            onClick={(e) => addProduct(p, e)}
                             className="w-full px-3 py-2.5 text-left hover:bg-muted transition-colors"
                           >
                             <p className="font-medium text-sm">{p.name}</p>
