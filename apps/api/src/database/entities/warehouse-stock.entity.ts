@@ -4,42 +4,25 @@ import {
   PrimaryColumn,
   ManyToOne,
   JoinColumn,
-  Index,
   UpdateDateColumn,
 } from 'typeorm';
 import { Warehouse } from './warehouse.entity';
 import { Product } from './product.entity';
 import { ProductVariant } from './product-variant.entity';
 
-@Entity('warehouse_stock')
-@Index(['warehouse_id'])
-@Index(['product_id'])
-@Index(['variant_id'], { where: 'variant_id IS NOT NULL' })
-@Index(['warehouse_id', 'product_id', 'variant_id'], { unique: true })
+@Entity({ name: 'warehouse_stock' })
 export class WarehouseStock {
-  @PrimaryColumn('uuid')
+  @PrimaryColumn({ type: 'uuid' })
   id: string;
 
-  @ManyToOne(() => Warehouse, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'warehouse_id' })
-  warehouse: Warehouse;
-
-  @Column('uuid')
+  @Column({ type: 'uuid', name: 'warehouse_id' })
   warehouse_id: string;
 
-  @ManyToOne(() => Product, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'product_id' })
-  product: Product;
-
-  @Column('uuid')
+  @Column({ type: 'uuid', name: 'product_id' })
   product_id: string;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ type: 'uuid', name: 'variant_id', nullable: true })
   variant_id: string | null;
-
-  @ManyToOne(() => ProductVariant, { onDelete: 'CASCADE', nullable: true })
-  @JoinColumn({ name: 'variant_id' })
-  variant: ProductVariant | null;
 
   @Column({ type: 'int', default: 0 })
   stock: number;
@@ -47,6 +30,26 @@ export class WarehouseStock {
   @Column({ type: 'int', default: 0 })
   reserved: number;
 
-  @UpdateDateColumn({ type: 'timestamptz' })
+  @UpdateDateColumn({ type: 'timestamptz', name: 'updated_at' })
   updated_at: Date;
+
+  // Relaciones - lazy loading para evitar problemas de alias
+  @ManyToOne(() => Warehouse, (warehouse) => warehouse.stock, {
+    onDelete: 'CASCADE',
+    lazy: true,
+  })
+  @JoinColumn({ name: 'warehouse_id' })
+  warehouse: Promise<Warehouse>;
+
+  @ManyToOne(() => Product, { onDelete: 'CASCADE', lazy: true })
+  @JoinColumn({ name: 'product_id' })
+  product: Promise<Product>;
+
+  @ManyToOne(() => ProductVariant, {
+    onDelete: 'CASCADE',
+    nullable: true,
+    lazy: true,
+  })
+  @JoinColumn({ name: 'variant_id' })
+  variant: Promise<ProductVariant | null>;
 }

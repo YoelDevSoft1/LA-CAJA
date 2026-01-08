@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, IsNull } from 'typeorm';
 import { Warehouse } from '../database/entities/warehouse.entity';
 import { WarehouseStock } from '../database/entities/warehouse-stock.entity';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
@@ -14,7 +14,6 @@ import { randomUUID } from 'crypto';
 
 /**
  * Servicio para gestión de bodegas/almacenes
- * Actualizado: 2026-01-08 - Fix IsNull() para variant_id
  */
 @Injectable()
 export class WarehousesService {
@@ -192,41 +191,16 @@ export class WarehousesService {
   ): Promise<WarehouseStock[]> {
     await this.findOne(storeId, warehouseId); // Validar que existe
 
-    const query = this.warehouseStockRepository
-      .createQueryBuilder('stock')
-      .innerJoin('stock.warehouse', 'warehouse')
-      .where('warehouse.store_id = :storeId', { storeId })
-      .andWhere('stock.warehouse_id = :warehouseId', { warehouseId });
-
+    const where: any = { warehouse_id: warehouseId };
     if (productId) {
-      query.andWhere('stock.product_id = :productId', { productId });
+      where.product_id = productId;
     }
 
-    return query.getMany();
-  }
-
-  /**
-   * Busca un registro de stock usando query raw para evitar bug de TypeORM con alias
-   */
-  private async findStockRecord(
-    warehouseId: string,
-    productId: string,
-    variantId: string | null,
-  ): Promise<WarehouseStock | null> {
-    const result = await this.dataSource.query(
-      `SELECT * FROM warehouse_stock
-       WHERE warehouse_id = $1
-       AND product_id = $2
-       AND ($3::uuid IS NULL AND variant_id IS NULL OR variant_id = $3::uuid)
-       LIMIT 1`,
-      [warehouseId, productId, variantId],
-    );
-    return result[0] || null;
+    return this.warehouseStockRepository.find({ where });
   }
 
   /**
    * Actualiza el stock de una bodega (usado internamente)
-   * Usa queries raw para evitar bug de TypeORM con alias de clase
    */
   async updateStock(
     warehouseId: string,
@@ -234,42 +208,33 @@ export class WarehousesService {
     variantId: string | null,
     qtyDelta: number,
   ): Promise<WarehouseStock> {
-    // Buscar el registro existente usando query raw
-    const stock = await this.findStockRecord(warehouseId, productId, variantId);
+    // Buscar el registro existente
+    const stock = await this.warehouseStockRepository.findOne({
+      where: {
+        warehouse_id: warehouseId,
+        product_id: productId,
+        variant_id: variantId === null ? IsNull() : variantId,
+      },
+    });
 
     if (stock) {
-      // Actualizar usando query raw para evitar que TypeORM cargue relaciones
-      const newStockValue = Math.max(0, stock.stock + qtyDelta);
-      await this.dataSource.query(
-        `UPDATE warehouse_stock SET stock = $1, updated_at = NOW() WHERE id = $2`,
-        [newStockValue, stock.id],
-      );
-      stock.stock = newStockValue;
-      return stock;
+      stock.stock = Math.max(0, stock.stock + qtyDelta);
+      return this.warehouseStockRepository.save(stock);
     } else {
-      // Insertar usando query raw
-      const newId = randomUUID();
-      const newStockValue = Math.max(0, qtyDelta);
-      await this.dataSource.query(
-        `INSERT INTO warehouse_stock (id, warehouse_id, product_id, variant_id, stock, reserved, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 0, NOW())`,
-        [newId, warehouseId, productId, variantId, newStockValue],
-      );
-      return {
-        id: newId,
+      const newStock = this.warehouseStockRepository.create({
+        id: randomUUID(),
         warehouse_id: warehouseId,
         product_id: productId,
         variant_id: variantId,
-        stock: newStockValue,
+        stock: Math.max(0, qtyDelta),
         reserved: 0,
-        updated_at: new Date(),
-      } as WarehouseStock;
+      });
+      return this.warehouseStockRepository.save(newStock);
     }
   }
 
   /**
    * Reserva stock en una bodega (para transferencias pendientes)
-   * Usa queries raw para evitar bug de TypeORM con alias de clase
    */
   async reserveStock(
     warehouseId: string,
@@ -277,25 +242,25 @@ export class WarehousesService {
     variantId: string | null,
     quantity: number,
   ): Promise<void> {
-    // Buscar el registro existente usando query raw
-    const stock = await this.findStockRecord(warehouseId, productId, variantId);
+    const stock = await this.warehouseStockRepository.findOne({
+      where: {
+        warehouse_id: warehouseId,
+        product_id: productId,
+        variant_id: variantId === null ? IsNull() : variantId,
+      },
+    });
 
     if (!stock || stock.stock < quantity) {
       throw new BadRequestException('Stock insuficiente para reservar');
     }
 
-    // Actualizar usando query raw
-    await this.dataSource.query(
-      `UPDATE warehouse_stock
-       SET stock = stock - $1, reserved = reserved + $1, updated_at = NOW()
-       WHERE id = $2`,
-      [quantity, stock.id],
-    );
+    stock.reserved += quantity;
+    stock.stock -= quantity;
+    await this.warehouseStockRepository.save(stock);
   }
 
   /**
    * Libera stock reservado
-   * Usa queries raw para evitar bug de TypeORM con alias de clase
    */
   async releaseReservedStock(
     warehouseId: string,
@@ -303,19 +268,20 @@ export class WarehousesService {
     variantId: string | null,
     quantity: number,
   ): Promise<void> {
-    // Buscar el registro existente usando query raw
-    const stock = await this.findStockRecord(warehouseId, productId, variantId);
+    const stock = await this.warehouseStockRepository.findOne({
+      where: {
+        warehouse_id: warehouseId,
+        product_id: productId,
+        variant_id: variantId === null ? IsNull() : variantId,
+      },
+    });
 
     if (!stock || stock.reserved < quantity) {
       throw new BadRequestException('Stock reservado insuficiente');
     }
 
-    // Actualizar usando query raw
-    await this.dataSource.query(
-      `UPDATE warehouse_stock
-       SET stock = stock + $1, reserved = reserved - $1, updated_at = NOW()
-       WHERE id = $2`,
-      [quantity, stock.id],
-    );
+    stock.reserved -= quantity;
+    stock.stock += quantity;
+    await this.warehouseStockRepository.save(stock);
   }
 }
