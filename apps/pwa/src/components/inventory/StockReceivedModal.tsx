@@ -53,6 +53,7 @@ export default function StockReceivedModal({
   const [invoice, setInvoice] = useState('')
   const [note, setNote] = useState('')
   const [warehouseId, setWarehouseId] = useState<string | null>(null)
+  const [isInteracting, setIsInteracting] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Obtener productos para selección (con cache offline persistente)
@@ -156,6 +157,7 @@ export default function StockReceivedModal({
       setSearchQuery('')
       setShowProductSearch(false)
       setWarehouseId(null)
+      setIsInteracting(false)
     }
   }, [isOpen])
 
@@ -172,6 +174,8 @@ export default function StockReceivedModal({
     e?.preventDefault()
     e?.stopPropagation()
 
+    setIsInteracting(true)
+
     const newItem: ProductItem = {
       id: `item-${Date.now()}-${Math.random()}`,
       product_id: product.id,
@@ -183,6 +187,9 @@ export default function StockReceivedModal({
     setProductItems([...productItems, newItem])
     setSearchQuery('')
     setShowProductSearch(false)
+
+    // Liberar el bloqueo después de que React haya actualizado el DOM
+    setTimeout(() => setIsInteracting(false), 200)
   }
 
   const removeProduct = (itemId: string) => {
@@ -275,17 +282,26 @@ export default function StockReceivedModal({
   )
 
   return (
-    <Dialog open={isOpen} onOpenChange={() => {}}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      // Solo permitir cerrar si no estamos interactuando
+      if (!open && !isInteracting) {
+        onClose()
+      }
+    }}>
       <DialogContent
         className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden"
         onEscapeKeyDown={(e) => {
-          e.preventDefault()
-          onClose()
+          if (!isInteracting) {
+            e.preventDefault()
+            onClose()
+          }
         }}
         onPointerDownOutside={(e) => {
+          // Siempre prevenir el cierre al hacer click fuera
           e.preventDefault()
         }}
         onInteractOutside={(e) => {
+          // Siempre prevenir el cierre por interacciones fuera
           e.preventDefault()
         }}
       >
