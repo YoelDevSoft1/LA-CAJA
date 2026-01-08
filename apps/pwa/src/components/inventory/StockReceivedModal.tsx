@@ -7,7 +7,7 @@ import { productsCacheService } from '@/services/products-cache.service'
 import { exchangeService } from '@/services/exchange.service'
 import { warehousesService } from '@/services/warehouses.service'
 import { useAuth } from '@/stores/auth.store'
-import { Plus, Trash2, Search, X } from 'lucide-react'
+import { Plus, Trash2, Search } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,13 +47,11 @@ export default function StockReceivedModal({
 }: StockReceivedModalProps) {
   const { user } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
-  const [showProductSearch, setShowProductSearch] = useState(false)
   const [productItems, setProductItems] = useState<ProductItem[]>([])
   const [supplier, setSupplier] = useState('')
   const [invoice, setInvoice] = useState('')
   const [note, setNote] = useState('')
   const [warehouseId, setWarehouseId] = useState<string | null>(null)
-  const [isInteracting, setIsInteracting] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Obtener productos para selección (con cache offline persistente)
@@ -131,8 +129,12 @@ export default function StockReceivedModal({
 
   // Si se pasa un producto específico, agregarlo automáticamente
   useEffect(() => {
-    if (isOpen && product && productItems.length === 0) {
-      setProductItems([
+    if (!isOpen || !product) return
+
+    setProductItems((current) => {
+      if (current.length > 0) return current
+
+      return [
         {
           id: `item-${Date.now()}`,
           product_id: product.product_id,
@@ -141,11 +143,9 @@ export default function StockReceivedModal({
           unit_cost_usd: 0,
           unit_cost_bs: 0,
         },
-      ])
-    } else if (isOpen && !product) {
-      setProductItems([])
-    }
-  }, [isOpen, product, productItems.length])
+      ]
+    })
+  }, [isOpen, product])
 
   // Limpiar al cerrar
   useEffect(() => {
@@ -155,27 +155,21 @@ export default function StockReceivedModal({
       setInvoice('')
       setNote('')
       setSearchQuery('')
-      setShowProductSearch(false)
       setWarehouseId(null)
-      setIsInteracting(false)
     }
   }, [isOpen])
 
-  // Focus en el input de búsqueda cuando se abre
+  // Auto-focus en el input de búsqueda cuando se abre el modal
   useEffect(() => {
-    if (showProductSearch && searchInputRef.current) {
-      setTimeout(() => {
+    if (isOpen && searchInputRef.current && productItems.length === 0) {
+      const timer = setTimeout(() => {
         searchInputRef.current?.focus()
       }, 100)
+      return () => clearTimeout(timer)
     }
-  }, [showProductSearch])
+  }, [isOpen, productItems.length])
 
-  const addProduct = (product: Product, e?: React.MouseEvent) => {
-    e?.preventDefault()
-    e?.stopPropagation()
-
-    setIsInteracting(true)
-
+  const addProduct = (product: Product) => {
     const newItem: ProductItem = {
       id: `item-${Date.now()}-${Math.random()}`,
       product_id: product.id,
@@ -184,12 +178,8 @@ export default function StockReceivedModal({
       unit_cost_usd: 0,
       unit_cost_bs: 0,
     }
-    setProductItems([...productItems, newItem])
+    setProductItems((prev) => [...prev, newItem])
     setSearchQuery('')
-    setShowProductSearch(false)
-
-    // Liberar el bloqueo después de que React haya actualizado el DOM
-    setTimeout(() => setIsInteracting(false), 200)
   }
 
   const removeProduct = (itemId: string) => {
@@ -282,29 +272,8 @@ export default function StockReceivedModal({
   )
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => {
-      // Solo permitir cerrar si no estamos interactuando
-      if (!open && !isInteracting) {
-        onClose()
-      }
-    }}>
-      <DialogContent
-        className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden"
-        onEscapeKeyDown={(e) => {
-          if (!isInteracting) {
-            e.preventDefault()
-            onClose()
-          }
-        }}
-        onPointerDownOutside={(e) => {
-          // Siempre prevenir el cierre al hacer click fuera
-          e.preventDefault()
-        }}
-        onInteractOutside={(e) => {
-          // Siempre prevenir el cierre por interacciones fuera
-          e.preventDefault()
-        }}
-      >
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-4 sm:px-6 py-4 border-b border-border flex-shrink-0">
           <DialogTitle className="text-xl">
             Recibir Stock {totalProducts > 0 && `(${totalProducts} productos)`}
@@ -316,76 +285,65 @@ export default function StockReceivedModal({
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
           <div className="space-y-6">
-            {/* Buscador de productos con diseño colapsable */}
-            {!showProductSearch ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full border-dashed"
-                onClick={() => setShowProductSearch(true)}
-              >
-                <Plus className="w-5 h-5 mr-2" />
-                Agregar Producto
-              </Button>
-            ) : (
-              <Card className="border-2 border-primary">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">Buscar Producto</CardTitle>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => {
-                        setShowProductSearch(false)
-                        setSearchQuery('')
-                      }}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                    <Input
-                      ref={searchInputRef}
-                      type="text"
-                      placeholder="Buscar por nombre, SKU o código de barras..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  <ScrollArea className="h-[200px] rounded-md border">
+            {/* Buscador de productos - Siempre visible */}
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Buscar producto por nombre, SKU o código de barras..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+
+              {/* Lista de productos filtrados */}
+              {searchQuery && (
+                <Card>
+                  <ScrollArea className="h-[200px]">
                     {filteredProducts.length === 0 ? (
                       <div className="p-4 text-center text-sm text-muted-foreground">
-                        {searchQuery ? 'No se encontraron productos' : 'Escribe para buscar productos'}
+                        No se encontraron productos
                       </div>
                     ) : (
                       <div className="divide-y">
-                        {filteredProducts.map((p: any) => (
+                        {filteredProducts.slice(0, 10).map((p: any) => (
                           <button
                             key={p.id}
                             type="button"
-                            onClick={(e) => addProduct(p, e)}
-                            className="w-full px-3 py-2.5 text-left hover:bg-muted transition-colors"
+                            onClick={() => addProduct(p)}
+                            className="w-full px-4 py-3 text-left hover:bg-muted transition-colors flex items-center justify-between"
                           >
-                            <p className="font-medium text-sm">{p.name}</p>
-                            {p.sku && <p className="text-xs text-muted-foreground mt-0.5">SKU: {p.sku}</p>}
+                            <div>
+                              <p className="font-medium text-sm">{p.name}</p>
+                              {p.sku && (
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  SKU: {p.sku}
+                                </p>
+                              )}
+                            </div>
+                            <Plus className="w-4 h-4 text-muted-foreground" />
                           </button>
                         ))}
                       </div>
                     )}
                   </ScrollArea>
-                </CardContent>
-              </Card>
-            )}
+                </Card>
+              )}
+            </div>
 
             {/* Lista de productos agregados */}
             {productItems.length > 0 && (
               <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Productos agregados</h3>
+                  <span className="text-xs text-muted-foreground">
+                    {totalProducts} producto{totalProducts > 1 ? 's' : ''}
+                  </span>
+                </div>
+
                 {productItems.map((item) => (
                   <Card key={item.id} className="bg-muted/50">
                     <CardContent className="p-4">
