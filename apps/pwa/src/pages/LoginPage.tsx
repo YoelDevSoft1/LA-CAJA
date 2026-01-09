@@ -11,7 +11,7 @@ import { authService, type LoginResponse } from '@/services/auth.service'
 import { useQueryClient } from '@tanstack/react-query'
 import { prefetchAllData } from '@/services/prefetch.service'
 import { syncService } from '@/services/sync.service'
-import { Loader2, Store, Lock, ChevronRight } from 'lucide-react'
+import { Loader2, Lock, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -108,30 +108,52 @@ export default function LoginPage() {
   const selectedCashierName = cashiers?.find((c) => c.user_id === selectedCashierId)?.full_name
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 relative flex items-center justify-center p-6 overflow-hidden">
-      {/* Partículas decorativas minimalistas usando CSS */}
+    <div className="min-h-screen bg-white relative flex items-center justify-center p-6 overflow-hidden">
+      {/* Partículas decorativas mejoradas con color del logo */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(45)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 bg-blue-400/30 rounded-full"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-            }}
-            animate={{
-              y: [0, (Math.random() - 0.5) * 30, 0],
-              opacity: [0.3, 0.7, 0.3],
-              scale: [1, 1.3, 1],
-            }}
-            transition={{
-              duration: 4 + Math.random() * 2,
-              repeat: Infinity,
-              delay: Math.random() * 2,
-              ease: 'easeInOut',
-            }}
-          />
-        ))}
+        {[...Array(80)].map((_, i) => {
+          const size = Math.random() * 4 + 2 // Tamaño entre 2-6px
+          const baseDelay = Math.random() * 4
+          const duration = 4 + Math.random() * 4 // 4-8 segundos
+          const moveDistance = 60 + Math.random() * 40 // 60-100px de movimiento
+          
+          return (
+            <motion.div
+              key={i}
+              className="absolute rounded-full"
+              style={{
+                width: `${size}px`,
+                height: `${size}px`,
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                backgroundColor: 'rgba(13, 129, 206, 0.6)', // Color del logo
+                boxShadow: `0 0 ${size * 2}px rgba(13, 129, 206, 0.4)`,
+              }}
+              animate={{
+                y: [
+                  0,
+                  (Math.random() - 0.5) * moveDistance,
+                  (Math.random() - 0.5) * moveDistance * 0.5,
+                  0,
+                ],
+                x: [
+                  0,
+                  (Math.random() - 0.5) * moveDistance * 0.6,
+                  (Math.random() - 0.5) * moveDistance * 0.3,
+                  0,
+                ],
+                opacity: [0.3, 0.9, 0.7, 0.3],
+                scale: [1, 1.8, 1.4, 1],
+              }}
+              transition={{
+                duration: duration,
+                repeat: Infinity,
+                delay: baseDelay,
+                ease: [0.4, 0, 0.6, 1], // easeInOut más suave
+              }}
+            />
+          )
+        })}
       </div>
 
       {/* Content */}
@@ -151,10 +173,14 @@ export default function LoginPage() {
               type: 'spring',
               stiffness: 200,
             }}
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 mb-6 shadow-xl"
+            className="inline-flex items-center justify-center mb-6"
             style={{ transformStyle: 'preserve-3d' }}
           >
-            <Store className="w-8 h-8 text-white" strokeWidth={2.5} />
+            <img 
+              src="/favicon.svg" 
+              alt="LA CAJA Logo" 
+              className="w-16 h-16 rounded-2xl border-2 border-slate-300/50 shadow-xl"
+            />
           </motion.div>
           <motion.h1
             className="text-4xl font-bold tracking-tight text-gray-900 mb-2"

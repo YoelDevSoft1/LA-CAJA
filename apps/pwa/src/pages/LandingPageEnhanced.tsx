@@ -51,11 +51,11 @@ import { cn } from '@/lib/utils'
 const STAT_COLOR_CLASSES = {
   emerald: 'from-emerald-500 to-emerald-600',
   blue: 'from-blue-500 to-blue-600',
-  purple: 'from-purple-500 to-purple-600',
-  pink: 'from-pink-500 to-pink-600',
-  yellow: 'from-yellow-500 to-yellow-600',
+  purple: 'from-indigo-500 to-indigo-600',
+  pink: 'from-slate-500 to-slate-600',
+  yellow: 'from-amber-500 to-amber-600',
   cyan: 'from-cyan-500 to-cyan-600',
-  orange: 'from-orange-500 to-orange-600',
+  orange: 'from-teal-500 to-teal-600',
   indigo: 'from-indigo-500 to-indigo-600',
   green: 'from-green-500 to-green-600',
 } as const
@@ -198,10 +198,12 @@ export default function LandingPageEnhanced() {
               whileHover={{ scale: 1.05 }}
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             >
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/50">
-                <Sparkles className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl font-black bg-gradient-to-r from-blue-500 via-indigo-500 to-slate-300 bg-clip-text text-transparent">
+              <img 
+                src="/favicon.svg" 
+                alt="LA CAJA Logo" 
+                className="w-10 h-10 rounded-lg border-2 border-slate-700/50 shadow-lg shadow-blue-500/20 hover:border-slate-600/70 transition-all duration-300"
+              />
+              <span className="text-xl font-black text-white">
                 LA CAJA
               </span>
             </motion.div>
@@ -467,7 +469,7 @@ export default function LandingPageEnhanced() {
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-slate-400">
-                  <Zap className="w-5 h-5 text-yellow-400" />
+                  <Zap className="w-5 h-5 text-amber-400" />
                   <span className="text-sm font-medium">
                     <span className="text-white font-bold">99.9%</span> uptime
                   </span>
@@ -485,13 +487,13 @@ export default function LandingPageEnhanced() {
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-slate-400">
-                  <Zap className="w-5 h-5 text-purple-400" />
+                  <Zap className="w-5 h-5 text-indigo-400" />
                   <span className="text-sm font-medium">
                     <span className="text-white font-bold">&lt;15ms</span> tiempo de respuesta
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-slate-400">
-                  <WifiOff className="w-5 h-5 text-orange-400" />
+                  <WifiOff className="w-5 h-5 text-teal-400" />
                   <span className="text-sm font-medium">
                     <span className="text-white font-bold">0</span> ventas perdidas por internet
                   </span>
@@ -679,7 +681,7 @@ function TerminalAnimation() {
           className={cn(
             line.type === 'command' && 'text-blue-400',
             line.type === 'success' && 'text-emerald-400',
-            line.type === 'info' && 'text-purple-400',
+            line.type === 'info' && 'text-indigo-400',
             line.type === 'empty' && 'h-2'
           )}
         >
@@ -889,13 +891,13 @@ function FeaturesSection() {
 
   const colorClasses = {
     blue: { icon: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
-    purple: { icon: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },
+    purple: { icon: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30' },
     emerald: { icon: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
-    pink: { icon: 'text-pink-400', bg: 'bg-pink-500/10', border: 'border-pink-500/30' },
-    orange: { icon: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/30' },
+    pink: { icon: 'text-slate-400', bg: 'bg-slate-500/10', border: 'border-slate-500/30' },
+    orange: { icon: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/30' },
     cyan: { icon: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30' },
     indigo: { icon: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30' },
-    yellow: { icon: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30' },
+    yellow: { icon: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
     slate: { icon: 'text-slate-400', bg: 'bg-slate-500/10', border: 'border-slate-500/30' },
     red: { icon: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/30' },
   }
@@ -909,7 +911,7 @@ function FeaturesSection() {
           transition={{ duration: isMobile ? 0.3 : 0.6 }}
           className="text-center space-y-4 mb-16"
         >
-          <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20">
+          <Badge className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20">
             Características Únicas
           </Badge>
           <h2 className="text-4xl sm:text-5xl font-black">
@@ -1008,7 +1010,7 @@ function SeniatShowcaseSection() {
           transition={{ duration: isMobile ? 0.3 : 0.6 }}
           className="text-center space-y-4 mb-16"
         >
-          <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 text-base px-4 py-2">
+          <Badge className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 text-base px-4 py-2">
             <Shield className="w-4 h-4 mr-2 inline" />
             Único en Venezuela
           </Badge>
@@ -1043,7 +1045,7 @@ function SeniatShowcaseSection() {
                   <div className="text-right">
                     <p className="font-bold text-lg">FACTURA FISCAL</p>
                     <p className="text-sm">Nro: FAC-2025-001234</p>
-                    <p className="text-sm text-purple-600 font-semibold">
+                    <p className="text-sm text-indigo-600 font-semibold">
                       Fiscal: VE20251231-567890
                     </p>
                   </div>
@@ -1102,7 +1104,7 @@ function SeniatShowcaseSection() {
                     <div className="absolute inset-0 bg-white/10 backdrop-blur-sm rounded" />
                   </div>
                   <p className="text-xs text-center text-slate-600">Código QR Fiscal</p>
-                  <p className="text-xs text-center text-purple-600 font-mono mt-1">
+                  <p className="text-xs text-center text-indigo-600 font-mono mt-1">
                     Control: A3F5K9X1Z2
                   </p>
                 </div>
@@ -1119,8 +1121,8 @@ function SeniatShowcaseSection() {
           >
             {/* Stats destacados */}
             <div className="grid grid-cols-3 gap-4">
-              <Card className="bg-purple-500/10 border-purple-500/30 text-center p-4">
-                <div className="text-3xl font-black text-purple-400">85%</div>
+              <Card className="bg-indigo-500/10 border-indigo-500/30 text-center p-4">
+                <div className="text-3xl font-black text-indigo-400">85%</div>
                 <div className="text-xs text-slate-400 mt-1">Cumplimiento SENIAT</div>
               </Card>
               <Card className="bg-emerald-500/10 border-emerald-500/30 text-center p-4">
@@ -1225,10 +1227,10 @@ function TimelineStep({
   return (
     <div className="flex gap-4">
       <div className="flex flex-col items-center">
-        <div className="w-8 h-8 rounded-full bg-purple-500/20 border-2 border-purple-500 flex items-center justify-center text-purple-400 font-bold text-sm flex-shrink-0">
+        <div className="w-8 h-8 rounded-full bg-indigo-500/20 border-2 border-indigo-500 flex items-center justify-center text-indigo-400 font-bold text-sm flex-shrink-0">
           {number}
         </div>
-        {!isLast && <div className="w-0.5 h-full bg-purple-500/20 my-1" />}
+        {!isLast && <div className="w-0.5 h-full bg-indigo-500/20 my-1" />}
       </div>
       <div className="flex-1 pb-4">
         <p className="font-semibold text-white mb-1">{title}</p>
@@ -1248,9 +1250,9 @@ function FeatureCheckItem({
   description: string
 }) {
   return (
-    <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-800/30 border border-slate-700/50 hover:border-purple-500/30 transition-colors group">
-      <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-purple-500/20 transition-colors">
-        <Icon className="w-5 h-5 text-purple-400" />
+    <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-800/30 border border-slate-700/50 hover:border-indigo-500/30 transition-colors group">
+      <div className="w-10 h-10 bg-indigo-500/10 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-500/20 transition-colors">
+        <Icon className="w-5 h-5 text-indigo-400" />
       </div>
       <div className="flex-1">
         <p className="font-semibold text-white mb-0.5">{text}</p>
@@ -1296,7 +1298,7 @@ function ComparisonSection() {
 
   const renderIcon = (status: boolean | 'partial') => {
     if (status === true) return <Check className="w-5 h-5 text-emerald-400" />
-    if (status === 'partial') return <Minus className="w-5 h-5 text-yellow-400" />
+    if (status === 'partial') return <Minus className="w-5 h-5 text-amber-400" />
     return <X className="w-5 h-5 text-red-400/50" />
   }
 
@@ -1338,9 +1340,11 @@ function ComparisonSection() {
                     <th className="text-left p-4 text-slate-400 font-medium">Característica</th>
                     <th className="p-4 text-center">
                       <div className="flex flex-col items-center gap-2">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
-                          <Sparkles className="w-6 h-6 text-white" />
-                        </div>
+                        <img 
+                          src="/favicon.svg" 
+                          alt="LA CAJA Logo" 
+                          className="w-10 h-10 rounded-lg border-2 border-slate-700/50 shadow-lg shadow-blue-500/20"
+                        />
                         <span className="text-white font-bold">LA CAJA</span>
                       </div>
                     </th>
@@ -1394,7 +1398,7 @@ function ComparisonSection() {
               <span>Completo</span>
             </div>
             <div className="flex items-center gap-2">
-              <Minus className="w-4 h-4 text-yellow-400" />
+              <Minus className="w-4 h-4 text-amber-400" />
               <span>Parcial</span>
             </div>
             <div className="flex items-center gap-2">
@@ -1561,7 +1565,7 @@ function PricingSection() {
     yellow: {
       gradient: 'from-yellow-500 to-yellow-600',
       ring: 'ring-yellow-500/50',
-      badge: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
+      badge: 'bg-amber-500/10 text-amber-400 border-amber-500/30'
     },
   }
 
@@ -1644,7 +1648,7 @@ function PricingSection() {
               >
                 {plan.popular && (
                   <div className="absolute -top-4 left-0 right-0 flex justify-center">
-                    <Badge className="bg-purple-500 text-white border-0 shadow-lg">
+                    <Badge className="bg-indigo-500 text-white border-0 shadow-lg">
                       Más Popular
                     </Badge>
                   </div>
@@ -1829,7 +1833,7 @@ function TestimonialsSection() {
           transition={{ duration: isMobile ? 0.3 : 0.6 }}
           className="text-center space-y-4 mb-16"
         >
-          <Badge className="bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+          <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20">
             Casos de Éxito
           </Badge>
           <h2 className="text-4xl sm:text-5xl font-black">
@@ -1851,17 +1855,17 @@ function TestimonialsSection() {
                 animate={shouldAnimate ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
                 transition={{ duration: isMobile ? 0.3 : 0.5, delay: isMobile ? 0 : index * 0.1 }}
               >
-                <Card className="bg-slate-800/50 border-slate-700 hover:border-yellow-500/30 transition-all duration-300 h-full group">
+                <Card className="bg-slate-800/50 border-slate-700 hover:border-amber-500/30 transition-all duration-300 h-full group">
                 <CardHeader>
                   {/* Quote icon */}
-                  <div className="w-12 h-12 bg-yellow-500/10 rounded-full flex items-center justify-center mb-4 group-hover:bg-yellow-500/20 transition-colors">
-                    <Quote className="w-6 h-6 text-yellow-400" />
+                  <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 group-hover:bg-amber-500/20 transition-colors">
+                    <Quote className="w-6 h-6 text-amber-400" />
                   </div>
 
                   {/* Stars */}
                   <div className="flex gap-1 mb-4">
                     {[...Array(testimonial.rating)].map((_, i) => (
-                      <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                      <Star key={i} className="w-5 h-5 fill-amber-400 text-amber-400" />
                     ))}
                   </div>
 
@@ -2131,8 +2135,8 @@ function FinalCTASection() {
                   <p className="text-sm font-semibold text-white">Gratis para siempre</p>
                 </div>
                 <div className="flex flex-col items-center gap-2">
-                  <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center">
-                    <CheckCircle2 className="w-6 h-6 text-purple-400" />
+                  <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center">
+                    <CheckCircle2 className="w-6 h-6 text-indigo-400" />
                   </div>
                   <p className="text-sm font-semibold text-white">Sin tarjeta de crédito</p>
                 </div>
@@ -2169,7 +2173,7 @@ function FinalCTASection() {
               <p className="text-sm text-slate-400 pt-4">
                 Más de <span className="font-bold text-emerald-400">10,000 ventas</span> procesadas hoy •{' '}
                 <span className="font-bold text-blue-400">99.9% uptime</span> •{' '}
-                <span className="font-bold text-purple-400">100% offline</span>
+                <span className="font-bold text-indigo-400">100% offline</span>
               </p>
             </CardContent>
           </Card>
@@ -2220,10 +2224,12 @@ function Footer() {
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/50">
-                <Sparkles className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl font-black bg-gradient-to-r from-blue-500 via-indigo-500 to-slate-300 bg-clip-text text-transparent">
+              <img 
+                src="/favicon.svg" 
+                alt="LA CAJA Logo" 
+                className="w-10 h-10 rounded-lg border-2 border-slate-700/50 shadow-lg shadow-blue-500/20"
+              />
+              <span className="text-xl font-black text-white">
                 LA CAJA
               </span>
             </div>
@@ -2338,7 +2344,7 @@ function Footer() {
 
         {/* Made in Venezuela badge */}
         <div className="mt-8 text-center">
-          <Badge className="bg-yellow-500/10 text-yellow-400 border-yellow-500/30">
+          <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30">
             🇻🇪 Hecho con ❤️ en Venezuela
           </Badge>
         </div>
