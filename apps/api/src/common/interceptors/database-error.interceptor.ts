@@ -65,7 +65,7 @@ export class DatabaseErrorInterceptor implements NestInterceptor {
             message.includes('unique constraint') ||
             message.includes('duplicate key') ||
             message.includes('UNIQUE constraint') ||
-            error.code === '23505' // PostgreSQL unique violation code
+            (error as any).code === '23505' // PostgreSQL unique violation code
           ) {
             this.logger.warn(
               `Violación de constraint único: ${message}`,
@@ -90,7 +90,7 @@ export class DatabaseErrorInterceptor implements NestInterceptor {
           if (
             message.includes('foreign key constraint') ||
             message.includes('FOREIGN KEY constraint') ||
-            error.code === '23503' // PostgreSQL foreign key violation code
+            (error as any).code === '23503' // PostgreSQL foreign key violation code
           ) {
             this.logger.error(
               `Violación de foreign key: ${message}`,
@@ -109,7 +109,7 @@ export class DatabaseErrorInterceptor implements NestInterceptor {
           if (
             message.includes('not null constraint') ||
             message.includes('NOT NULL constraint') ||
-            error.code === '23502' // PostgreSQL not null violation code
+            (error as any).code === '23502' // PostgreSQL not null violation code
           ) {
             this.logger.error(
               `Violación de not null: ${message}`,
