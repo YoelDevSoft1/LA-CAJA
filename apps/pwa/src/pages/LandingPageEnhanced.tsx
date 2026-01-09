@@ -905,8 +905,8 @@ function FeaturesSection() {
       <div className="container mx-auto max-w-7xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-          transition={{ duration: 0.6 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+          transition={{ duration: isMobile ? 0.3 : 0.6 }}
           className="text-center space-y-4 mb-16"
         >
           <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20">
@@ -1004,8 +1004,8 @@ function SeniatShowcaseSection() {
       <div className="container mx-auto max-w-6xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-          transition={{ duration: 0.6 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+          transition={{ duration: isMobile ? 0.3 : 0.6 }}
           className="text-center space-y-4 mb-16"
         >
           <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 text-base px-4 py-2">
@@ -1029,8 +1029,8 @@ function SeniatShowcaseSection() {
           {/* Left: Mockup factura fiscal */}
           <motion.div
             initial={{ opacity: 0, x: -40 }}
-            animate={isInView ? { opacity: 1, x: 0 } : { opacity: 0, x: -40 }}
-            transition={{ duration: 0.8 }}
+            animate={isInView ? { opacity: 1, x: 0 } : { opacity: isMobile ? 1 : 0, x: isMobile ? 0 : -40 }}
+            transition={{ duration: isMobile ? 0.3 : 0.8 }}
           >
             <Card className="bg-white text-slate-900 shadow-2xl">
               <CardHeader className="border-b-2 border-slate-800">
@@ -1113,8 +1113,8 @@ function SeniatShowcaseSection() {
           {/* Right: Features + Timeline */}
           <motion.div
             initial={{ opacity: 0, x: 40 }}
-            animate={isInView ? { opacity: 1, x: 0 } : { opacity: 0, x: 40 }}
-            transition={{ duration: 0.8 }}
+            animate={isInView ? { opacity: 1, x: 0 } : { opacity: isMobile ? 1 : 0, x: isMobile ? 0 : 40 }}
+            transition={{ duration: isMobile ? 0.3 : 0.8 }}
             className="space-y-6"
           >
             {/* Stats destacados */}
@@ -1305,8 +1305,8 @@ function ComparisonSection() {
       <div className="container mx-auto max-w-6xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-          transition={{ duration: 0.6 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+          transition={{ duration: isMobile ? 0.3 : 0.6 }}
           className="text-center space-y-4 mb-16"
         >
           <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">
@@ -1325,8 +1325,8 @@ function ComparisonSection() {
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+          transition={{ duration: isMobile ? 0.3 : 0.6, delay: isMobile ? 0 : 0.2 }}
           className="overflow-x-auto"
         >
           <Card className="bg-slate-800/50 border-slate-700">
@@ -1353,8 +1353,8 @@ function ComparisonSection() {
                     <motion.tr
                       key={feature.name}
                       initial={{ opacity: 0, x: -20 }}
-                      animate={isInView ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
-                      transition={{ duration: 0.4, delay: 0.1 * index }}
+                      animate={isInView ? { opacity: 1, x: 0 } : { opacity: isMobile ? 1 : 0, x: isMobile ? 0 : -20 }}
+                      transition={{ duration: isMobile ? 0.2 : 0.4, delay: isMobile ? 0 : 0.1 * index }}
                       className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors"
                     >
                       <td className="p-4 text-slate-300 align-middle">{feature.name}</td>
@@ -1436,8 +1436,8 @@ function StatsSection() {
       <div className="container mx-auto max-w-6xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-          transition={{ duration: 0.6 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+          transition={{ duration: isMobile ? 0.3 : 0.6 }}
           className="text-center space-y-4 mb-16"
         >
           <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
@@ -1568,8 +1568,8 @@ function PricingSection() {
       <div className="container mx-auto max-w-7xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-          transition={{ duration: 0.6 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+          transition={{ duration: isMobile ? 0.3 : 0.6 }}
           className="text-center space-y-4 mb-12"
         >
           <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">
@@ -1636,8 +1636,8 @@ function PricingSection() {
               <motion.div
                 key={plan.name}
                 initial={{ opacity: 0, y: 20 }}
-                animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-                transition={{ duration: 0.5, delay: 0.1 * index }}
+                animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+                transition={{ duration: isMobile ? 0.3 : 0.5, delay: isMobile ? 0 : 0.1 * index }}
                 className="relative"
               >
                 {plan.popular && (
@@ -1726,11 +1726,11 @@ function PricingSection() {
         {/* ROI Calculator teaser */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-          transition={{ duration: 0.6, delay: 0.6 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+          transition={{ duration: isMobile ? 0.3 : 0.6, delay: isMobile ? 0 : 0.6 }}
           className="mt-16 text-center"
         >
-          <Card className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 border-blue-500/30 max-w-3xl mx-auto">
+          <Card className="bg-gradient-to-br from-blue-900/20 to-indigo-900/20 border-blue-500/30 max-w-3xl mx-auto">
             <CardContent className="p-8">
               <div className="flex items-center justify-center gap-3 mb-4">
                 <BarChart3 className="w-6 h-6 text-blue-400" />
@@ -1810,8 +1810,8 @@ function TestimonialsSection() {
       <div className="container mx-auto max-w-6xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-          transition={{ duration: 0.6 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+          transition={{ duration: isMobile ? 0.3 : 0.6 }}
           className="text-center space-y-4 mb-16"
         >
           <Badge className="bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
@@ -1830,13 +1830,13 @@ function TestimonialsSection() {
 
         <div className="grid md:grid-cols-3 gap-8">
           {testimonials.map((testimonial, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 20 }}
-              animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-            >
-              <Card className="bg-slate-800/50 border-slate-700 hover:border-yellow-500/30 transition-all duration-300 h-full group">
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 20 }}
+                animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+                transition={{ duration: isMobile ? 0.3 : 0.5, delay: isMobile ? 0 : index * 0.1 }}
+              >
+                <Card className="bg-slate-800/50 border-slate-700 hover:border-yellow-500/30 transition-all duration-300 h-full group">
                 <CardHeader>
                   {/* Quote icon */}
                   <div className="w-12 h-12 bg-yellow-500/10 rounded-full flex items-center justify-center mb-4 group-hover:bg-yellow-500/20 transition-colors">
@@ -1903,7 +1903,13 @@ function TestimonialsSection() {
 // ========================================
 function FAQSection() {
   const sectionRef = useRef(null)
-  const isInView = useInView(sectionRef, { once: true, amount: 0.3 })
+  const isMobile = useMobileDetection()
+  // En mobile, activar más temprano con amount más bajo
+  const isInView = useInView(sectionRef, { 
+    once: true, 
+    amount: isMobile ? 0.05 : 0.3,
+    margin: isMobile ? '-150px' : '0px'
+  })
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   const faqs = [
@@ -1946,8 +1952,8 @@ function FAQSection() {
       <div className="container mx-auto max-w-4xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-          transition={{ duration: 0.6 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+          transition={{ duration: isMobile ? 0.3 : 0.6 }}
           className="text-center space-y-4 mb-16"
         >
           <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">
@@ -1971,8 +1977,8 @@ function FAQSection() {
               <motion.div
                 key={index}
                 initial={{ opacity: 0, y: 20 }}
-                animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-                transition={{ duration: 0.5, delay: index * 0.05 }}
+                animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+                transition={{ duration: isMobile ? 0.3 : 0.5, delay: isMobile ? 0 : index * 0.05 }}
               >
                 <Card
                   className={cn(
