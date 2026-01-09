@@ -10,6 +10,7 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { NotificationsService } from './notifications.service';
@@ -108,23 +109,14 @@ export class NotificationsController {
    */
   @Post('push/subscribe')
   async subscribePush(@Request() req: any, @Body() dto: SubscribePushDto) {
-    try {
-      const storeId = req.user.store_id;
-      const userId = req.user.user_id;
+    const storeId = req.user.store_id;
+    const userId = req.user.user_id;
 
-      if (!storeId || !userId) {
-        throw new Error('store_id o user_id faltante en el token');
-      }
-
-      return await this.notificationsService.subscribePush(
-        storeId,
-        userId,
-        dto,
-      );
-    } catch (error) {
-      // El error será manejado por el interceptor global o NestJS exception filter
-      throw error;
+    if (!storeId || !userId) {
+      throw new BadRequestException('store_id o user_id faltante en el token');
     }
+
+    return await this.notificationsService.subscribePush(storeId, userId, dto);
   }
 
   /**

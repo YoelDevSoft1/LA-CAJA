@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan, QueryFailedError } from 'typeorm';
 import { Notification } from '../database/entities/notification.entity';
@@ -281,23 +286,54 @@ export class NotificationsService {
           delivered_at: new Date(),
         });
         await this.deliveryRepository.save(delivery);
+
+        return { success: true, subscriptionId: subscription.id };
       } catch (error) {
         this.logger.error(
           `Error enviando push a suscripción ${subscription.id}`,
           error instanceof Error ? error.stack : String(error),
         );
 
-        // Si la suscripción es inválida, desactivarla
-        if (error instanceof Error && error.message.includes('410')) {
+        // Si la suscripción es inválida (410 Gone), desactivarla
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('410') || errorMessage.includes('Gone')) {
           subscription.is_active = false;
           await this.subscriptionRepository.save(subscription);
+          this.logger.warn(
+            `Suscripción ${subscription.id} desactivada por ser inválida`,
+          );
         }
 
-        throw error;
+        // Crear delivery record con estado failed
+        const delivery = this.deliveryRepository.create({
+          id: randomUUID(),
+          notification_id: notification.id,
+          subscription_id: subscription.id,
+          channel: 'push',
+          status: 'failed',
+          error_message: errorMessage,
+        });
+        await this.deliveryRepository.save(delivery);
+
+        return { success: false, subscriptionId: subscription.id, error };
       }
     });
 
-    await Promise.allSettled(promises);
+    const results = await Promise.allSettled(promises);
+    const successful = results.filter(
+      (r) => r.status === 'fulfilled' && r.value?.success,
+    ).length;
+    const failed = results.length - successful;
+
+    if (successful > 0) {
+      this.logger.log(
+        `Push notifications enviadas: ${successful} exitosas, ${failed} fallidas`,
+      );
+    } else if (failed > 0) {
+      this.logger.warn(
+        `Todas las push notifications fallaron (${failed} intentos)`,
+      );
+    }
   }
 
   /**
@@ -451,6 +487,27 @@ export class NotificationsService {
     dto: SubscribePushDto,
   ): Promise<NotificationSubscription> {
     try {
+      // Validar campos requeridos explícitamente antes de cualquier operación
+      if (!dto || typeof dto !== 'object') {
+        throw new BadRequestException('DTO inválido o no proporcionado');
+      }
+
+      if (!dto.endpoint || typeof dto.endpoint !== 'string' || !dto.endpoint.trim()) {
+        throw new BadRequestException('endpoint es requerido y debe ser una cadena no vacía');
+      }
+
+      if (!dto.p256dh_key || typeof dto.p256dh_key !== 'string' || !dto.p256dh_key.trim()) {
+        throw new BadRequestException('p256dh_key es requerido y debe ser una cadena no vacía');
+      }
+
+      if (!dto.auth_key || typeof dto.auth_key !== 'string' || !dto.auth_key.trim()) {
+        throw new BadRequestException('auth_key es requerido y debe ser una cadena no vacía');
+      }
+
+      if (!dto.device_id || typeof dto.device_id !== 'string' || !dto.device_id.trim()) {
+        throw new BadRequestException('device_id es requerido y debe ser una cadena no vacía');
+      }
+
       this.logger.debug(
         `Suscribiendo push para store: ${storeId}, user: ${userId}, device: ${dto.device_id}`,
       );
