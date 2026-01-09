@@ -69,7 +69,10 @@ export { FiscalInvoiceItem } from './fiscal-invoice-item.entity';
 export { FiscalConfig } from './fiscal-config.entity';
 
 // Exchange entities
-export { ExchangeRate } from './exchange-rate.entity';
+export { ExchangeRate, ExchangeRateType } from './exchange-rate.entity';
+export { StoreRateConfig } from './store-rate-config.entity';
+export { SalePayment, PaymentMethod, PaymentStatus } from './sale-payment.entity';
+export { SaleChange, ChangeMethod, ExcessAction, ChangeBreakdown } from './sale-change.entity';
 
 // ML & Analytics entities
 export { DemandPrediction } from './demand-prediction.entity';
@@ -139,6 +142,9 @@ import { Customer } from './customer.entity';
 import { Debt } from './debt.entity';
 import { DebtPayment } from './debt-payment.entity';
 import { ExchangeRate } from './exchange-rate.entity';
+import { StoreRateConfig } from './store-rate-config.entity';
+import { SalePayment } from './sale-payment.entity';
+import { SaleChange } from './sale-change.entity';
 import { Warehouse } from './warehouse.entity';
 import { WarehouseStock } from './warehouse-stock.entity';
 import { Transfer } from './transfer.entity';
@@ -220,6 +226,9 @@ export const ALL_ENTITIES = [
   Debt,
   DebtPayment,
   ExchangeRate,
+  StoreRateConfig,
+  SalePayment,
+  SaleChange,
   Warehouse,
   WarehouseStock,
   Transfer,

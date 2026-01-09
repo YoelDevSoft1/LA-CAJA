@@ -12,6 +12,7 @@ import { Store } from './store.entity';
 import { Profile } from './profile.entity';
 
 export type ExchangeRateSource = 'api' | 'manual';
+export type ExchangeRateType = 'BCV' | 'PARALLEL' | 'CASH' | 'ZELLE';
 
 @Entity('exchange_rates')
 @Index(['store_id'])
@@ -19,6 +20,7 @@ export type ExchangeRateSource = 'api' | 'manual';
   where: 'is_active = true',
 })
 @Index(['store_id', 'effective_from'], { where: 'is_active = true' })
+@Index(['store_id', 'rate_type', 'is_active'], { where: 'is_active = true' })
 export class ExchangeRate {
   @PrimaryColumn('uuid')
   id: string;
@@ -39,6 +41,16 @@ export class ExchangeRate {
     default: 'manual',
   })
   source: ExchangeRateSource;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: 'BCV',
+  })
+  rate_type: ExchangeRateType;
+
+  @Column({ type: 'boolean', default: false })
+  is_preferred: boolean;
 
   @Column({ type: 'timestamptz', default: () => 'NOW()' })
   effective_from: Date;

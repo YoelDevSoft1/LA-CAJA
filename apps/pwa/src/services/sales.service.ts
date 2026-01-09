@@ -24,6 +24,18 @@ export interface CartItemDto {
   variant_id?: string | null
 }
 
+// Pago individual en sistema de pagos divididos
+export interface SplitPaymentDto {
+  method: string
+  amount_usd?: number
+  amount_bs?: number
+  reference?: string
+  bank_code?: string
+  phone?: string
+  card_last_4?: string
+  note?: string
+}
+
 export interface CreateSaleRequest {
   items: CartItemDto[]
   exchange_rate: number
@@ -36,6 +48,7 @@ export interface CreateSaleRequest {
     transfer_bs?: number
     other_bs?: number
   }
+  split_payments?: SplitPaymentDto[] // Pagos divididos (sistema multi-tasa)
   cash_payment?: {
     received_usd: number // Monto recibido en USD físico
     change_bs?: number // Cambio dado en Bs (si aplica)

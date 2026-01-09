@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, CreditCard, Wallet, Banknote, User, Search, Check, Calculator } from 'lucide-react'
+import { X, CreditCard, Wallet, Banknote, User, Search, Check, Calculator, Split } from 'lucide-react'
 import { CartItem } from '@/stores/cart.store'
 import { exchangeService } from '@/services/exchange.service'
 import { customersService } from '@/services/customers.service'
@@ -24,6 +24,20 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import SerialSelector from '@/components/serials/SerialSelector'
+import SplitPaymentManager from './SplitPaymentManager'
+import { SplitPaymentItem, PaymentMethod } from '@/types/split-payment.types'
+
+// Tipo de pago dividido para el backend
+interface SplitPaymentForBackend {
+  method: PaymentMethod
+  amount_usd?: number
+  amount_bs?: number
+  reference?: string
+  bank_code?: string
+  phone?: string
+  card_last_4?: string
+  note?: string
+}
 
 interface CheckoutModalProps {
   isOpen: boolean
@@ -31,7 +45,7 @@ interface CheckoutModalProps {
   items: CartItem[]
   total: { bs: number; usd: number }
   onConfirm: (data: {
-    payment_method: 'CASH_BS' | 'CASH_USD' | 'PAGO_MOVIL' | 'TRANSFER' | 'OTHER' | 'FIAO'
+    payment_method: 'CASH_BS' | 'CASH_USD' | 'PAGO_MOVIL' | 'TRANSFER' | 'OTHER' | 'FIAO' | 'SPLIT'
     currency: 'BS' | 'USD' | 'MIXED'
     exchange_rate: number
     cash_payment?: {
@@ -42,6 +56,7 @@ interface CheckoutModalProps {
       received_bs: number
       change_bs?: number
     }
+    split_payments?: SplitPaymentForBackend[]
     customer_id?: string
     customer_name?: string
     customer_document_id?: string
@@ -65,6 +80,8 @@ export default function CheckoutModal({
   isLoading = false,
 }: CheckoutModalProps) {
   const [selectedMethod, setSelectedMethod] = useState<'CASH_BS' | 'CASH_USD' | 'PAGO_MOVIL' | 'TRANSFER' | 'OTHER' | 'FIAO'>('CASH_USD')
+  const [paymentMode, setPaymentMode] = useState<'SINGLE' | 'SPLIT'>('SINGLE')
+  const [splitPayments, setSplitPayments] = useState<SplitPaymentItem[]>([])
   const [exchangeRate, setExchangeRate] = useState<number>(36) // Tasa de cambio por defecto
   const [customerName, setCustomerName] = useState<string>('')
   const [customerDocumentId, setCustomerDocumentId] = useState<string>('')
@@ -102,6 +119,17 @@ export default function CheckoutModal({
     enabled: isOpen, // Solo obtener cuando el modal está abierto
     refetchOnWindowFocus: false,
   })
+
+  // Obtener todas las tasas disponibles (multi-tasa)
+  // Se puede usar en el futuro para mostrar múltiples tasas en la UI
+  const { data: _allRatesData } = useQuery({
+    queryKey: ['exchange', 'rates'],
+    queryFn: () => exchangeService.getAllRates(),
+    staleTime: 1000 * 60 * 60 * 2, // 2 horas
+    enabled: isOpen,
+    refetchOnWindowFocus: false,
+  })
+  void _allRatesData // Usado para prefetch de tasas multi-moneda
 
   // Obtener configuraciones de métodos de pago para validar topes
   const { data: paymentConfigs } = useQuery({
@@ -238,6 +266,9 @@ export default function CheckoutModal({
       setSelectedWarehouseId(null)
       setSelectedSerials({})
       setSerialSelectorItem(null)
+      // Limpiar estados de pagos divididos
+      setPaymentMode('SINGLE')
+      setSplitPayments([])
     }
   }, [isOpen])
 
@@ -344,6 +375,40 @@ export default function CheckoutModal({
     ? Math.round((changeBsRaw - roundedChangeBs) * 100) / 100
     : 0
 
+  // ============================================
+  // CÁLCULOS PARA PAGOS DIVIDIDOS
+  // ============================================
+
+  // Total pagado en USD por pagos divididos
+  const splitTotalPaidUsd = splitPayments.reduce((sum, p) => sum + p.amount_usd, 0)
+  const splitTotalPaidBs = splitPayments.reduce((sum, p) => sum + p.amount_bs, 0)
+
+  // Restante por pagar
+  const splitRemainingUsd = Math.max(0, Math.round((total.usd - splitTotalPaidUsd) * 100) / 100)
+  const splitRemainingBs = Math.max(0, Math.round((total.usd * exchangeRate - splitTotalPaidBs) * 100) / 100)
+
+  // ¿Está completo el pago dividido?
+  const splitIsComplete = splitRemainingUsd < 0.01
+
+  // Handlers para pagos divididos
+  const handleAddSplitPayment = (payment: Omit<SplitPaymentItem, 'id'>) => {
+    const newPayment: SplitPaymentItem = {
+      ...payment,
+      id: crypto.randomUUID(),
+    }
+    setSplitPayments([...splitPayments, newPayment])
+  }
+
+  const handleRemoveSplitPayment = (paymentId: string) => {
+    setSplitPayments(splitPayments.filter((p) => p.id !== paymentId))
+  }
+
+  const handleUpdateSplitPayment = (paymentId: string, updates: Partial<Omit<SplitPaymentItem, 'id'>>) => {
+    setSplitPayments(
+      splitPayments.map((p) => (p.id === paymentId ? { ...p, ...updates } : p))
+    )
+  }
+
   if (!isOpen) return null
 
   const handleConfirm = () => {
@@ -354,13 +419,25 @@ export default function CheckoutModal({
     }
 
     // Validación FIAO: requiere información del cliente
-    if (selectedMethod === 'FIAO' && !customerName.trim() && !customerDocumentId.trim()) {
+    if (selectedMethod === 'FIAO' && paymentMode === 'SINGLE' && !customerName.trim() && !customerDocumentId.trim()) {
       setError('Para ventas FIAO debes ingresar al menos el nombre y la cédula del cliente')
       return
     }
 
-    // Validación CASH_USD: verificar que el monto recibido sea suficiente
-    if (selectedMethod === 'CASH_USD' && receivedUsd < total.usd) {
+    // Validación para modo SPLIT
+    if (paymentMode === 'SPLIT') {
+      if (splitPayments.length === 0) {
+        setError('Debes agregar al menos un método de pago')
+        return
+      }
+      if (!splitIsComplete) {
+        setError(`Faltan $${splitRemainingUsd.toFixed(2)} USD por pagar. Agrega más pagos.`)
+        return
+      }
+    }
+
+    // Validación CASH_USD: verificar que el monto recibido sea suficiente (solo en modo SINGLE)
+    if (paymentMode === 'SINGLE' && selectedMethod === 'CASH_USD' && receivedUsd < total.usd) {
       setError(`El monto recibido ($${receivedUsd.toFixed(2)}) debe ser mayor o igual al total ($${total.usd.toFixed(2)})`)
       return
     }
@@ -493,12 +570,32 @@ export default function CheckoutModal({
     // Por ahora, omitimos la verificación automática y permitimos que el usuario seleccione seriales opcionalmente
     // En una implementación completa, verificaríamos con la API si el producto tiene seriales disponibles
 
+    // Preparar datos para pagos divididos
+    let splitPaymentsForBackend: SplitPaymentForBackend[] | undefined = undefined
+    if (paymentMode === 'SPLIT' && splitPayments.length > 0) {
+      splitPaymentsForBackend = splitPayments.map((p) => ({
+        method: p.method,
+        amount_usd: p.amount_usd,
+        amount_bs: p.amount_bs,
+        reference: p.reference,
+        bank_code: p.bank,
+        phone: p.phone,
+        card_last_4: p.card_last_4,
+        note: p.notes,
+      }))
+    }
+
+    // Determinar método de pago final
+    const effectivePaymentMethod = paymentMode === 'SPLIT' ? 'SPLIT' : finalPaymentMethod
+    const effectiveCurrency = paymentMode === 'SPLIT' ? 'MIXED' : currency
+
     onConfirm({
-      payment_method: finalPaymentMethod,
-      currency,
+      payment_method: effectivePaymentMethod,
+      currency: effectiveCurrency,
       exchange_rate: exchangeRate,
-      cash_payment: cashPayment,
-      cash_payment_bs: cashPaymentBs,
+      cash_payment: paymentMode === 'SINGLE' ? cashPayment : undefined,
+      cash_payment_bs: paymentMode === 'SINGLE' ? cashPaymentBs : undefined,
+      split_payments: splitPaymentsForBackend,
       customer_id: selectedCustomerId || undefined,
       customer_name: customerName.trim() || undefined,
       customer_document_id: customerDocumentId.trim() || undefined,
@@ -643,55 +740,128 @@ export default function CheckoutModal({
             </CardContent>
           </Card>
 
-          {/* Método de pago */}
+          {/* Selector de Modo de Pago: SINGLE vs SPLIT */}
           <div>
             <label className="block text-sm font-semibold text-foreground mb-3">
-              Método de pago
+              Modo de pago
             </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {methods.map((method) => {
-                const Icon = method.icon
-                const isSelected = selectedMethod === method.id
-                return (
-                  <button
-                    key={method.id}
-                    onClick={() => {
-                      setSelectedMethod(method.id as any)
-                      setError('')
-                    }}
-                    disabled={(() => {
-                      const config = paymentConfigs?.find((c) => c.method === method.id)
-                      return config ? !config.enabled : false
-                    })()}
-                    className={cn(
-                      "p-3 border rounded-lg transition-all",
-                      isSelected
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border hover:border-primary/50',
-                      (() => {
-                        const config = paymentConfigs?.find((c) => c.method === method.id)
-                        return config && !config.enabled ? 'opacity-50 cursor-not-allowed' : ''
-                      })()
-                    )}
-                  >
-                    <Icon className={cn(
-                      "w-5 h-5 mx-auto mb-2",
-                      isSelected ? method.color : 'text-muted-foreground'
-                    )} />
-                    <p className={cn(
-                      "text-xs font-medium",
-                      isSelected ? 'text-primary' : 'text-foreground'
-                    )}>
-                      {method.label}
-                    </p>
-                  </button>
-                )
-              })}
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button
+                onClick={() => {
+                  setPaymentMode('SINGLE')
+                  setError('')
+                }}
+                className={cn(
+                  "p-3 border rounded-lg transition-all flex flex-col items-center",
+                  paymentMode === 'SINGLE'
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border hover:border-primary/50'
+                )}
+              >
+                <CreditCard className={cn(
+                  "w-5 h-5 mb-2",
+                  paymentMode === 'SINGLE' ? 'text-primary' : 'text-muted-foreground'
+                )} />
+                <p className={cn(
+                  "text-xs font-medium",
+                  paymentMode === 'SINGLE' ? 'text-primary' : 'text-foreground'
+                )}>
+                  Pago Único
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Un solo método</p>
+              </button>
+              <button
+                onClick={() => {
+                  setPaymentMode('SPLIT')
+                  setError('')
+                }}
+                className={cn(
+                  "p-3 border rounded-lg transition-all flex flex-col items-center",
+                  paymentMode === 'SPLIT'
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border hover:border-primary/50'
+                )}
+              >
+                <Split className={cn(
+                  "w-5 h-5 mb-2",
+                  paymentMode === 'SPLIT' ? 'text-primary' : 'text-muted-foreground'
+                )} />
+                <p className={cn(
+                  "text-xs font-medium",
+                  paymentMode === 'SPLIT' ? 'text-primary' : 'text-foreground'
+                )}>
+                  Pago Dividido
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Múltiples métodos</p>
+              </button>
             </div>
           </div>
 
-          {/* Captura de efectivo USD con cálculo de cambio */}
-          {selectedMethod === 'CASH_USD' && (
+          {/* Método de pago único (modo SINGLE) */}
+          {paymentMode === 'SINGLE' && (
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-3">
+                Método de pago
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {methods.map((method) => {
+                  const Icon = method.icon
+                  const isSelected = selectedMethod === method.id
+                  return (
+                    <button
+                      key={method.id}
+                      onClick={() => {
+                        setSelectedMethod(method.id as any)
+                        setError('')
+                      }}
+                      disabled={(() => {
+                        const config = paymentConfigs?.find((c) => c.method === method.id)
+                        return config ? !config.enabled : false
+                      })()}
+                      className={cn(
+                        "p-3 border rounded-lg transition-all",
+                        isSelected
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/50',
+                        (() => {
+                          const config = paymentConfigs?.find((c) => c.method === method.id)
+                          return config && !config.enabled ? 'opacity-50 cursor-not-allowed' : ''
+                        })()
+                      )}
+                    >
+                      <Icon className={cn(
+                        "w-5 h-5 mx-auto mb-2",
+                        isSelected ? method.color : 'text-muted-foreground'
+                      )} />
+                      <p className={cn(
+                        "text-xs font-medium",
+                        isSelected ? 'text-primary' : 'text-foreground'
+                      )}>
+                        {method.label}
+                      </p>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Gestor de Pagos Divididos (modo SPLIT) */}
+          {paymentMode === 'SPLIT' && (
+            <SplitPaymentManager
+              payments={splitPayments}
+              remainingUsd={splitRemainingUsd}
+              remainingBs={splitRemainingBs}
+              exchangeRate={exchangeRate}
+              isComplete={splitIsComplete}
+              onAddPayment={handleAddSplitPayment}
+              onRemovePayment={handleRemoveSplitPayment}
+              onUpdatePayment={handleUpdateSplitPayment}
+            />
+          )}
+
+          {/* Captura de efectivo USD con cálculo de cambio (solo modo SINGLE) */}
+          {paymentMode === 'SINGLE' && selectedMethod === 'CASH_USD' && (
             <Card className="border border-border bg-success/5">
               <CardContent className="p-4 space-y-4">
               <div className="flex items-center mb-3">
@@ -767,18 +937,18 @@ export default function CheckoutModal({
                         </span>
                       </div>
                       {excessFromUsd > 0 && excessFromUsd <= 5 && (
-                        <Card className="border border-warning/50 bg-warning/5">
+                        <Card className="border border-amber-300 bg-amber-50">
                           <CardContent className="p-2">
-                            <p className="text-xs text-warning-foreground font-medium">
+                            <p className="text-xs text-amber-800 font-medium">
                             💡 Excedente mínimo de {excessFromUsd.toFixed(2)} Bs a nuestro favor. Considera dar un dulce como gesto de cortesía.
                           </p>
                           </CardContent>
                         </Card>
                       )}
-                      <div className="text-xs text-muted-foreground">
-                        <p className="font-medium mb-1 text-foreground">Desglose por denominaciones:</p>
-                        <p className="text-foreground">{changeBreakdownFormattedFromUsd || 'Sin desglose disponible'}</p>
-                        <p className="mt-2">
+                      <div className="text-xs">
+                        <p className="font-medium mb-1 text-slate-700">Desglose por denominaciones:</p>
+                        <p className="text-slate-600">{changeBreakdownFormattedFromUsd || 'Sin desglose disponible'}</p>
+                        <p className="mt-2 text-slate-500">
                           Calculado: ${changeUsd.toFixed(2)} USD × {exchangeRate.toFixed(2)} (tasa BCV) = {changeBsFromUsd.toFixed(2)} Bs
                         </p>
                       </div>
@@ -791,8 +961,8 @@ export default function CheckoutModal({
           </Card>
           )}
 
-          {/* Captura de efectivo Bs con cálculo de cambio */}
-          {selectedMethod === 'CASH_BS' && (
+          {/* Captura de efectivo Bs con cálculo de cambio (solo modo SINGLE) */}
+          {paymentMode === 'SINGLE' && selectedMethod === 'CASH_BS' && (
             <Card className="border border-border bg-success/5">
               <CardContent className="p-4 space-y-4">
               <div className="flex items-center mb-3">
@@ -840,40 +1010,40 @@ export default function CheckoutModal({
                         </span>
                       </div>
                       {excessFromBs > 0 && excessFromBs <= 5 && (
-                        <Card className="border border-warning/50 bg-warning/5">
+                        <Card className="border border-amber-300 bg-amber-50">
                           <CardContent className="p-2">
-                            <p className="text-xs text-warning-foreground font-medium">
+                            <p className="text-xs text-amber-800 font-medium">
                             💡 Excedente mínimo de {excessFromBs.toFixed(2)} Bs a nuestro favor. Considera dar un dulce como gesto de cortesía.
                           </p>
                           </CardContent>
                         </Card>
                       )}
                       {changeBsRaw !== roundedChangeBs && excessFromBs > 5 && (
-                        <div className="text-xs text-warning mb-2">
+                        <div className="text-xs text-amber-600 mb-2">
                           Cambio exacto: {changeBsRaw.toFixed(2)} Bs → Redondeado a: {roundedChangeBs.toFixed(2)} Bs (favorece al POS)
                         </div>
                       )}
-                      <div className="text-xs text-muted-foreground">
-                        <p className="font-medium mb-1 text-foreground">Desglose por denominaciones:</p>
-                        <p className="text-foreground">{changeBsBreakdownFormatted || 'Sin desglose disponible'}</p>
+                      <div className="text-xs">
+                        <p className="font-medium mb-1 text-slate-700">Desglose por denominaciones:</p>
+                        <p className="text-slate-600">{changeBsBreakdownFormatted || 'Sin desglose disponible'}</p>
                       </div>
                     </>
                   ) : (
                     // Cuando el cambio es menor a 5 y se redondea a 0
                     <div>
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-semibold text-foreground">Cambio exacto:</span>
+                        <span className="text-sm font-semibold text-slate-700">Cambio exacto:</span>
                         <span className="text-lg font-bold text-info">
                           {changeBsRaw.toFixed(2)} Bs
                         </span>
                       </div>
-                      <div className="text-xs text-muted-foreground mb-2">
+                      <div className="text-xs text-slate-500 mb-2">
                         No se dará cambio (menor a la menor denominación común)
                       </div>
                       {excessFromBs > 0 && excessFromBs <= 5 && (
-                        <Card className="border border-warning/50 bg-warning/5">
+                        <Card className="border border-amber-300 bg-amber-50">
                           <CardContent className="p-2">
-                            <p className="text-xs text-warning-foreground font-medium">
+                            <p className="text-xs text-amber-800 font-medium">
                             💡 Excedente mínimo de {excessFromBs.toFixed(2)} Bs a nuestro favor. Considera dar un dulce como gesto de cortesía.
                           </p>
                           </CardContent>

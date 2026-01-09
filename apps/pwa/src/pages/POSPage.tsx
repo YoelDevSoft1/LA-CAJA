@@ -367,7 +367,7 @@ export default function POSPage() {
   })
 
   const handleCheckout = (checkoutData: {
-    payment_method: 'CASH_BS' | 'CASH_USD' | 'PAGO_MOVIL' | 'TRANSFER' | 'OTHER' | 'FIAO'
+    payment_method: 'CASH_BS' | 'CASH_USD' | 'PAGO_MOVIL' | 'TRANSFER' | 'OTHER' | 'FIAO' | 'SPLIT'
     currency: 'BS' | 'USD' | 'MIXED'
     exchange_rate: number
     cash_payment?: {
@@ -378,6 +378,16 @@ export default function POSPage() {
       received_bs: number
       change_bs?: number
     }
+    split_payments?: Array<{
+      method: string
+      amount_usd?: number
+      amount_bs?: number
+      reference?: string
+      bank_code?: string
+      phone?: string
+      card_last_4?: string
+      note?: string
+    }>
     customer_id?: string
     customer_name?: string
     customer_document_id?: string
@@ -417,6 +427,7 @@ export default function POSPage() {
       currency: checkoutData.currency,
       payment_method: checkoutData.payment_method,
       cash_payment: checkoutData.cash_payment,
+      split_payments: checkoutData.split_payments, // Pagos divididos (multi-tasa)
       cash_session_id: currentCashSession?.id || undefined, // Asociar con sesión de caja actual
       customer_id: checkoutData.customer_id,
       customer_name: checkoutData.customer_name,

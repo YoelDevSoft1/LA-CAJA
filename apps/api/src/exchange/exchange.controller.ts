@@ -2,42 +2,219 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Query,
   UseGuards,
   Body,
   Request,
+  Param,
 } from '@nestjs/common';
 import { ExchangeService } from './exchange.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SetManualRateDto } from './dto/set-manual-rate.dto';
+import { UpdateRateConfigDto } from './dto/update-rate-config.dto';
+import { SetMultipleRatesDto } from './dto/set-multiple-rates.dto';
+import { ExchangeRateType } from '../database/entities/exchange-rate.entity';
 
 @Controller('exchange')
 @UseGuards(JwtAuthGuard)
 export class ExchangeController {
   constructor(private readonly exchangeService: ExchangeService) {}
 
+  // ============================================
+  // ENDPOINTS MULTI-TASA
+  // ============================================
+
+  /**
+   * Obtiene todas las tasas activas de la tienda
+   */
+  @Get('rates')
+  async getAllRates(@Request() req: any) {
+    const storeId = req.user.store_id;
+    const rates = await this.exchangeService.getAllActiveRates(storeId);
+
+    return {
+      rates,
+      available: rates.bcv !== null,
+    };
+  }
+
+  /**
+   * Obtiene una tasa específica por tipo
+   */
+  @Get('rates/:type')
+  async getRateByType(@Param('type') type: string, @Request() req: any) {
+    const storeId = req.user.store_id;
+    const rateType = type.toUpperCase() as ExchangeRateType;
+
+    if (!['BCV', 'PARALLEL', 'CASH', 'ZELLE'].includes(rateType)) {
+      return {
+        rate: null,
+        available: false,
+        message: 'Tipo de tasa inválido',
+      };
+    }
+
+    const rate = await this.exchangeService.getRateByType(storeId, rateType);
+
+    return {
+      rate,
+      rate_type: rateType,
+      available: rate !== null,
+    };
+  }
+
+  /**
+   * Obtiene la tasa apropiada para un método de pago
+   */
+  @Get('rates/for-method/:method')
+  async getRateForMethod(@Param('method') method: string, @Request() req: any) {
+    const storeId = req.user.store_id;
+    const result = await this.exchangeService.getRateForPaymentMethod(
+      storeId,
+      method.toUpperCase(),
+    );
+
+    if (result) {
+      return {
+        rate: result.rate,
+        rate_type: result.rateType,
+        method: method.toUpperCase(),
+        available: true,
+      };
+    }
+
+    return {
+      rate: null,
+      rate_type: null,
+      method: method.toUpperCase(),
+      available: false,
+    };
+  }
+
+  /**
+   * Establece múltiples tasas a la vez
+   */
+  @Post('rates/bulk')
+  async setMultipleRates(@Body() dto: SetMultipleRatesDto, @Request() req: any) {
+    const storeId = req.user.store_id;
+    const userId = req.user.user_id;
+
+    const results: Array<{
+      id: string;
+      rate: number;
+      rate_type: ExchangeRateType;
+      is_preferred: boolean;
+      effective_from: Date;
+    }> = [];
+
+    for (const rateItem of dto.rates) {
+      const saved = await this.exchangeService.setManualRate(
+        storeId,
+        rateItem.rate,
+        userId,
+        undefined,
+        undefined,
+        rateItem.note,
+        rateItem.rate_type,
+        rateItem.is_preferred ?? true,
+      );
+
+      results.push({
+        id: saved.id,
+        rate: Number(saved.rate),
+        rate_type: saved.rate_type,
+        is_preferred: saved.is_preferred,
+        effective_from: saved.effective_from,
+      });
+    }
+
+    return { rates: results };
+  }
+
+  // ============================================
+  // CONFIGURACIÓN DE TIENDA
+  // ============================================
+
+  /**
+   * Obtiene la configuración de tasas de la tienda
+   */
+  @Get('config')
+  async getRateConfig(@Request() req: any) {
+    const storeId = req.user.store_id;
+    const config = await this.exchangeService.getStoreRateConfig(storeId);
+
+    return {
+      config: {
+        // Tasas por método
+        cash_usd_rate_type: config.cash_usd_rate_type,
+        cash_bs_rate_type: config.cash_bs_rate_type,
+        pago_movil_rate_type: config.pago_movil_rate_type,
+        transfer_rate_type: config.transfer_rate_type,
+        point_of_sale_rate_type: config.point_of_sale_rate_type,
+        zelle_rate_type: config.zelle_rate_type,
+        // Redondeo
+        rounding_mode: config.rounding_mode,
+        rounding_precision: config.rounding_precision,
+        // Cambio
+        prefer_change_in: config.prefer_change_in,
+        auto_convert_small_change: config.auto_convert_small_change,
+        small_change_threshold_usd: Number(config.small_change_threshold_usd),
+        // Sobrepago
+        allow_overpayment: config.allow_overpayment,
+        max_overpayment_usd: Number(config.max_overpayment_usd),
+        overpayment_action: config.overpayment_action,
+      },
+    };
+  }
+
+  /**
+   * Actualiza la configuración de tasas de la tienda
+   */
+  @Put('config')
+  async updateRateConfig(
+    @Body() dto: UpdateRateConfigDto,
+    @Request() req: any,
+  ) {
+    const storeId = req.user.store_id;
+    const config = await this.exchangeService.updateStoreRateConfig(
+      storeId,
+      dto,
+    );
+
+    return {
+      config: {
+        cash_usd_rate_type: config.cash_usd_rate_type,
+        cash_bs_rate_type: config.cash_bs_rate_type,
+        pago_movil_rate_type: config.pago_movil_rate_type,
+        transfer_rate_type: config.transfer_rate_type,
+        point_of_sale_rate_type: config.point_of_sale_rate_type,
+        zelle_rate_type: config.zelle_rate_type,
+        rounding_mode: config.rounding_mode,
+        rounding_precision: config.rounding_precision,
+        prefer_change_in: config.prefer_change_in,
+        auto_convert_small_change: config.auto_convert_small_change,
+        small_change_threshold_usd: Number(config.small_change_threshold_usd),
+        allow_overpayment: config.allow_overpayment,
+        max_overpayment_usd: Number(config.max_overpayment_usd),
+        overpayment_action: config.overpayment_action,
+      },
+      updated: true,
+    };
+  }
+
+  // ============================================
+  // ENDPOINTS ORIGINALES (COMPATIBILIDAD)
+  // ============================================
+
   /**
    * Obtiene la tasa BCV actual
-   * Prioriza: tasa manual activa > API > última tasa manual > fallback
    */
   @Get('bcv')
   async getBCVRate(@Query('force') force?: string, @Request() req?: any) {
     try {
       const storeId = req?.user?.store_id;
 
-      // Si force=true, ignorar cache
-      if (force === 'true') {
-        // Limpiar cache forzando nueva búsqueda
-        const rate = await this.exchangeService.getBCVRate(storeId);
-        return {
-          rate: rate?.rate || null,
-          source: rate?.source || null,
-          timestamp: rate?.timestamp || null,
-          available: rate !== null,
-        };
-      }
-
-      // Intentar obtener tasa automáticamente
       const rate = await this.exchangeService.getBCVRate(storeId);
 
       if (rate) {
@@ -49,8 +226,6 @@ export class ExchangeController {
         };
       }
 
-      // Si no está disponible automáticamente, retornar null
-      // El frontend deberá solicitar entrada manual
       return {
         rate: null,
         source: null,
@@ -59,16 +234,13 @@ export class ExchangeController {
         message: 'Tasa BCV no disponible automáticamente. Ingrese manualmente.',
       };
     } catch (error) {
-      // Log del error para debugging
       console.error('Error en getBCVRate:', error);
-
-      // Retornar respuesta con fallback en caso de error
       return {
         rate: null,
         source: null,
         timestamp: null,
         available: false,
-        message: 'Error al obtener la tasa de cambio. Intente nuevamente.',
+        message: 'Error al obtener la tasa de cambio.',
       };
     }
   }
@@ -125,11 +297,15 @@ export class ExchangeController {
       effectiveFrom,
       effectiveUntil,
       dto.note,
+      dto.rate_type || 'BCV',
+      dto.is_preferred ?? true,
     );
 
     return {
       id: exchangeRate.id,
       rate: Number(exchangeRate.rate),
+      rate_type: exchangeRate.rate_type,
+      is_preferred: exchangeRate.is_preferred,
       source: exchangeRate.source,
       effective_from: exchangeRate.effective_from,
       effective_until: exchangeRate.effective_until,
@@ -144,22 +320,29 @@ export class ExchangeController {
   async getRateHistory(
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('rate_type') rateType?: string,
     @Request() req?: any,
   ) {
     const storeId = req?.user?.store_id;
     const limitNum = limit ? parseInt(limit, 10) : 50;
     const offsetNum = offset ? parseInt(offset, 10) : 0;
+    const typeFilter = rateType
+      ? (rateType.toUpperCase() as ExchangeRateType)
+      : undefined;
 
     const result = await this.exchangeService.getRateHistory(
       storeId,
       limitNum,
       offsetNum,
+      typeFilter,
     );
 
     return {
       rates: result.rates.map((rate) => ({
         id: rate.id,
         rate: Number(rate.rate),
+        rate_type: rate.rate_type,
+        is_preferred: rate.is_preferred,
         source: rate.source,
         effective_from: rate.effective_from,
         effective_until: rate.effective_until,

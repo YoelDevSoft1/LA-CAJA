@@ -3,22 +3,22 @@ import {
   IsOptional,
   IsString,
   Min,
-  IsDateString,
+  ValidateNested,
+  IsArray,
   IsIn,
   IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ExchangeRateType } from '../../database/entities/exchange-rate.entity';
 
-export class SetManualRateDto {
+class RateItemDto {
+  @IsIn(['BCV', 'PARALLEL', 'CASH', 'ZELLE'])
+  rate_type: ExchangeRateType;
+
   @IsNumber()
   @Min(0.01)
   @Type(() => Number)
   rate: number;
-
-  @IsOptional()
-  @IsIn(['BCV', 'PARALLEL', 'CASH', 'ZELLE'])
-  rate_type?: ExchangeRateType;
 
   @IsOptional()
   @IsBoolean()
@@ -26,14 +26,13 @@ export class SetManualRateDto {
   is_preferred?: boolean;
 
   @IsOptional()
-  @IsDateString()
-  effective_from?: string;
-
-  @IsOptional()
-  @IsDateString()
-  effective_until?: string;
-
-  @IsOptional()
   @IsString()
   note?: string;
+}
+
+export class SetMultipleRatesDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RateItemDto)
+  rates: RateItemDto[];
 }
