@@ -28,34 +28,36 @@ export default function SimpleLoader({
   const [showWelcome, setShowWelcome] = useState(false)
 
   // Calcular posiciones iniciales y finales de las partículas
-  const particleCount = 250 // Más partículas para efecto más épico
-  const logoRadius = 180 // Círculo mucho más grande y visible
+  const particleCount = 400 // Muchas más partículas para círculo denso y épico
+  const logoRadius = 200 // Círculo grande y visible
   const centerX = typeof window !== 'undefined' ? window.innerWidth / 2 : 0
   const centerY = typeof window !== 'undefined' ? window.innerHeight / 2 : 0
 
   const particles = useMemo(() => {
     return Array.from({ length: particleCount }, (_, i) => {
-      // Posición inicial aleatoria en toda la pantalla (más dispersa)
+      // Posición inicial aleatoria en toda la pantalla (muy dispersa)
       const angle = Math.random() * Math.PI * 2
-      const distance = Math.random() * Math.max(
+      const maxDistance = Math.max(
         typeof window !== 'undefined' ? window.innerWidth : 1920,
         typeof window !== 'undefined' ? window.innerHeight : 1080
-      ) * 0.6
+      ) * 0.7
+      const distance = Math.random() * maxDistance
       const startX = centerX + Math.cos(angle) * distance
       const startY = centerY + Math.sin(angle) * distance
       
-      // Posición final en círculo alrededor del logo (múltiples capas)
+      // Posición final en un solo círculo denso y perfecto
+      // Distribución uniforme para evitar gaps
       const finalAngle = (i / particleCount) * Math.PI * 2
-      const layer = Math.floor(i / (particleCount / 3)) // 3 capas concéntricas
-      const radiusVariation = logoRadius + (layer * 20) // Capas a diferentes distancias
+      // Pequeña variación aleatoria en el radio para hacerlo más orgánico pero denso
+      const radiusVariation = logoRadius + (Math.random() - 0.5) * 8
       const endX = centerX + Math.cos(finalAngle) * radiusVariation
       const endY = centerY + Math.sin(finalAngle) * radiusVariation
       
-      // Tamaño variado (más grande)
-      const size = Math.random() * 4 + 3
+      // Tamaño variado pero más consistente
+      const size = Math.random() * 3 + 4
       
-      // Delay escalonado para efecto de recolección más dramático
-      const delay = (i / particleCount) * 0.5
+      // Delay escalonado más suave para recolección fluida
+      const delay = (i / particleCount) * 0.4
       
       return {
         startX,
@@ -65,7 +67,6 @@ export default function SimpleLoader({
         size,
         delay,
         angle: finalAngle,
-        layer,
       }
     })
   }, [centerX, centerY, logoRadius])
@@ -101,7 +102,7 @@ export default function SimpleLoader({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3, ease: 'easeInOut' }}
         >
-          {/* Círculo guía animado que se forma mientras las partículas se recogen */}
+          {/* Círculo guía animado más visible que se forma mientras las partículas se recogen */}
           <motion.div
             className="absolute pointer-events-none"
             style={{
@@ -111,23 +112,24 @@ export default function SimpleLoader({
             }}
             initial={{ opacity: 0, scale: 0 }}
             animate={{ 
-              opacity: progress > 30 ? 0.3 : 0,
-              scale: progress > 30 ? 1 : 0,
+              opacity: progress > 20 ? 0.5 : 0,
+              scale: progress > 20 ? 1 : 0,
             }}
             transition={{ duration: 0.5 }}
           >
-            <svg width={logoRadius * 2 + 40} height={logoRadius * 2 + 40} className="overflow-visible">
+            <svg width={logoRadius * 2 + 60} height={logoRadius * 2 + 60} className="overflow-visible">
               <circle
-                cx={(logoRadius * 2 + 40) / 2}
-                cy={(logoRadius * 2 + 40) / 2}
+                cx={(logoRadius * 2 + 60) / 2}
+                cy={(logoRadius * 2 + 60) / 2}
                 r={logoRadius}
                 fill="none"
-                stroke="rgba(13, 129, 206, 0.2)"
-                strokeWidth="2"
+                stroke="rgba(13, 129, 206, 0.4)"
+                strokeWidth="3"
                 strokeDasharray={`${2 * Math.PI * logoRadius}`}
                 strokeDashoffset={`${2 * Math.PI * logoRadius * (1 - progress / 100)}`}
                 style={{
                   transition: 'stroke-dashoffset 0.1s linear',
+                  filter: 'drop-shadow(0 0 8px rgba(13, 129, 206, 0.5))',
                 }}
               />
             </svg>
@@ -156,18 +158,15 @@ export default function SimpleLoader({
               const currentX = particle.startX + (particle.endX - particle.startX) * smoothProgress
               const currentY = particle.startY + (particle.endY - particle.startY) * smoothProgress
               
-              // Opacidad: empieza más visible, se intensifica dramáticamente al llegar
+              // Opacidad: más visible desde el inicio, muy intensa al llegar
               const opacity = shouldAnimate 
-                ? Math.min(0.5 + smoothProgress * 0.8, 1)
-                : 0.4
+                ? Math.min(0.6 + smoothProgress * 0.5, 1)
+                : 0.5
               
-              // Escala: crece más dramáticamente al llegar al círculo
+              // Escala: crece suavemente al llegar
               const scale = shouldAnimate
-                ? 1 + smoothProgress * 1.2
-                : 1
-              
-              // Rotación sutil mientras se mueve
-              const rotation = shouldAnimate ? smoothProgress * 360 : 0
+                ? 0.8 + smoothProgress * 0.6
+                : 0.8
               
               return (
                 <motion.div
@@ -178,12 +177,12 @@ export default function SimpleLoader({
                     height: `${particle.size}px`,
                     left: `${currentX}px`,
                     top: `${currentY}px`,
-                    background: `radial-gradient(circle, rgba(13, 129, 206, 1) 0%, rgba(13, 129, 206, 0.8) 50%, rgba(13, 129, 206, 0.4) 100%)`,
+                    background: `radial-gradient(circle, rgba(13, 129, 206, 1) 0%, rgba(13, 129, 206, 0.9) 40%, rgba(13, 129, 206, 0.6) 100%)`,
                     opacity: opacity,
-                    transform: `translate(-50%, -50%) scale(${scale}) rotate(${rotation}deg)`,
-                    boxShadow: `0 0 ${particle.size * 3}px rgba(13, 129, 206, ${opacity * 0.8}), 
-                                0 0 ${particle.size * 6}px rgba(13, 129, 206, ${opacity * 0.4})`,
-                    filter: `blur(${shouldAnimate ? (1 - smoothProgress) * 0.5 : 0}px)`,
+                    transform: `translate(-50%, -50%) scale(${scale})`,
+                    boxShadow: `0 0 ${particle.size * 4}px rgba(13, 129, 206, ${opacity * 0.9}), 
+                                0 0 ${particle.size * 8}px rgba(13, 129, 206, ${opacity * 0.5}),
+                                0 0 ${particle.size * 12}px rgba(13, 129, 206, ${opacity * 0.2})`,
                   }}
                   animate={{
                     opacity: opacity,
@@ -198,34 +197,64 @@ export default function SimpleLoader({
             })}
           </div>
 
-          {/* Efecto de pulso en el centro cuando las partículas se recogen */}
-          {progress > 70 && (
-            <motion.div
-              className="absolute pointer-events-none"
-              style={{
-                left: `${centerX}px`,
-                top: `${centerY}px`,
-                transform: 'translate(-50%, -50%)',
-              }}
-              animate={{
-                scale: [1, 1.2, 1],
-                opacity: [0.3, 0.6, 0.3],
-              }}
-              transition={{
-                duration: 1.5,
-                repeat: Infinity,
-                ease: 'easeInOut',
-              }}
-            >
-              <div 
-                className="rounded-full"
+          {/* Efecto de pulso épico en el centro cuando las partículas se recogen */}
+          {progress > 60 && (
+            <>
+              <motion.div
+                className="absolute pointer-events-none"
                 style={{
-                  width: `${logoRadius * 2}px`,
-                  height: `${logoRadius * 2}px`,
-                  background: 'radial-gradient(circle, rgba(13, 129, 206, 0.2) 0%, transparent 70%)',
+                  left: `${centerX}px`,
+                  top: `${centerY}px`,
+                  transform: 'translate(-50%, -50%)',
                 }}
-              />
-            </motion.div>
+                animate={{
+                  scale: [1, 1.3, 1],
+                  opacity: [0.2, 0.5, 0.2],
+                }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                }}
+              >
+                <div 
+                  className="rounded-full"
+                  style={{
+                    width: `${logoRadius * 2}px`,
+                    height: `${logoRadius * 2}px`,
+                    background: 'radial-gradient(circle, rgba(13, 129, 206, 0.3) 0%, rgba(13, 129, 206, 0.1) 50%, transparent 80%)',
+                  }}
+                />
+              </motion.div>
+              {/* Segundo pulso más grande */}
+              <motion.div
+                className="absolute pointer-events-none"
+                style={{
+                  left: `${centerX}px`,
+                  top: `${centerY}px`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+                animate={{
+                  scale: [1, 1.5, 1],
+                  opacity: [0.1, 0.3, 0.1],
+                }}
+                transition={{
+                  duration: 2.5,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                  delay: 0.5,
+                }}
+              >
+                <div 
+                  className="rounded-full"
+                  style={{
+                    width: `${logoRadius * 2.5}px`,
+                    height: `${logoRadius * 2.5}px`,
+                    background: 'radial-gradient(circle, rgba(13, 129, 206, 0.2) 0%, transparent 70%)',
+                  }}
+                />
+              </motion.div>
+            </>
           )}
           {/* Contenedor central con transición logo -> bienvenida */}
           <div className="flex flex-col items-center gap-4 relative z-10">
@@ -388,7 +417,7 @@ export default function SimpleLoader({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2, duration: 0.4 }}
                   >
-                    Bienvenido{firstName && firstName.toLowerCase().endsWith('a') ? 'a' : ''}
+                    {firstName && firstName.toLowerCase().endsWith('a') ? 'Bienvenida' : 'Bienvenido'}
                   </motion.h1>
                   {firstName && (
                     <motion.p
