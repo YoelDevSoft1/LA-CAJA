@@ -4788,7 +4788,7 @@ precacheAndRoute([{
   "revision": "3ca0b8505b4bec776b69afdba2768812"
 }, {
   "url": "/index.html",
-  "revision": "0.utu4m9sguas"
+  "revision": "0.p46on1kkfas"
 }], {});
 cleanupOutdatedCaches();
 registerRoute(new NavigationRoute(createHandlerBoundToURL("/index.html"), {
@@ -4821,8 +4821,7 @@ registerRoute(({
   }]
 }), 'GET');
 registerRoute(({
-  url,
-  request
+  url
 }) => {
   const pathname = url.pathname;
   return pathname.startsWith("/@") || pathname.startsWith("/src/") || pathname.includes("@vite") || pathname.includes("@react-refresh") || pathname.includes("vite-plugin-pwa") || pathname.endsWith(".tsx") || pathname.endsWith(".ts") || pathname.endsWith(".jsx") || pathname.endsWith(".js") && !pathname.includes("node_modules");

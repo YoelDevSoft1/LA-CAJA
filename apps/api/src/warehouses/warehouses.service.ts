@@ -201,22 +201,49 @@ export class WarehousesService {
 
   /**
    * Busca un registro de stock usando raw query para evitar bug de TypeORM
+   * Maneja el caso donde la tabla puede o no tener la columna id
    */
   private async findStockRecord(
     warehouseId: string,
     productId: string,
     variantId: string | null,
   ): Promise<WarehouseStock | null> {
-    const result = await this.dataSource.query(
-      `SELECT id, warehouse_id, product_id, variant_id, stock, reserved, updated_at
-       FROM warehouse_stock
-       WHERE warehouse_id = $1
-         AND product_id = $2
-         AND (($3::uuid IS NULL AND variant_id IS NULL) OR variant_id = $3::uuid)
-       LIMIT 1`,
-      [warehouseId, productId, variantId],
-    );
-    return result[0] || null;
+    // Intentar obtener con id primero (si existe)
+    try {
+      const result = await this.dataSource.query(
+        `SELECT id, warehouse_id, product_id, variant_id, stock, reserved, updated_at
+         FROM warehouse_stock
+         WHERE warehouse_id = $1
+           AND product_id = $2
+           AND (($3::uuid IS NULL AND variant_id IS NULL) OR variant_id = $3::uuid)
+         LIMIT 1`,
+        [warehouseId, productId, variantId],
+      );
+      return result[0] || null;
+    } catch (error: any) {
+      // Si falla porque no existe la columna id, intentar sin ella
+      if (error.message?.includes('column "id"') || error.message?.includes('does not exist')) {
+        const result = await this.dataSource.query(
+          `SELECT warehouse_id, product_id, variant_id, stock, reserved, updated_at
+           FROM warehouse_stock
+           WHERE warehouse_id = $1
+             AND product_id = $2
+             AND (($3::uuid IS NULL AND variant_id IS NULL) OR variant_id = $3::uuid)
+           LIMIT 1`,
+          [warehouseId, productId, variantId],
+        );
+        if (!result[0]) {
+          return null;
+        }
+        // Generar un id temporal para compatibilidad con la entidad TypeORM
+        const record = result[0];
+        return {
+          id: `${record.warehouse_id}-${record.product_id}-${record.variant_id || 'null'}`,
+          ...record,
+        } as WarehouseStock;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -233,28 +260,58 @@ export class WarehousesService {
     if (stock) {
       const newStockValue = Math.max(0, stock.stock + qtyDelta);
       await this.dataSource.query(
-        `UPDATE warehouse_stock SET stock = $1, updated_at = NOW() WHERE id = $2`,
-        [newStockValue, stock.id],
+        `UPDATE warehouse_stock 
+         SET stock = $1, updated_at = NOW() 
+         WHERE warehouse_id = $2 
+           AND product_id = $3 
+           AND (($4::uuid IS NULL AND variant_id IS NULL) OR variant_id = $4::uuid)`,
+        [newStockValue, warehouseId, productId, variantId],
       );
       stock.stock = newStockValue;
       return stock;
     } else {
-      const newId = randomUUID();
       const newStockValue = Math.max(0, qtyDelta);
-      await this.dataSource.query(
-        `INSERT INTO warehouse_stock (id, warehouse_id, product_id, variant_id, stock, reserved, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 0, NOW())`,
-        [newId, warehouseId, productId, variantId, newStockValue],
-      );
-      return {
-        id: newId,
-        warehouse_id: warehouseId,
-        product_id: productId,
-        variant_id: variantId,
-        stock: newStockValue,
-        reserved: 0,
-        updated_at: new Date(),
-      } as WarehouseStock;
+      // Intentar insertar con id primero (si la tabla lo tiene)
+      try {
+        const newId = randomUUID();
+        await this.dataSource.query(
+          `INSERT INTO warehouse_stock (id, warehouse_id, product_id, variant_id, stock, reserved, updated_at)
+           VALUES ($1, $2, $3, $4, $5, 0, NOW())
+           ON CONFLICT (warehouse_id, product_id, variant_id) 
+           DO UPDATE SET stock = warehouse_stock.stock + $5, updated_at = NOW()`,
+          [newId, warehouseId, productId, variantId, newStockValue],
+        );
+        return {
+          id: newId,
+          warehouse_id: warehouseId,
+          product_id: productId,
+          variant_id: variantId,
+          stock: newStockValue,
+          reserved: 0,
+          updated_at: new Date(),
+        } as WarehouseStock;
+      } catch (error: any) {
+        // Si falla porque no existe la columna id, intentar sin id
+        if (error.message?.includes('column "id"') || error.message?.includes('does not exist')) {
+          await this.dataSource.query(
+            `INSERT INTO warehouse_stock (warehouse_id, product_id, variant_id, stock, reserved, updated_at)
+             VALUES ($1, $2, $3, $4, 0, NOW())
+             ON CONFLICT (warehouse_id, product_id, variant_id) 
+             DO UPDATE SET stock = warehouse_stock.stock + $4, updated_at = NOW()`,
+            [warehouseId, productId, variantId, newStockValue],
+          );
+          return {
+            id: `${warehouseId}-${productId}-${variantId || 'null'}`,
+            warehouse_id: warehouseId,
+            product_id: productId,
+            variant_id: variantId,
+            stock: newStockValue,
+            reserved: 0,
+            updated_at: new Date(),
+          } as WarehouseStock;
+        }
+        throw error;
+      }
     }
   }
 
@@ -274,8 +331,12 @@ export class WarehousesService {
     }
 
     await this.dataSource.query(
-      `UPDATE warehouse_stock SET stock = stock - $1, reserved = reserved + $1, updated_at = NOW() WHERE id = $2`,
-      [quantity, stock.id],
+      `UPDATE warehouse_stock 
+       SET stock = stock - $1, reserved = reserved + $1, updated_at = NOW() 
+       WHERE warehouse_id = $2 
+         AND product_id = $3 
+         AND (($4::uuid IS NULL AND variant_id IS NULL) OR variant_id = $4::uuid)`,
+      [quantity, warehouseId, productId, variantId],
     );
   }
 
@@ -295,8 +356,12 @@ export class WarehousesService {
     }
 
     await this.dataSource.query(
-      `UPDATE warehouse_stock SET stock = stock + $1, reserved = reserved - $1, updated_at = NOW() WHERE id = $2`,
-      [quantity, stock.id],
+      `UPDATE warehouse_stock 
+       SET stock = stock + $1, reserved = reserved - $1, updated_at = NOW() 
+       WHERE warehouse_id = $2 
+         AND product_id = $3 
+         AND (($4::uuid IS NULL AND variant_id IS NULL) OR variant_id = $4::uuid)`,
+      [quantity, warehouseId, productId, variantId],
     );
   }
 }
