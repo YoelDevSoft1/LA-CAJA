@@ -7,6 +7,7 @@ import { productsCacheService } from '@/services/products-cache.service'
 import { exchangeService } from '@/services/exchange.service'
 import { warehousesService } from '@/services/warehouses.service'
 import { useAuth } from '@/stores/auth.store'
+import { useMobileOptimizedQuery } from '@/hooks/use-mobile-optimized-query'
 import { Plus, Trash2, Search } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -54,11 +55,14 @@ export default function StockReceivedModal({
   const [warehouseId, setWarehouseId] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
+  // Optimización para mobile: diferir carga de queries pesadas
+  const { shouldLoad: shouldLoadProducts } = useMobileOptimizedQuery(isOpen)
+
   // Obtener productos para selección (con cache offline persistente)
   const { data: productsData } = useQuery({
     queryKey: ['products', 'list', user?.store_id],
     queryFn: () => productsService.search({ limit: 1000 }, user?.store_id),
-    enabled: isOpen && !!user?.store_id,
+    enabled: shouldLoadProducts && !!user?.store_id,
     staleTime: 1000 * 60 * 5, // 5 minutos
     gcTime: Infinity, // Nunca eliminar del cache
     placeholderData: undefined, // Se carga desde cache en useEffect
@@ -81,7 +85,7 @@ export default function StockReceivedModal({
     }
   }, [user?.store_id, isOpen]);
 
-  // Obtener tasa BCV (usa cache del prefetch)
+  // Obtener tasa BCV (usa cache del prefetch) - carga inmediata porque es ligera
   const { data: bcvRateData } = useQuery({
     queryKey: ['exchange', 'bcv'],
     queryFn: () => exchangeService.getBCVRate(),
@@ -90,14 +94,14 @@ export default function StockReceivedModal({
     enabled: isOpen,
   })
 
-  // Obtener bodegas
+  // Obtener bodegas - carga inmediata porque es ligera
   const { data: warehouses = [] } = useQuery({
     queryKey: ['warehouses'],
     queryFn: () => warehousesService.getAll(),
     enabled: isOpen && !!user?.store_id,
   })
 
-  // Obtener bodega por defecto
+  // Obtener bodega por defecto - carga inmediata porque es ligera
   const { data: defaultWarehouse } = useQuery({
     queryKey: ['warehouses', 'default'],
     queryFn: () => warehousesService.getDefault(),

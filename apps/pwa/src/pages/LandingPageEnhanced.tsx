@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { useMobileDetection } from '@/hooks/use-mobile-detection'
 import {
   Check,
   Shield,
@@ -196,10 +197,10 @@ export default function LandingPageEnhanced() {
               whileHover={{ scale: 1.05 }}
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             >
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/50">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/50">
                 <Sparkles className="w-6 h-6 text-white" />
               </div>
-              <span className="text-xl font-black bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+              <span className="text-xl font-black bg-gradient-to-r from-blue-500 via-indigo-500 to-slate-300 bg-clip-text text-transparent">
                 LA CAJA
               </span>
             </motion.div>
@@ -231,15 +232,20 @@ export default function LandingPageEnhanced() {
               <Button
                 variant="ghost"
                 onClick={() => navigate('/login')}
-                className="text-slate-300 hover:text-white hover:bg-slate-800"
+                className="text-slate-300 hover:text-white hover:bg-slate-800/50 hover:shadow-md rounded-lg px-4 py-2 transition-all duration-300 hover:scale-105"
               >
                 Iniciar Sesión
               </Button>
               <Button
+                variant="gradient"
                 onClick={() => navigate('/login')}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all"
+                className="rounded-lg px-5 py-2.5 font-semibold relative overflow-hidden group"
               >
-                Empezar Gratis
+                <span className="relative z-10 flex items-center gap-2">
+                  Empezar Gratis
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
+                </span>
+                <span className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </Button>
             </div>
           </div>
@@ -311,7 +317,7 @@ export default function LandingPageEnhanced() {
               transition={{ duration: 0.6, delay: 0.3 }}
               className="text-5xl sm:text-6xl lg:text-7xl font-black leading-tight"
             >
-              <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-slate-300 bg-clip-text text-transparent">
                 El Sistema POS
               </span>
               <br />
@@ -349,22 +355,26 @@ export default function LandingPageEnhanced() {
               className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
             >
               <Button
-                size="lg"
+                variant="gradient"
+                size="xl"
                 onClick={() => navigate('/login')}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-lg px-8 py-6 h-auto group shadow-2xl shadow-blue-500/30 hover:shadow-blue-500/50 transition-all"
+                className="group relative overflow-hidden rounded-xl px-10 py-7 font-bold shadow-xl shadow-blue-500/20"
               >
-                Empezar Gratis Ahora
-                <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <span className="relative z-10 flex items-center gap-3">
+                  Empezar Gratis Ahora
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" />
+                </span>
+                <span className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </Button>
               <Button
-                size="lg"
+                size="xl"
                 variant="outline"
-                className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white hover:border-slate-600 text-lg px-8 py-6 h-auto backdrop-blur-sm"
+                className="border-2 border-slate-500 bg-slate-800/50 text-slate-100 hover:bg-slate-700/70 hover:text-white hover:border-slate-400 rounded-xl px-10 py-7 font-semibold backdrop-blur-sm hover:shadow-xl hover:shadow-slate-500/30 transition-all duration-300 group"
                 onClick={() => {
                   document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })
                 }}
               >
-                <Play className="mr-2 w-5 h-5" />
+                <Play className="mr-2 w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                 Ver Demo
               </Button>
             </motion.div>
@@ -502,7 +512,7 @@ export default function LandingPageEnhanced() {
             </Badge>
             <h2 className="text-4xl sm:text-5xl font-black">
               <span className="text-white">Entendemos</span>{' '}
-              <span className="bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-blue-500 to-indigo-500 bg-clip-text text-transparent">
                 tus Desafíos
               </span>
             </h2>
@@ -735,7 +745,13 @@ function SolutionItem({
 // ========================================
 function FeaturesSection() {
   const featuresRef = useRef(null)
-  const isInView = useInView(featuresRef, { once: true, amount: 0.2 })
+  const isMobile = useMobileDetection()
+  // En mobile, usar amount más bajo y margin más grande para activar antes
+  const isInView = useInView(featuresRef, { 
+    once: true, 
+    amount: isMobile ? 0.1 : 0.2,
+    margin: isMobile ? '-100px' : '0px'
+  })
 
   const features = [
     {
@@ -761,7 +777,7 @@ function FeaturesSection() {
         'Notas crédito/débito',
         'Endpoint auditoría SENIAT',
       ],
-      color: 'purple',
+      color: 'blue',
       badge: '85% Compliant - Único en el mercado',
     },
     {
@@ -898,7 +914,7 @@ function FeaturesSection() {
           <h2 className="text-4xl sm:text-5xl font-black">
             <span className="text-white">Todo lo que necesitas para</span>
             <br />
-            <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-500 to-indigo-500 bg-clip-text text-transparent">
               gestionar tu negocio
             </span>
           </h2>
@@ -970,13 +986,19 @@ function FeaturesSection() {
 // ========================================
 function SeniatShowcaseSection() {
   const sectionRef = useRef(null)
-  const isInView = useInView(sectionRef, { once: true, amount: 0.3 })
+  const isMobile = useMobileDetection()
+  // En mobile, activar más temprano
+  const isInView = useInView(sectionRef, { 
+    once: true, 
+    amount: isMobile ? 0.1 : 0.3,
+    margin: isMobile ? '-100px' : '0px'
+  })
 
   return (
     <section
       id="seniat"
       ref={sectionRef}
-      className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-900/30 to-purple-900/10"
+      className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-900/30 to-blue-900/10"
     >
       <div className="container mx-auto max-w-6xl">
         <motion.div
@@ -992,7 +1014,7 @@ function SeniatShowcaseSection() {
           <h2 className="text-4xl sm:text-5xl font-black">
             <span className="text-white">Facturación Fiscal</span>
             <br />
-            <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-slate-300 bg-clip-text text-transparent">
               Cumplimiento SENIAT
             </span>
           </h2>
@@ -1171,11 +1193,15 @@ function SeniatShowcaseSection() {
             </div>
 
             <Button
+              variant="gradientPink"
               size="lg"
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+              className="w-full rounded-lg font-semibold relative overflow-hidden group"
             >
-              Cumplir con SENIAT Hoy
-              <ArrowRight className="ml-2 w-5 h-5" />
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                Cumplir con SENIAT Hoy
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
+              </span>
+              <span className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             </Button>
           </motion.div>
         </div>
@@ -1281,7 +1307,7 @@ function ComparisonSection() {
           </Badge>
           <h2 className="text-4xl sm:text-5xl font-black">
             <span className="text-white">¿Por qué</span>{' '}
-            <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-500 to-indigo-500 bg-clip-text text-transparent">
               LA CAJA?
             </span>
           </h2>
@@ -1304,7 +1330,7 @@ function ComparisonSection() {
                     <th className="text-left p-4 text-slate-400 font-medium">Característica</th>
                     <th className="p-4 text-center">
                       <div className="flex flex-col items-center gap-2">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
                           <Sparkles className="w-6 h-6 text-white" />
                         </div>
                         <span className="text-white font-bold">LA CAJA</span>
@@ -1324,11 +1350,27 @@ function ComparisonSection() {
                       transition={{ duration: 0.4, delay: 0.1 * index }}
                       className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors"
                     >
-                      <td className="p-4 text-slate-300">{feature.name}</td>
-                      <td className="p-4 text-center bg-blue-500/5">{renderIcon(feature.laCaja)}</td>
-                      <td className="p-4 text-center">{renderIcon(feature.square)}</td>
-                      <td className="p-4 text-center">{renderIcon(feature.toast)}</td>
-                      <td className="p-4 text-center">{renderIcon(feature.otros)}</td>
+                      <td className="p-4 text-slate-300 align-middle">{feature.name}</td>
+                      <td className="p-4 text-center bg-blue-500/5 align-middle">
+                        <div className="flex items-center justify-center">
+                          {renderIcon(feature.laCaja)}
+                        </div>
+                      </td>
+                      <td className="p-4 text-center align-middle">
+                        <div className="flex items-center justify-center">
+                          {renderIcon(feature.square)}
+                        </div>
+                      </td>
+                      <td className="p-4 text-center align-middle">
+                        <div className="flex items-center justify-center">
+                          {renderIcon(feature.toast)}
+                        </div>
+                      </td>
+                      <td className="p-4 text-center align-middle">
+                        <div className="flex items-center justify-center">
+                          {renderIcon(feature.otros)}
+                        </div>
+                      </td>
                     </motion.tr>
                   ))}
                 </tbody>
@@ -1389,7 +1431,7 @@ function StatsSection() {
             Números que Hablan
           </Badge>
           <h2 className="text-4xl sm:text-5xl font-black">
-            <span className="bg-gradient-to-r from-emerald-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-slate-300 bg-clip-text text-transparent">
               Estadísticas Impresionantes
             </span>
           </h2>
@@ -1443,7 +1485,7 @@ function PricingSection() {
       price: 29,
       annualPrice: 24,
       icon: Rocket,
-      color: 'purple',
+      color: 'blue',
       popular: true,
       features: [
         'Todo lo de Free +',
@@ -1486,14 +1528,14 @@ function PricingSection() {
 
   const colorClasses = {
     blue: {
-      gradient: 'from-blue-500 to-blue-600',
+      gradient: 'from-blue-600 to-indigo-600',
       ring: 'ring-blue-500/50',
       badge: 'bg-blue-500/10 text-blue-400 border-blue-500/30'
     },
     purple: {
-      gradient: 'from-purple-500 to-purple-600',
-      ring: 'ring-purple-500/50',
-      badge: 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+      gradient: 'from-blue-600 to-indigo-600',
+      ring: 'ring-blue-500/50',
+      badge: 'bg-blue-500/10 text-blue-400 border-blue-500/30'
     },
     yellow: {
       gradient: 'from-yellow-500 to-yellow-600',
@@ -1516,7 +1558,7 @@ function PricingSection() {
           </Badge>
           <h2 className="text-4xl sm:text-5xl font-black">
             <span className="text-white">Precios</span>{' '}
-            <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-500 to-indigo-500 bg-clip-text text-transparent">
               Transparentes
             </span>
           </h2>
@@ -1532,25 +1574,34 @@ function PricingSection() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="flex items-center justify-center gap-4 mb-12"
         >
-          <span className={cn("text-sm font-medium", billingCycle === 'monthly' ? 'text-white' : 'text-slate-400')}>
+          <span className={cn(
+            "text-sm font-semibold transition-colors duration-300",
+            billingCycle === 'monthly' ? 'text-white' : 'text-slate-400'
+          )}>
             Mensual
           </span>
           <button
             onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'annual' : 'monthly')}
             className={cn(
-              "relative w-14 h-7 rounded-full transition-colors",
-              billingCycle === 'annual' ? 'bg-purple-500' : 'bg-slate-700'
+              "relative w-16 h-8 rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-slate-900",
+              billingCycle === 'annual' 
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/30' 
+                : 'bg-slate-700 hover:bg-slate-600'
             )}
+            aria-label="Toggle billing cycle"
           >
             <div className={cn(
-              "absolute top-1 w-5 h-5 bg-white rounded-full transition-transform",
-              billingCycle === 'annual' ? 'translate-x-8' : 'translate-x-1'
+              "absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-all duration-300 shadow-md",
+              billingCycle === 'annual' ? 'translate-x-7' : 'translate-x-0'
             )} />
           </button>
-          <span className={cn("text-sm font-medium", billingCycle === 'annual' ? 'text-white' : 'text-slate-400')}>
+          <span className={cn(
+            "text-sm font-semibold transition-colors duration-300",
+            billingCycle === 'annual' ? 'text-white' : 'text-slate-400'
+          )}>
             Anual
           </span>
-          <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-xs">
+          <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-xs px-3 py-1 shadow-lg shadow-emerald-500/20">
             Ahorra 20%
           </Badge>
         </motion.div>
@@ -1580,7 +1631,7 @@ function PricingSection() {
 
                 <Card className={cn(
                   "bg-slate-800/50 border-slate-700 hover:border-slate-600 transition-all duration-300 h-full",
-                  plan.popular && "ring-2 ring-purple-500/50 shadow-2xl shadow-purple-500/20 scale-105"
+                  plan.popular && "ring-2 ring-blue-500/50 shadow-2xl shadow-blue-500/20 scale-105"
                 )}>
                   <CardHeader>
                     <div className={cn(
@@ -1619,15 +1670,22 @@ function PricingSection() {
                     <Button
                       size="lg"
                       onClick={() => navigate('/login')}
+                      variant={plan.popular ? "gradientPink" : "default"}
                       className={cn(
-                        "w-full text-white shadow-lg hover:shadow-xl transition-all",
+                        "w-full rounded-lg font-semibold relative overflow-hidden group transition-all duration-300",
                         plan.popular
-                          ? "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                          : "bg-slate-700 hover:bg-slate-600"
+                          ? "shadow-xl hover:shadow-2xl"
+                          : "bg-slate-700 hover:bg-slate-600 hover:shadow-lg hover:shadow-slate-500/20"
                       )}
                     >
-                      {plan.cta}
-                      {!plan.popular && <ArrowRight className="ml-2 w-4 h-4" />}
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        {plan.cta}
+                        {!plan.popular && <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />}
+                        {plan.popular && <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />}
+                      </span>
+                      {plan.popular && (
+                        <span className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      )}
                     </Button>
 
                     <div className="space-y-3">
@@ -1736,7 +1794,7 @@ function TestimonialsSection() {
           </Badge>
           <h2 className="text-4xl sm:text-5xl font-black">
             <span className="text-white">Lo que dicen</span>{' '}
-            <span className="bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-500 to-indigo-500 bg-clip-text text-transparent">
               Nuestros Clientes
             </span>
           </h2>
@@ -1871,7 +1929,7 @@ function FAQSection() {
             Preguntas Frecuentes
           </Badge>
           <h2 className="text-4xl sm:text-5xl font-black">
-            <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-500 to-indigo-500 bg-clip-text text-transparent">
               ¿Tienes Preguntas?
             </span>
           </h2>
@@ -1946,8 +2004,11 @@ function FAQSection() {
           className="mt-12 text-center"
         >
           <p className="text-slate-400 mb-4">¿No encontraste tu respuesta?</p>
-          <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white">
-            <Mail className="mr-2 w-4 h-4" />
+          <Button 
+            variant="outline" 
+            className="border-2 border-slate-500 bg-slate-800/50 text-slate-100 hover:bg-slate-700/70 hover:text-white hover:border-slate-400 rounded-lg px-6 py-3 font-medium hover:shadow-lg hover:shadow-slate-500/30 transition-all duration-300 group"
+          >
+            <Mail className="mr-2 w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
             Contactar Soporte
           </Button>
         </motion.div>
@@ -1978,14 +2039,14 @@ function FinalCTASection() {
           animate={isInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.6 }}
         >
-          <Card className="bg-gradient-to-br from-blue-900/30 via-purple-900/30 to-pink-900/30 border-blue-500/30 shadow-2xl shadow-blue-500/20 backdrop-blur-xl">
+          <Card className="bg-gradient-to-br from-blue-900/30 via-indigo-900/30 to-slate-900/30 border-blue-500/30 shadow-2xl shadow-blue-500/20 backdrop-blur-xl">
             <CardContent className="p-12 text-center space-y-8">
               {/* Icon */}
               <motion.div
                 initial={{ scale: 0 }}
                 animate={isInView ? { scale: 1 } : { scale: 0 }}
                 transition={{ duration: 0.5, delay: 0.2, type: 'spring' }}
-                className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg shadow-blue-500/50"
+                className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl shadow-lg shadow-blue-600/50"
               >
                 <Rocket className="w-10 h-10 text-white" />
               </motion.div>
@@ -1993,7 +2054,7 @@ function FinalCTASection() {
               {/* Headline */}
               <div className="space-y-4">
                 <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">
-                  <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                  <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-slate-300 bg-clip-text text-transparent">
                     Transforma tu Negocio Hoy
                   </span>
                 </h2>
@@ -2028,22 +2089,26 @@ function FinalCTASection() {
               {/* CTA Buttons */}
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
                 <Button
-                  size="lg"
+                  variant="gradient"
+                  size="xl"
                   onClick={() => navigate('/login')}
-                  className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:to-pink-700 text-white text-lg px-10 py-7 h-auto shadow-2xl shadow-blue-500/40 hover:shadow-blue-500/60 transition-all group"
+                  className="group relative overflow-hidden rounded-xl px-10 py-7 font-bold shadow-xl shadow-blue-500/20"
                 >
-                  Empezar Gratis Ahora
-                  <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  <span className="relative z-10 flex items-center gap-3">
+                    Empezar Gratis Ahora
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" />
+                  </span>
+                  <span className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 </Button>
                 <Button
-                  size="lg"
+                  size="xl"
                   variant="outline"
-                  className="border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white hover:border-slate-500 text-lg px-10 py-7 h-auto backdrop-blur-sm"
+                  className="border-2 border-slate-500 bg-slate-800/40 text-slate-100 hover:bg-slate-700/60 hover:text-white hover:border-slate-400 rounded-xl px-10 py-7 font-semibold backdrop-blur-sm hover:shadow-xl hover:shadow-slate-500/30 transition-all duration-300 group"
                   onClick={() => {
                     document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })
                   }}
                 >
-                  <Play className="mr-2 w-5 h-5" />
+                  <Play className="mr-2 w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                   Ver Demo
                 </Button>
               </div>
@@ -2103,10 +2168,10 @@ function Footer() {
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/50">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/50">
                 <Sparkles className="w-6 h-6 text-white" />
               </div>
-              <span className="text-xl font-black bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+              <span className="text-xl font-black bg-gradient-to-r from-blue-500 via-indigo-500 to-slate-300 bg-clip-text text-transparent">
                 LA CAJA
               </span>
             </div>

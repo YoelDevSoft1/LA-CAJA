@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import {
   X,
@@ -48,10 +48,23 @@ export default function OrderModal({ isOpen, onClose, order, onOrderUpdated }: O
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false)
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
 
+  // Optimización: diferir carga en mobile para mejor percepción de rendimiento
+  const [shouldLoad, setShouldLoad] = useState(false)
+  
+  useEffect(() => {
+    if (isOpen && order) {
+      const delay = window.innerWidth < 640 ? 100 : 0
+      const timer = setTimeout(() => setShouldLoad(true), delay)
+      return () => clearTimeout(timer)
+    } else {
+      setShouldLoad(false)
+    }
+  }, [isOpen, order])
+
   const { data: orderData, refetch: refetchOrder } = useQuery({
     queryKey: ['order', order?.id],
     queryFn: () => order && ordersService.getOrderById(order.id),
-    enabled: isOpen && !!order,
+    enabled: shouldLoad && !!order,
     staleTime: 1000 * 30, // 30 segundos
   })
 

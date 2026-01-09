@@ -82,6 +82,7 @@ export default function ProductFormModal({
   })
 
   // Obtener tasa BCV para cálculo automático (usa cache del prefetch)
+  // Carga inmediata porque es ligera y necesaria para cálculos
   const { data: bcvRateData } = useQuery({
     queryKey: ['exchange', 'bcv'],
     queryFn: () => exchangeService.getBCVRate(),
