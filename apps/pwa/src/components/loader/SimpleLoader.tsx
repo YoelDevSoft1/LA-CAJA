@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 
 interface SimpleLoaderProps {
   onComplete?: () => void
@@ -26,24 +26,6 @@ export default function SimpleLoader({
   const [progress, setProgress] = useState(0)
   const [phase, setPhase] = useState<'loading' | 'welcome'>('loading')
 
-  // Partículas elegantes y sutiles
-  const particles = useMemo(() => {
-    const count = 60 // Menos partículas, más elegante
-    return Array.from({ length: count }, (_, i) => ({
-      id: i,
-      // Posición inicial dispersa
-      startX: Math.random() * 100,
-      startY: Math.random() * 100,
-      // Tamaño variado pero sutil
-      size: Math.random() * 4 + 2,
-      // Opacidad base
-      opacity: Math.random() * 0.4 + 0.1,
-      // Velocidad de movimiento
-      speed: Math.random() * 20 + 10,
-      // Delay para escalonar
-      delay: Math.random() * 0.5,
-    }))
-  }, [])
 
   useEffect(() => {
     const startTime = Date.now()
@@ -77,47 +59,6 @@ export default function SimpleLoader({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.5, ease: 'easeInOut' }}
         >
-          {/* Partículas flotantes sutiles */}
-          <div className="absolute inset-0 overflow-hidden">
-            {particles.map((particle) => (
-              <motion.div
-                key={particle.id}
-                className="absolute rounded-full"
-                style={{
-                  width: particle.size,
-                  height: particle.size,
-                  left: `${particle.startX}%`,
-                  top: `${particle.startY}%`,
-                  backgroundColor: 'rgb(13, 129, 206)',
-                }}
-                initial={{
-                  opacity: 0,
-                  scale: 0,
-                }}
-                animate={{
-                  opacity: particle.opacity,
-                  scale: 1,
-                  y: [0, -particle.speed, 0],
-                  x: [0, Math.sin(particle.id) * 10, 0],
-                }}
-                transition={{
-                  opacity: { duration: 0.8, delay: particle.delay },
-                  scale: { duration: 0.8, delay: particle.delay },
-                  y: {
-                    duration: particle.speed / 4,
-                    repeat: Infinity,
-                    ease: 'easeInOut',
-                  },
-                  x: {
-                    duration: particle.speed / 3,
-                    repeat: Infinity,
-                    ease: 'easeInOut',
-                  },
-                }}
-              />
-            ))}
-          </div>
-
           {/* Círculo de progreso sutil en el fondo */}
           <motion.div
             className="absolute"

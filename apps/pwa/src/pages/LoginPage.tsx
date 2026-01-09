@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -107,53 +107,56 @@ export default function LoginPage() {
 
   const selectedCashierName = cashiers?.find((c) => c.user_id === selectedCashierId)?.full_name
 
+  // Partículas memorizadas para evitar regeneración en cada render
+  const particles = useMemo(() => {
+    return Array.from({ length: 50 }, (_, i) => {
+      const size = Math.random() * 3 + 2
+      const baseDelay = Math.random() * 3
+      const duration = 5 + Math.random() * 4
+      const moveDistance = 30 + Math.random() * 20
+
+      return {
+        id: i,
+        size,
+        left: Math.random() * 100,
+        top: Math.random() * 100,
+        baseDelay,
+        duration,
+        yMove: [(Math.random() - 0.5) * moveDistance, (Math.random() - 0.5) * moveDistance * 0.5],
+        xMove: [(Math.random() - 0.5) * moveDistance * 0.4, (Math.random() - 0.5) * moveDistance * 0.2],
+      }
+    })
+  }, [])
+
   return (
     <div className="min-h-screen bg-white relative flex items-center justify-center p-6 overflow-hidden">
-      {/* Partículas decorativas mejoradas con color del logo */}
+      {/* Partículas decorativas sutiles */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(80)].map((_, i) => {
-          const size = Math.random() * 4 + 2 // Tamaño entre 2-6px
-          const baseDelay = Math.random() * 4
-          const duration = 4 + Math.random() * 4 // 4-8 segundos
-          const moveDistance = 60 + Math.random() * 40 // 60-100px de movimiento
-          
-          return (
-            <motion.div
-              key={i}
-              className="absolute rounded-full"
-              style={{
-                width: `${size}px`,
-                height: `${size}px`,
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                backgroundColor: 'rgba(13, 129, 206, 0.6)', // Color del logo
-                boxShadow: `0 0 ${size * 2}px rgba(13, 129, 206, 0.4)`,
-              }}
-              animate={{
-                y: [
-                  0,
-                  (Math.random() - 0.5) * moveDistance,
-                  (Math.random() - 0.5) * moveDistance * 0.5,
-                  0,
-                ],
-                x: [
-                  0,
-                  (Math.random() - 0.5) * moveDistance * 0.6,
-                  (Math.random() - 0.5) * moveDistance * 0.3,
-                  0,
-                ],
-                opacity: [0.3, 0.9, 0.7, 0.3],
-                scale: [1, 1.8, 1.4, 1],
-              }}
-              transition={{
-                duration: duration,
-                repeat: Infinity,
-                delay: baseDelay,
-                ease: [0.4, 0, 0.6, 1], // easeInOut más suave
-              }}
-            />
-          )
-        })}
+        {particles.map((particle) => (
+          <motion.div
+            key={particle.id}
+            className="absolute rounded-full"
+            style={{
+              width: particle.size,
+              height: particle.size,
+              left: `${particle.left}%`,
+              top: `${particle.top}%`,
+              backgroundColor: 'rgba(13, 129, 206, 0.5)',
+            }}
+            animate={{
+              y: [0, particle.yMove[0], particle.yMove[1], 0],
+              x: [0, particle.xMove[0], particle.xMove[1], 0],
+              opacity: [0.2, 0.6, 0.4, 0.2],
+              scale: [1, 1.3, 1.1, 1],
+            }}
+            transition={{
+              duration: particle.duration,
+              repeat: Infinity,
+              delay: particle.baseDelay,
+              ease: 'easeInOut',
+            }}
+          />
+        ))}
       </div>
 
       {/* Content */}
