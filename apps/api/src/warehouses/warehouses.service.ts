@@ -274,6 +274,8 @@ export class WarehousesService {
       // Intentar insertar con id primero (si la tabla lo tiene)
       try {
         const newId = randomUUID();
+        // PostgreSQL maneja NULL en UNIQUE correctamente, pero necesitamos
+        // usar una expresión que funcione tanto con NULL como con valores
         await this.dataSource.query(
           `INSERT INTO warehouse_stock (id, warehouse_id, product_id, variant_id, stock, reserved, updated_at)
            VALUES ($1, $2, $3, $4, $5, 0, NOW())
@@ -291,6 +293,15 @@ export class WarehousesService {
           updated_at: new Date(),
         } as WarehouseStock;
       } catch (error: any) {
+        // Si falla porque variant_id no puede ser NULL, la migración aún no se ejecutó
+        if (error.message?.includes('null value in column "variant_id"')) {
+          this.logger.error(
+            'variant_id no permite NULL. Ejecuta la migración 25_fix_warehouse_stock_variant_null.sql',
+          );
+          throw new BadRequestException(
+            'El sistema necesita actualización: variant_id debe permitir NULL. Contacta al administrador.',
+          );
+        }
         // Si falla porque no existe la columna id, intentar sin id
         if (error.message?.includes('column "id"') || error.message?.includes('does not exist')) {
           await this.dataSource.query(

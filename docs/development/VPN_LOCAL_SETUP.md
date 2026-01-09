@@ -50,6 +50,15 @@ PORT=3000
 # Rate Limiting
 THROTTLE_TTL=60000
 THROTTLE_LIMIT=100
+
+# Timeouts de base de datos (opcional, para VPN)
+# Valores por defecto: 30s en desarrollo, 10s en producción
+DB_CONNECTION_TIMEOUT=30000
+
+# Pool de conexiones (opcional, para VPN)
+# Valores por defecto: max=5, min=1 en desarrollo; max=20, min=2 en producción
+DB_POOL_MAX=5
+DB_POOL_MIN=1
 ```
 
 ### 3. Verificación
@@ -105,6 +114,47 @@ ALLOWED_ORIGINS=https://la-caja.netlify.app,https://tu-dominio.com
 4. Revisa los logs del servidor para confirmar el modo
 
 ### Error de conexión a base de datos
-1. Verifica que `DATABASE_URL` sea correcta
-2. Verifica que estés usando el pooler de Render/Supabase
-3. Verifica que no haya restricciones de IP en el servicio de base de datos
+
+#### Timeout de conexión (Error: Connection terminated due to connection timeout)
+
+Si ves este error, significa que la conexión está tardando demasiado (probablemente debido a VPN). Solución:
+
+1. **Aumentar timeouts para desarrollo local:**
+
+Agrega estas variables a tu `.env`:
+
+```env
+# Timeouts más largos para desarrollo local con VPN (30 segundos en lugar de 10)
+DB_CONNECTION_TIMEOUT=30000
+
+# Pool más conservador en desarrollo local (menos conexiones simultáneas)
+DB_POOL_MAX=5
+DB_POOL_MIN=1
+```
+
+2. **SSL requerido para Supabase:**
+
+Supabase requiere SSL incluso en desarrollo. El código ya detecta esto automáticamente, pero si tienes problemas, puedes forzarlo:
+
+```env
+# Forzar SSL para Supabase (solo si detecta automáticamente no funciona)
+DB_SSL_REJECT_UNAUTHORIZED=false
+```
+
+3. **Verificar DATABASE_URL:**
+
+Asegúrate de que tu `DATABASE_URL` use el **pooler** de Supabase:
+
+```
+✅ CORRECTO (pooler): postgresql://user:pass@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+❌ INCORRECTO (directo): postgresql://user:pass@db.xxxxx.supabase.co:5432/postgres
+```
+
+El pooler acepta conexiones desde cualquier IP y es más estable con VPN.
+
+4. **Otras verificaciones:**
+
+- Verifica que `DATABASE_URL` sea correcta
+- Verifica que la contraseña esté URL-encoded si tiene caracteres especiales (`@` → `%40`)
+- Verifica tu conexión a internet/VPN
+- Intenta desactivar temporalmente el firewall para probar

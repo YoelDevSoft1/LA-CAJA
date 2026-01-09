@@ -86,22 +86,31 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
         const url = new URL(databaseUrl);
         const isProduction =
           configService.get<string>('NODE_ENV') === 'production';
+        const isDevelopment = !isProduction;
         
         // Detectar si es un servicio cloud que usa certificados autofirmados
         const isCloudDatabase =
           url.hostname.includes('supabase.co') ||
+          url.hostname.includes('pooler.supabase.com') ||
           url.hostname.includes('render.com') ||
           url.hostname.includes('aws') ||
           url.hostname.includes('azure') ||
           url.hostname.includes('gcp') ||
           configService.get<string>('DB_SSL_REJECT_UNAUTHORIZED') === 'false';
         
-        // Configuración SSL: en producción, usar SSL pero permitir certificados autofirmados
-        // para servicios cloud (Render, Supabase, etc.)
+        // Configuración SSL: servicios cloud (Supabase, Render) requieren SSL incluso en desarrollo
         // Se puede override con DB_SSL_REJECT_UNAUTHORIZED=true para forzar verificación estricta
         const sslRejectUnauthorized =
           configService.get<string>('DB_SSL_REJECT_UNAUTHORIZED') === 'true' ||
           (!isCloudDatabase && isProduction);
+        
+        // Timeouts configurables: más largos en desarrollo local (útil para VPN)
+        const connectionTimeoutEnv = configService.get<number>('DB_CONNECTION_TIMEOUT');
+        const connectionTimeout = connectionTimeoutEnv || (isDevelopment ? 30000 : 10000); // 30s en dev, 10s en prod
+        
+        // Pool configurable: más conservador en desarrollo local
+        const poolMax = configService.get<number>('DB_POOL_MAX') || (isDevelopment ? 5 : 20);
+        const poolMin = configService.get<number>('DB_POOL_MIN') || (isDevelopment ? 1 : 2);
 
         return {
           type: 'postgres',
@@ -116,11 +125,11 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
           logging: configService.get<string>('NODE_ENV') === 'development',
           // Configuración robusta del pool de conexiones para Render/Cloud
           extra: {
-            // Pool de conexiones
-            max: 20, // Máximo de conexiones en el pool
-            min: 2, // Mínimo de conexiones en el pool
+            // Pool de conexiones (más conservador en desarrollo local con VPN)
+            max: poolMax,
+            min: poolMin,
             idleTimeoutMillis: 30000, // Cerrar conexiones inactivas después de 30s
-            connectionTimeoutMillis: 10000, // Timeout al conectar (10s)
+            connectionTimeoutMillis: connectionTimeout, // Timeout configurable (30s en dev con VPN)
             // Reconexión automática
             keepAlive: true,
             keepAliveInitialDelayMillis: 10000, // Enviar keep-alive cada 10s
@@ -129,13 +138,12 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
           retryAttempts: 10, // Reintentar conexión hasta 10 veces
           retryDelay: 3000, // Esperar 3 segundos entre reintentos
           // Timeouts
-          connectTimeoutMS: 10000, // 10 segundos para conectar
+          connectTimeoutMS: connectionTimeout, // Timeout configurable
           // Manejo de errores de conexión
           autoLoadEntities: false, // Ya especificamos entities manualmente
-          // SSL para producción (Render/Supabase)
-          // NOTA: Servicios cloud como Render/Supabase usan certificados autofirmados
-          // Se puede forzar verificación estricta con DB_SSL_REJECT_UNAUTHORIZED=true
-          ssl: isProduction
+          // SSL: servicios cloud (Supabase, Render) requieren SSL incluso en desarrollo
+          // NOTA: Supabase pooler requiere SSL siempre, incluso en desarrollo
+          ssl: isCloudDatabase || isProduction
             ? {
                 rejectUnauthorized: sslRejectUnauthorized,
               }
