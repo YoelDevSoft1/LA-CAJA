@@ -40,7 +40,7 @@ export default function SimpleLoader({
         setTimeout(() => {
           setIsComplete(true)
           onComplete?.()
-        }, 1500)
+        }, 2500)
       }
     }, 16)
 

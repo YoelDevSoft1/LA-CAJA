@@ -380,16 +380,22 @@ export default function LoginPage() {
                             )}
                           </div>
                           <div className="flex-1 text-left">
-                            <p className={cn(
-                              "text-sm font-semibold transition-colors",
-                              selectedCashierId === cashier.user_id ? "text-blue-700" : "text-gray-900"
-                            )}>
+                            <p 
+                              className={cn(
+                                "text-sm font-semibold transition-colors",
+                                selectedCashierId === cashier.user_id ? "" : "text-gray-900"
+                              )}
+                              style={selectedCashierId === cashier.user_id ? { color: 'rgb(13, 129, 206)' } : undefined}
+                            >
                               {cashier.full_name || 'Sin nombre'}
                             </p>
-                            <p className={cn(
-                              "text-xs capitalize transition-colors",
-                              selectedCashierId === cashier.user_id ? "text-blue-600" : "text-gray-500"
-                            )}>
+                            <p 
+                              className={cn(
+                                "text-xs capitalize transition-colors",
+                                selectedCashierId === cashier.user_id ? "" : "text-gray-500"
+                              )}
+                              style={selectedCashierId === cashier.user_id ? { color: 'rgba(13, 129, 206, 0.8)' } : undefined}
+                            >
                               {cashier.role === 'owner' ? 'Propietario' : 'Cajero'}
                             </p>
                           </div>
@@ -399,7 +405,7 @@ export default function LoginPage() {
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ type: 'spring', stiffness: 400 }}
                             >
-                              <ChevronRight className="w-5 h-5 text-blue-500" />
+                              <ChevronRight className="w-5 h-5" style={{ color: 'rgb(13, 129, 206)' }} />
                             </motion.div>
                           )}
                         </motion.button>
@@ -429,7 +435,7 @@ export default function LoginPage() {
                   className="space-y-3 overflow-hidden"
                 >
                   <Label htmlFor="pin" className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'rgb(13, 129, 206)' }} />
                     PIN {selectedCashierName && <span className="font-normal text-gray-500">de {selectedCashierName}</span>}
                   </Label>
                   <Input
@@ -441,8 +447,28 @@ export default function LoginPage() {
                       "h-12 text-center text-xl tracking-[0.5em] font-semibold border-2 transition-all duration-200",
                       errors.pin 
                         ? "border-destructive focus:border-destructive" 
-                        : "border-gray-200 hover:border-blue-300 focus:border-blue-500"
+                        : "border-gray-200"
                     )}
+                    onMouseEnter={(e) => {
+                      if (!errors.pin) {
+                        (e.currentTarget as HTMLElement).style.borderColor = 'rgba(13, 129, 206, 0.5)'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!errors.pin) {
+                        (e.currentTarget as HTMLElement).style.borderColor = ''
+                      }
+                    }}
+                    onFocus={(e) => {
+                      if (!errors.pin) {
+                        (e.currentTarget as HTMLElement).style.borderColor = 'rgb(13, 129, 206)'
+                      }
+                    }}
+                    onBlur={(e) => {
+                      if (!errors.pin) {
+                        (e.currentTarget as HTMLElement).style.borderColor = ''
+                      }
+                    }}
                     {...register('pin')}
                     autoFocus
                   />
@@ -469,9 +495,21 @@ export default function LoginPage() {
                 type="submit"
                 className={cn(
                   "w-full h-12 text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 relative overflow-hidden",
-                  "bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600",
                   "disabled:opacity-50 disabled:cursor-not-allowed"
                 )}
+                style={{
+                  background: 'linear-gradient(to right, rgb(13, 129, 206), rgba(13, 129, 206, 0.9))',
+                }}
+                onMouseEnter={(e) => {
+                  if (!mutation.isPending && selectedCashierId) {
+                    (e.currentTarget as HTMLElement).style.background = 'linear-gradient(to right, rgba(13, 129, 206, 0.9), rgb(13, 129, 206))'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!mutation.isPending && selectedCashierId) {
+                    (e.currentTarget as HTMLElement).style.background = 'linear-gradient(to right, rgb(13, 129, 206), rgba(13, 129, 206, 0.9))'
+                  }
+                }}
                 disabled={mutation.isPending || !selectedCashierId}
               >
                 {mutation.isPending ? (
