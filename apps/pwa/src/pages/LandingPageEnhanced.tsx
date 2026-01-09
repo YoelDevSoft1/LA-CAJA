@@ -1194,7 +1194,7 @@ function SeniatShowcaseSection() {
             </div>
 
             <Button
-              variant="gradientPink"
+              variant="gradient"
               size="lg"
               className="w-full rounded-lg font-semibold relative overflow-hidden group"
             >
@@ -1276,22 +1276,22 @@ function ComparisonSection() {
   const features: Array<{
     name: string
     laCaja: boolean
-    square: boolean | 'partial'
-    toast: boolean | 'partial'
+    a2pos: boolean | 'partial'
+    valerypos: boolean | 'partial'
     otros: boolean | 'partial'
   }> = [
-    { name: 'Offline-first real', laCaja: true, square: false, toast: false, otros: false },
-    { name: 'Facturación SENIAT', laCaja: true, square: false, toast: false, otros: false },
-    { name: 'Dual Bs/USD nativo', laCaja: true, square: false, toast: false, otros: 'partial' },
-    { name: 'Contabilidad integrada', laCaja: true, square: false, toast: true, otros: false },
-    { name: 'IA/ML predictivo', laCaja: true, square: false, toast: false, otros: false },
-    { name: 'Multi-plataforma (PWA/Desktop/Android)', laCaja: true, square: 'partial', toast: 'partial', otros: false },
-    { name: 'Split payments (6 métodos)', laCaja: true, square: 'partial', toast: 'partial', otros: false },
-    { name: '24 bancos venezolanos', laCaja: true, square: false, toast: false, otros: 'partial' },
-    { name: 'Inventario multi-bodega', laCaja: true, square: true, toast: true, otros: 'partial' },
-    { name: 'Analytics tiempo real', laCaja: true, square: true, toast: true, otros: 'partial' },
-    { name: 'Plan gratuito ilimitado', laCaja: true, square: false, toast: false, otros: false },
-    { name: 'Setup en 5 minutos', laCaja: true, square: false, toast: false, otros: 'partial' },
+    { name: 'Offline-first real', laCaja: true, a2pos: false, valerypos: false, otros: false },
+    { name: 'Facturación SENIAT', laCaja: true, a2pos: true, valerypos: true, otros: 'partial' },
+    { name: 'Dual Bs/USD nativo', laCaja: true, a2pos: false, valerypos: false, otros: 'partial' },
+    { name: 'Contabilidad integrada', laCaja: true, a2pos: true, valerypos: true, otros: false },
+    { name: 'IA/ML predictivo', laCaja: true, a2pos: false, valerypos: false, otros: false },
+    { name: 'Multi-plataforma (PWA/Desktop/Android)', laCaja: true, a2pos: false, valerypos: false, otros: false },
+    { name: 'Split payments (6 métodos)', laCaja: true, a2pos: 'partial', valerypos: 'partial', otros: false },
+    { name: '24 bancos venezolanos', laCaja: true, a2pos: false, valerypos: false, otros: 'partial' },
+    { name: 'Inventario multi-bodega', laCaja: true, a2pos: true, valerypos: true, otros: 'partial' },
+    { name: 'Analytics tiempo real', laCaja: true, a2pos: true, valerypos: true, otros: 'partial' },
+    { name: 'Plan gratuito ilimitado', laCaja: true, a2pos: false, valerypos: false, otros: false },
+    { name: 'Setup en 5 minutos', laCaja: true, a2pos: false, valerypos: false, otros: 'partial' },
   ]
 
   const renderIcon = (status: boolean | 'partial') => {
@@ -1319,7 +1319,7 @@ function ComparisonSection() {
             </span>
           </h2>
           <p className="text-xl text-slate-400 max-w-2xl mx-auto">
-            Comparación directa con las soluciones más populares del mercado.
+            Comparación directa con los sistemas POS más utilizados en Venezuela.
           </p>
         </motion.div>
 
@@ -1327,11 +1327,12 @@ function ComparisonSection() {
           initial={{ opacity: 0, y: 20 }}
           animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
           transition={{ duration: isMobile ? 0.3 : 0.6, delay: isMobile ? 0 : 0.2 }}
-          className="overflow-x-auto"
+          className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0"
         >
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="p-0">
-              <table className="w-full">
+          <div className="inline-block min-w-full">
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardContent className="p-0">
+                <table className="w-full min-w-[600px]">
                 <thead>
                   <tr className="border-b border-slate-700">
                     <th className="text-left p-4 text-slate-400 font-medium">Característica</th>
@@ -1343,8 +1344,8 @@ function ComparisonSection() {
                         <span className="text-white font-bold">LA CAJA</span>
                       </div>
                     </th>
-                    <th className="p-4 text-center text-slate-400">Square</th>
-                    <th className="p-4 text-center text-slate-400">Toast</th>
+                    <th className="p-4 text-center text-slate-400">A2 POS</th>
+                    <th className="p-4 text-center text-slate-400">ValeryPOS</th>
                     <th className="p-4 text-center text-slate-400">Otros POS VE</th>
                   </tr>
                 </thead>
@@ -1365,12 +1366,12 @@ function ComparisonSection() {
                       </td>
                       <td className="p-4 text-center align-middle">
                         <div className="flex items-center justify-center">
-                          {renderIcon(feature.square)}
+                          {renderIcon(feature.a2pos)}
                         </div>
                       </td>
                       <td className="p-4 text-center align-middle">
                         <div className="flex items-center justify-center">
-                          {renderIcon(feature.toast)}
+                          {renderIcon(feature.valerypos)}
                         </div>
                       </td>
                       <td className="p-4 text-center align-middle">
@@ -1381,9 +1382,10 @@ function ComparisonSection() {
                     </motion.tr>
                   ))}
                 </tbody>
-              </table>
-            </CardContent>
-          </Card>
+                </table>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Leyenda */}
           <div className="flex items-center justify-center gap-6 mt-6 text-sm text-slate-400">
@@ -1689,7 +1691,7 @@ function PricingSection() {
                     <Button
                       size="lg"
                       onClick={() => navigate('/login')}
-                      variant={plan.popular ? "gradientPink" : "default"}
+                      variant={plan.popular ? "gradient" : "default"}
                       className={cn(
                         "w-full rounded-lg font-semibold relative overflow-hidden group transition-all duration-300",
                         plan.popular
@@ -1740,7 +1742,7 @@ function PricingSection() {
                 Nuestros clientes ahorran en promedio <span className="text-emerald-400 font-bold">20 horas/mes</span> en contabilidad
                 y aumentan sus ventas un <span className="text-emerald-400 font-bold">15%</span> con IA predictiva.
               </p>
-              <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
                 <div>
                   <p className="text-3xl font-black text-emerald-400">4,869%</p>
                   <p className="text-sm text-slate-400">ROI Plan Pro</p>
@@ -1750,7 +1752,7 @@ function PricingSection() {
                   <p className="text-sm text-slate-400">Ahorro anual</p>
                 </div>
                 <div>
-                  <p className="text-3xl font-black text-purple-400">3 meses</p>
+                  <p className="text-3xl font-black text-indigo-400">3 meses</p>
                   <p className="text-sm text-slate-400">Tiempo de payback</p>
                 </div>
               </div>
@@ -1769,11 +1771,24 @@ function TestimonialsSection() {
   const sectionRef = useRef(null)
   const isMobile = useMobileDetection()
   // En mobile, activar más temprano con amount más bajo
+  // Forzar render inicial en mobile para evitar problemas de carga
+  const [forceRender, setForceRender] = useState(isMobile)
   const isInView = useInView(sectionRef, { 
     once: true, 
     amount: isMobile ? 0.05 : 0.3,
     margin: isMobile ? '-150px' : '0px'
   })
+  
+  // En mobile, forzar render después de un pequeño delay si no se activó isInView
+  useEffect(() => {
+    if (isMobile && !forceRender) {
+      const timer = setTimeout(() => setForceRender(true), 200)
+      return () => clearTimeout(timer)
+    }
+  }, [isMobile, forceRender])
+  
+  // Usar forceRender en mobile si isInView no se ha activado
+  const shouldAnimate = isMobile ? (forceRender || isInView) : isInView
 
   const testimonials = [
     {
@@ -1810,7 +1825,7 @@ function TestimonialsSection() {
       <div className="container mx-auto max-w-6xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+          animate={shouldAnimate ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
           transition={{ duration: isMobile ? 0.3 : 0.6 }}
           className="text-center space-y-4 mb-16"
         >
@@ -1833,7 +1848,7 @@ function TestimonialsSection() {
               <motion.div
                 key={index}
                 initial={{ opacity: 0, y: 20 }}
-                animate={isInView ? { opacity: 1, y: 0 } : { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 20 }}
+                animate={shouldAnimate ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
                 transition={{ duration: isMobile ? 0.3 : 0.5, delay: isMobile ? 0 : index * 0.1 }}
               >
                 <Card className="bg-slate-800/50 border-slate-700 hover:border-yellow-500/30 transition-all duration-300 h-full group">
