@@ -445,30 +445,10 @@ export default function LoginPage() {
                     maxLength={6}
                     className={cn(
                       "h-12 text-center text-xl tracking-[0.5em] font-semibold border-2 transition-all duration-200",
-                      errors.pin 
-                        ? "border-destructive focus:border-destructive" 
-                        : "border-gray-200"
+                      errors.pin
+                        ? "border-destructive focus:border-destructive"
+                        : "border-gray-200 hover:border-[rgba(13,129,206,0.5)] focus:border-[rgb(13,129,206)]"
                     )}
-                    onMouseEnter={(e) => {
-                      if (!errors.pin) {
-                        (e.currentTarget as HTMLElement).style.borderColor = 'rgba(13, 129, 206, 0.5)'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!errors.pin) {
-                        (e.currentTarget as HTMLElement).style.borderColor = ''
-                      }
-                    }}
-                    onFocus={(e) => {
-                      if (!errors.pin) {
-                        (e.currentTarget as HTMLElement).style.borderColor = 'rgb(13, 129, 206)'
-                      }
-                    }}
-                    onBlur={(e) => {
-                      if (!errors.pin) {
-                        (e.currentTarget as HTMLElement).style.borderColor = ''
-                      }
-                    }}
                     {...register('pin')}
                     autoFocus
                   />
