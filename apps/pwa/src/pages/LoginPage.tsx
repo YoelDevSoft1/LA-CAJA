@@ -243,8 +243,32 @@ export default function LoginPage() {
                         "h-12 text-base border-2 transition-all duration-200",
                         errors.store_id 
                           ? "border-destructive focus:border-destructive" 
-                          : "border-gray-200 hover:border-blue-300 focus:border-blue-500"
+                          : "border-gray-200"
                       )}
+                      style={!errors.store_id ? {
+                        '--hover-border': 'rgba(13, 129, 206, 0.5)',
+                        '--focus-border': 'rgb(13, 129, 206)',
+                      } as React.CSSProperties & { '--hover-border'?: string; '--focus-border'?: string } : undefined}
+                      onMouseEnter={(e) => {
+                        if (!errors.store_id) {
+                          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(13, 129, 206, 0.5)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!errors.store_id) {
+                          (e.currentTarget as HTMLElement).style.borderColor = ''
+                        }
+                      }}
+                      onFocus={(e) => {
+                        if (!errors.store_id) {
+                          (e.currentTarget as HTMLElement).style.borderColor = 'rgb(13, 129, 206)'
+                        }
+                      }}
+                      onBlur={(e) => {
+                        if (!errors.store_id) {
+                          (e.currentTarget as HTMLElement).style.borderColor = ''
+                        }
+                      }}
                     >
                       <SelectValue placeholder="Selecciona tu tienda" />
                     </SelectTrigger>
