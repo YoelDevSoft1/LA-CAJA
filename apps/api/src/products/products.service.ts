@@ -47,6 +47,18 @@ export class ProductsService {
       `Creando producto: price_usd=${price_usd} -> price_bs=${price_bs.toFixed(2)} (tasa=${exchangeRate})`,
     );
 
+    const isWeightProduct = dto.is_weight_product ?? false;
+    const pricePerWeightUsd =
+      isWeightProduct && dto.price_per_weight_usd != null
+        ? this.roundToTwoDecimals(dto.price_per_weight_usd)
+        : null;
+    const pricePerWeightBs =
+      isWeightProduct && pricePerWeightUsd !== null
+        ? this.roundToTwoDecimals(pricePerWeightUsd * exchangeRate)
+        : isWeightProduct
+          ? dto.price_per_weight_bs ?? null
+          : null;
+
     const product = this.productRepository.create({
       id: randomUUID(),
       store_id: storeId,
@@ -60,6 +72,14 @@ export class ProductsService {
       cost_usd: cost_usd,
       low_stock_threshold: dto.low_stock_threshold || 0,
       is_active: true,
+      is_weight_product: isWeightProduct,
+      weight_unit: isWeightProduct ? dto.weight_unit ?? null : null,
+      price_per_weight_bs: pricePerWeightBs,
+      price_per_weight_usd: pricePerWeightUsd,
+      min_weight: isWeightProduct ? dto.min_weight ?? null : null,
+      max_weight: isWeightProduct ? dto.max_weight ?? null : null,
+      scale_plu: isWeightProduct ? dto.scale_plu ?? null : null,
+      scale_department: isWeightProduct ? dto.scale_department ?? null : null,
     });
 
     return this.productRepository.save(product);
@@ -129,7 +149,11 @@ export class ProductsService {
 
     // Obtener tasa BCV una sola vez si es necesaria
     let exchangeRate: number | null = null;
-    if (dto.price_usd !== undefined || dto.cost_usd !== undefined) {
+    if (
+      dto.price_usd !== undefined ||
+      dto.cost_usd !== undefined ||
+      dto.price_per_weight_usd != null
+    ) {
       const bcvRate = await this.exchangeService.getBCVRate();
       exchangeRate = bcvRate?.rate || 36;
       this.logger.log(`Usando tasa BCV para actualización: ${exchangeRate}`);
@@ -143,6 +167,8 @@ export class ProductsService {
     if (dto.low_stock_threshold !== undefined)
       product.low_stock_threshold = dto.low_stock_threshold;
     if (dto.is_active !== undefined) product.is_active = dto.is_active;
+    if (dto.is_weight_product !== undefined)
+      product.is_weight_product = dto.is_weight_product;
 
     // Si se actualiza el precio USD, recalcular el precio Bs usando la tasa BCV
     // SIEMPRE recalcular, ignorando cualquier price_bs que venga en el DTO
@@ -162,6 +188,37 @@ export class ProductsService {
       this.logger.log(
         `Actualizando costo: cost_usd=${product.cost_usd} -> cost_bs=${product.cost_bs.toFixed(2)} (tasa=${exchangeRate})`,
       );
+    }
+
+    const isWeightProduct = product.is_weight_product;
+    if (!isWeightProduct) {
+      product.weight_unit = null;
+      product.price_per_weight_bs = null;
+      product.price_per_weight_usd = null;
+      product.min_weight = null;
+      product.max_weight = null;
+      product.scale_plu = null;
+      product.scale_department = null;
+    } else {
+      if (dto.weight_unit !== undefined) product.weight_unit = dto.weight_unit;
+      if (dto.min_weight !== undefined) product.min_weight = dto.min_weight;
+      if (dto.max_weight !== undefined) product.max_weight = dto.max_weight;
+      if (dto.scale_plu !== undefined) product.scale_plu = dto.scale_plu;
+      if (dto.scale_department !== undefined)
+        product.scale_department = dto.scale_department;
+
+      if (dto.price_per_weight_usd != null && exchangeRate !== null) {
+        product.price_per_weight_usd = this.roundToTwoDecimals(
+          dto.price_per_weight_usd,
+        );
+        product.price_per_weight_bs = this.roundToTwoDecimals(
+          dto.price_per_weight_usd * exchangeRate,
+        );
+      } else if (dto.price_per_weight_bs != null) {
+        product.price_per_weight_bs = this.roundToTwoDecimals(
+          dto.price_per_weight_bs,
+        );
+      }
     }
 
     return this.productRepository.save(product);
