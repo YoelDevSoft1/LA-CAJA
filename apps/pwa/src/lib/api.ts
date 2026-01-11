@@ -7,6 +7,9 @@ function getApiUrl(): string {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
+  if (import.meta.env.PROD) {
+    throw new Error('VITE_API_URL is not set in production');
+  }
 
   // Si estamos en localhost, usar localhost
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
