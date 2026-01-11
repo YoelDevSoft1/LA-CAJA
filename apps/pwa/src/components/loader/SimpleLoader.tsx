@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
+import { colors } from '@/design-system'
 
 interface SimpleLoaderProps {
   onComplete?: () => void
@@ -8,8 +9,8 @@ interface SimpleLoaderProps {
 }
 
 /**
- * Loader minimalista y elegante con partículas flotantes
- * Diseño limpio inspirado en Apple/Linear
+ * Loader profesional con transición elegante
+ * Incluye partículas flotantes, progreso animado y saludo personalizado
  */
 export default function SimpleLoader({
   onComplete,
@@ -26,6 +27,26 @@ export default function SimpleLoader({
   const [progress, setProgress] = useState(0)
   const [phase, setPhase] = useState<'loading' | 'welcome'>('loading')
 
+  // Partículas memorizadas
+  const particles = useMemo(() => {
+    return Array.from({ length: 30 }, (_, i) => ({
+      id: i,
+      size: Math.random() * 4 + 2,
+      left: Math.random() * 100,
+      top: Math.random() * 100,
+      duration: 4 + Math.random() * 4,
+      delay: Math.random() * 2,
+    }))
+  }, [])
+
+  // Puntos orbitales para el círculo de progreso
+  const orbitalDots = useMemo(() => {
+    return Array.from({ length: 8 }, (_, i) => ({
+      id: i,
+      angle: (i * 360) / 8,
+      delay: i * 0.1,
+    }))
+  }, [])
 
   useEffect(() => {
     const startTime = Date.now()
@@ -40,7 +61,7 @@ export default function SimpleLoader({
         setTimeout(() => {
           setIsComplete(true)
           onComplete?.()
-        }, 2500)
+        }, 2000)
       }
     }, 16)
 
@@ -56,31 +77,55 @@ export default function SimpleLoader({
             background: 'linear-gradient(135deg, #fafbfc 0%, #f0f4f8 100%)',
           }}
           initial={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.5, ease: 'easeInOut' }}
+          exit={{ opacity: 0, scale: 1.05 }}
+          transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
         >
-          {/* Círculo de progreso sutil en el fondo */}
-          <motion.div
-            className="absolute"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 0.08, scale: 1 }}
-            transition={{ duration: 1 }}
-          >
-            <svg width="400" height="400" viewBox="0 0 400 400">
-              <circle
-                cx="200"
-                cy="200"
-                r="180"
-                fill="none"
-                stroke="rgb(13, 129, 206)"
-                strokeWidth="1"
-                strokeDasharray={`${2 * Math.PI * 180}`}
-                strokeDashoffset={`${2 * Math.PI * 180 * (1 - progress / 100)}`}
-                strokeLinecap="round"
-                style={{ transition: 'stroke-dashoffset 0.3s ease-out' }}
+          {/* Partículas flotantes */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            {particles.map((particle) => (
+              <motion.div
+                key={particle.id}
+                className="absolute rounded-full"
+                style={{
+                  width: particle.size,
+                  height: particle.size,
+                  left: `${particle.left}%`,
+                  top: `${particle.top}%`,
+                  backgroundColor: colors.brand.primarySoft,
+                }}
+                animate={{
+                  y: [0, -30, 0],
+                  x: [0, Math.random() * 20 - 10, 0],
+                  opacity: [0.3, 0.6, 0.3],
+                  scale: [1, 1.2, 1],
+                }}
+                transition={{
+                  duration: particle.duration,
+                  repeat: Infinity,
+                  delay: particle.delay,
+                  ease: 'easeInOut',
+                }}
               />
-            </svg>
-          </motion.div>
+            ))}
+          </div>
+
+          {/* Gradientes de fondo */}
+          <motion.div
+            className="absolute -top-1/4 -left-1/4 w-[60%] h-[60%] opacity-0 pointer-events-none"
+            style={{
+              background: `radial-gradient(ellipse, ${colors.brand.primaryLight} 0%, transparent 60%)`,
+            }}
+            animate={{ opacity: 0.4 }}
+            transition={{ duration: 1.5 }}
+          />
+          <motion.div
+            className="absolute -bottom-1/4 -right-1/4 w-[60%] h-[60%] opacity-0 pointer-events-none"
+            style={{
+              background: `radial-gradient(ellipse, ${colors.brand.primaryLight} 0%, transparent 60%)`,
+            }}
+            animate={{ opacity: 0.4 }}
+            transition={{ duration: 1.5, delay: 0.3 }}
+          />
 
           {/* Contenido central */}
           <div className="relative z-10 flex flex-col items-center">
@@ -91,43 +136,115 @@ export default function SimpleLoader({
                   className="flex flex-col items-center"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20, scale: 0.95 }}
-                  transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+                  exit={{ opacity: 0, y: -30, scale: 0.9 }}
+                  transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
                 >
-                  {/* Logo container */}
-                  <motion.div
-                    className="relative mb-8"
-                    animate={{
-                      y: [0, -8, 0],
-                    }}
-                    transition={{
-                      duration: 3,
-                      repeat: Infinity,
-                      ease: 'easeInOut',
-                    }}
-                  >
-                    {/* Glow sutil */}
-                    <div
-                      className="absolute inset-0 blur-2xl opacity-30"
-                      style={{
-                        background: 'radial-gradient(circle, rgb(13, 129, 206) 0%, transparent 70%)',
-                        transform: 'scale(2)',
+                  {/* Logo con anillo de progreso */}
+                  <div className="relative mb-10">
+                    {/* Anillo de progreso exterior */}
+                    <svg
+                      className="absolute -inset-4"
+                      width="140"
+                      height="140"
+                      viewBox="0 0 140 140"
+                    >
+                      {/* Track */}
+                      <circle
+                        cx="70"
+                        cy="70"
+                        r="64"
+                        fill="none"
+                        stroke={colors.brand.primaryLight}
+                        strokeWidth="2"
+                      />
+                      {/* Progress */}
+                      <motion.circle
+                        cx="70"
+                        cy="70"
+                        r="64"
+                        fill="none"
+                        stroke={colors.brand.primary}
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeDasharray={2 * Math.PI * 64}
+                        strokeDashoffset={2 * Math.PI * 64 * (1 - progress / 100)}
+                        style={{
+                          transform: 'rotate(-90deg)',
+                          transformOrigin: 'center',
+                        }}
+                        transition={{ duration: 0.1 }}
+                      />
+                    </svg>
+
+                    {/* Puntos orbitales */}
+                    {orbitalDots.map((dot) => (
+                      <motion.div
+                        key={dot.id}
+                        className="absolute w-1.5 h-1.5 rounded-full"
+                        style={{
+                          backgroundColor: colors.brand.primary,
+                          top: '50%',
+                          left: '50%',
+                          marginTop: -3,
+                          marginLeft: -3,
+                        }}
+                        animate={{
+                          x: Math.cos((dot.angle * Math.PI) / 180 + (progress / 100) * Math.PI * 2) * 58,
+                          y: Math.sin((dot.angle * Math.PI) / 180 + (progress / 100) * Math.PI * 2) * 58,
+                          opacity: progress > dot.id * 12.5 ? [0.3, 1, 0.3] : 0.1,
+                          scale: progress > dot.id * 12.5 ? [0.8, 1.2, 0.8] : 0.5,
+                        }}
+                        transition={{
+                          duration: 1.5,
+                          repeat: Infinity,
+                          delay: dot.delay,
+                          ease: 'easeInOut',
+                        }}
+                      />
+                    ))}
+
+                    {/* Glow pulsante */}
+                    <motion.div
+                      className="absolute inset-0 blur-2xl rounded-full"
+                      style={{ background: colors.brand.primary }}
+                      animate={{
+                        opacity: [0.15, 0.3, 0.15],
+                        scale: [1, 1.2, 1],
+                      }}
+                      transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: 'easeInOut',
                       }}
                     />
 
-                    {/* Logo */}
-                    <div className="relative bg-white p-5 rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100">
+                    {/* Logo container */}
+                    <motion.div
+                      className="relative bg-white p-5 rounded-2xl shadow-xl border border-slate-100"
+                      style={{
+                        boxShadow: colors.shadows.xl,
+                      }}
+                      animate={{
+                        y: [0, -6, 0],
+                      }}
+                      transition={{
+                        duration: 2.5,
+                        repeat: Infinity,
+                        ease: 'easeInOut',
+                      }}
+                    >
                       <img
                         src="/favicon.svg"
                         alt="LA CAJA"
                         className="w-16 h-16"
                       />
-                    </div>
-                  </motion.div>
+                    </motion.div>
+                  </div>
 
                   {/* Nombre de la app */}
                   <motion.h2
-                    className="text-xl font-semibold tracking-wide text-slate-800 mb-8"
+                    className="text-xl font-bold tracking-wide mb-6"
+                    style={{ color: colors.brand.primary }}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.2 }}
@@ -135,111 +252,173 @@ export default function SimpleLoader({
                     LA CAJA
                   </motion.h2>
 
-                  {/* Barra de progreso minimalista */}
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-48 h-1 bg-slate-200 rounded-full overflow-hidden">
+                  {/* Barra de progreso moderna */}
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="relative w-56 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      {/* Shimmer effect */}
                       <motion.div
-                        className="h-full rounded-full"
+                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
+                        animate={{ x: ['-100%', '200%'] }}
+                        transition={{
+                          duration: 1.5,
+                          repeat: Infinity,
+                          ease: 'easeInOut',
+                        }}
+                      />
+                      {/* Progress bar */}
+                      <motion.div
+                        className="h-full rounded-full relative"
                         style={{
                           width: `${progress}%`,
-                          backgroundColor: 'rgb(13, 129, 206)',
+                          background: colors.gradients.primary,
                         }}
                         transition={{ duration: 0.1 }}
-                      />
+                      >
+                        {/* Glow tip */}
+                        <motion.div
+                          className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full"
+                          style={{
+                            background: colors.brand.primary,
+                            boxShadow: colors.shadows.glow,
+                          }}
+                          animate={{
+                            scale: [1, 1.3, 1],
+                            opacity: [0.8, 1, 0.8],
+                          }}
+                          transition={{
+                            duration: 0.8,
+                            repeat: Infinity,
+                            ease: 'easeInOut',
+                          }}
+                        />
+                      </motion.div>
                     </div>
 
-                    {/* Porcentaje sutil */}
-                    <motion.span
-                      className="text-sm font-medium text-slate-400 tabular-nums"
+                    {/* Texto de carga */}
+                    <motion.div
+                      className="flex items-center gap-2 text-sm text-slate-500"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: 0.3 }}
                     >
-                      {Math.round(progress)}%
-                    </motion.span>
+                      <span className="font-medium">Preparando tu espacio</span>
+                      <motion.span
+                        animate={{ opacity: [0, 1, 0] }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
+                      >
+                        ...
+                      </motion.span>
+                    </motion.div>
                   </div>
                 </motion.div>
               ) : (
                 <motion.div
                   key="welcome"
                   className="flex flex-col items-center text-center px-8"
-                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  initial={{ opacity: 0, scale: 0.8, y: 30 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   transition={{
                     duration: 0.6,
-                    ease: [0.4, 0, 0.2, 1],
+                    ease: [0.34, 1.56, 0.64, 1], // Bounce out
                   }}
                 >
-                  {/* Checkmark animado */}
-                  <motion.div
-                    className="mb-6 w-16 h-16 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: 'rgba(13, 129, 206, 0.1)' }}
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{
-                      type: 'spring',
-                      stiffness: 300,
-                      damping: 20,
-                    }}
-                  >
-                    <motion.svg
-                      width="32"
-                      height="32"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      initial={{ pathLength: 0, opacity: 0 }}
-                      animate={{ pathLength: 1, opacity: 1 }}
-                      transition={{ duration: 0.5, delay: 0.2 }}
-                    >
-                      <motion.path
-                        d="M5 13l4 4L19 7"
-                        stroke="rgb(13, 129, 206)"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        initial={{ pathLength: 0 }}
-                        animate={{ pathLength: 1 }}
-                        transition={{ duration: 0.5, delay: 0.3 }}
+                  {/* Checkmark animado con burst effect */}
+                  <motion.div className="relative mb-8">
+                    {/* Burst particles */}
+                    {[...Array(8)].map((_, i) => (
+                      <motion.div
+                        key={i}
+                        className="absolute w-2 h-2 rounded-full"
+                        style={{
+                          backgroundColor: colors.brand.primary,
+                          top: '50%',
+                          left: '50%',
+                        }}
+                        initial={{ scale: 0, x: 0, y: 0, opacity: 1 }}
+                        animate={{
+                          scale: [0, 1, 0],
+                          x: Math.cos((i * 45 * Math.PI) / 180) * 60,
+                          y: Math.sin((i * 45 * Math.PI) / 180) * 60,
+                          opacity: [1, 1, 0],
+                        }}
+                        transition={{
+                          duration: 0.8,
+                          delay: 0.2,
+                          ease: 'easeOut',
+                        }}
                       />
-                    </motion.svg>
+                    ))}
+
+                    {/* Circle background */}
+                    <motion.div
+                      className="w-20 h-20 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: colors.brand.primaryLight }}
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 400,
+                        damping: 15,
+                      }}
+                    >
+                      {/* Checkmark SVG */}
+                      <svg
+                        width="40"
+                        height="40"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <motion.path
+                          d="M5 13l4 4L19 7"
+                          stroke={colors.brand.primary}
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          initial={{ pathLength: 0 }}
+                          animate={{ pathLength: 1 }}
+                          transition={{ duration: 0.4, delay: 0.3 }}
+                        />
+                      </svg>
+                    </motion.div>
                   </motion.div>
 
-                  {/* Saludo */}
+                  {/* Saludo personalizado */}
                   <motion.div
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
+                    transition={{ delay: 0.5 }}
                   >
                     <h1
-                      className="text-3xl font-semibold mb-2"
-                      style={{ color: 'rgb(13, 129, 206)' }}
+                      className="text-4xl font-bold mb-3"
+                      style={{ color: colors.brand.primary }}
                     >
                       {firstName && firstName.toLowerCase().endsWith('a') ? 'Bienvenida' : 'Bienvenido'}
                     </h1>
                     {firstName && (
-                      <p className="text-2xl font-medium text-slate-700">
+                      <motion.p
+                        className="text-3xl font-semibold text-slate-700"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.7 }}
+                      >
                         {firstName}
-                      </p>
+                      </motion.p>
                     )}
                   </motion.div>
+
+                  {/* Subtitle */}
+                  <motion.p
+                    className="mt-4 text-slate-500 text-sm"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.9 }}
+                  >
+                    Tu punto de venta está listo
+                  </motion.p>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-
-          {/* Gradiente sutil en las esquinas */}
-          <div
-            className="absolute top-0 left-0 w-64 h-64 opacity-30 pointer-events-none"
-            style={{
-              background: 'radial-gradient(circle at top left, rgba(13, 129, 206, 0.15) 0%, transparent 60%)',
-            }}
-          />
-          <div
-            className="absolute bottom-0 right-0 w-64 h-64 opacity-30 pointer-events-none"
-            style={{
-              background: 'radial-gradient(circle at bottom right, rgba(13, 129, 206, 0.15) 0%, transparent 60%)',
-            }}
-          />
         </motion.div>
       )}
     </AnimatePresence>
