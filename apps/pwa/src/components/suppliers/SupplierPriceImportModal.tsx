@@ -102,19 +102,24 @@ export default function SupplierPriceImportModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label className="text-sm font-semibold">Proveedor</Label>
-              <Select value={supplierId} onValueChange={setSupplierId}>
-                <SelectTrigger className="mt-2">
-                  <SelectValue placeholder="Selecciona un proveedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Sin proveedor</SelectItem>
+                <Select
+                  value={supplierId}
+                  onValueChange={(value) =>
+                    setSupplierId(value === 'none' ? '' : value)
+                  }
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder="Selecciona un proveedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                  <SelectItem value="none">Sin proveedor</SelectItem>
                   {suppliers.map((supplier) => (
                     <SelectItem key={supplier.id} value={supplier.id}>
                       {supplier.name}
                     </SelectItem>
                   ))}
-                </SelectContent>
-              </Select>
+                  </SelectContent>
+                </Select>
             </div>
             <div>
               <Label className="text-sm font-semibold">Moneda de la lista</Label>
