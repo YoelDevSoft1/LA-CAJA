@@ -1,11 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { X } from 'lucide-react'
+import { X, Search } from 'lucide-react'
 import { productsService, Product } from '@/services/products.service'
 import { exchangeService } from '@/services/exchange.service'
+import { suppliersService } from '@/services/suppliers.service'
+import { supplierPriceListsService, SupplierPriceListItem } from '@/services/supplier-price-lists.service'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/stores/auth.store'
 import { Button } from '@/components/ui/button'
@@ -94,6 +96,9 @@ export default function ProductFormModal({
       low_stock_threshold: 0,
     },
   })
+  const [supplierPriceSearch, setSupplierPriceSearch] = useState('')
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('')
+  const [applySupplierPriceToSale, setApplySupplierPriceToSale] = useState(false)
 
   // Obtener tasa BCV para cálculo automático (usa cache del prefetch)
   // Carga inmediata porque es ligera y necesaria para cálculos
@@ -103,6 +108,33 @@ export default function ProductFormModal({
     staleTime: 1000 * 60 * 60 * 2, // 2 horas
     gcTime: Infinity, // Nunca eliminar
     enabled: isOpen,
+  })
+
+  const { data: suppliers = [] } = useQuery({
+    queryKey: ['suppliers'],
+    queryFn: () => suppliersService.getAll(),
+    staleTime: 1000 * 60 * 5,
+    enabled: isOpen,
+  })
+
+  const {
+    data: supplierPriceLookup,
+    isLoading: isLoadingSupplierPrices,
+    error: supplierPriceError,
+  } = useQuery({
+    queryKey: ['supplier-price-items', selectedSupplierId, supplierPriceSearch],
+    queryFn: () =>
+      supplierPriceListsService.searchItems({
+        supplier_id: selectedSupplierId,
+        search: supplierPriceSearch.trim(),
+        limit: 20,
+      }),
+    enabled:
+      isOpen &&
+      Boolean(selectedSupplierId) &&
+      supplierPriceSearch.trim().length >= 2,
+    staleTime: 1000 * 60 * 2,
+    retry: false,
   })
 
   // Observar cambios en price_usd y cost_usd para calcular automáticamente los valores en Bs
@@ -221,6 +253,9 @@ export default function ProductFormModal({
   // Limpiar formulario cuando se cierra el modal
   useEffect(() => {
     if (!isOpen) {
+      setSupplierPriceSearch('')
+      setSelectedSupplierId('')
+      setApplySupplierPriceToSale(false)
       reset({
         name: '',
         category: '',
@@ -383,9 +418,59 @@ export default function ProductFormModal({
     }
   }
 
+  const formatSupplierPrice = (value: number | string | null | undefined) => {
+    if (value === null || value === undefined) return null
+    const parsed = Number(value)
+    return Number.isNaN(parsed) ? null : parsed.toFixed(4)
+  }
+
+  const handleApplySupplierPrice = (
+    item: SupplierPriceListItem,
+    tier: 'A' | 'B'
+  ) => {
+    const unitPriceRaw = tier === 'A' ? item.unit_price_a : item.unit_price_b
+    const unitPrice = unitPriceRaw != null ? Number(unitPriceRaw) : 0
+
+    if (!unitPrice || Number.isNaN(unitPrice)) {
+      toast.error('El precio seleccionado no es válido')
+      return
+    }
+
+    const currency = supplierPriceLookup?.list.currency || 'USD'
+    const exchangeRate = bcvRateData?.rate || 36
+    const priceUsd = currency === 'USD' ? unitPrice : unitPrice / exchangeRate
+    const priceBs = currency === 'USD' ? unitPrice * exchangeRate : unitPrice
+
+    const costUsd = roundTo(priceUsd, 2)
+    const costBs = roundTo(priceBs, 2)
+
+    setValue('cost_usd', costUsd, { shouldValidate: true })
+    setValue('cost_bs', costBs, { shouldValidate: true })
+
+    if (applySupplierPriceToSale) {
+      setValue('price_usd', costUsd, { shouldValidate: true })
+      setValue('price_bs', costBs, { shouldValidate: true })
+    }
+
+    const currentName = getValues('name')
+    if (!currentName || !currentName.trim()) {
+      setValue('name', item.product_name, { shouldValidate: true })
+    }
+
+    const currentSku = getValues('sku')
+    if (!currentSku && item.product_code) {
+      setValue('sku', item.product_code, { shouldValidate: false })
+    }
+
+    setSupplierPriceSearch('')
+    toast.success(`Precio aplicado desde lista (${tier})`)
+  }
+
   if (!isOpen) return null
 
   const isLoading = createMutation.isPending || updateMutation.isPending
+  const supplierCurrencySymbol =
+    supplierPriceLookup?.list.currency === 'BS' ? 'Bs.' : '$'
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-1 sm:p-4">
@@ -460,6 +545,123 @@ export default function ProductFormModal({
               className="mt-2 text-base"
               placeholder="Ej: 7801234567890"
             />
+          </div>
+
+          {/* Lista de precios de proveedor */}
+          <div className="rounded-lg border border-border p-3 sm:p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Lista de precios de proveedor</p>
+                <p className="text-xs text-muted-foreground">
+                  Busca en listas importadas para completar los costos automáticamente.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="apply_supplier_price_to_sale"
+                  checked={applySupplierPriceToSale}
+                  onCheckedChange={setApplySupplierPriceToSale}
+                />
+                <Label htmlFor="apply_supplier_price_to_sale" className="text-xs">
+                  Aplicar también como precio de venta
+                </Label>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-sm font-semibold">Proveedor</Label>
+                <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder="Selecciona un proveedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-sm font-semibold">Buscar en lista</Label>
+                <div className="relative mt-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={supplierPriceSearch}
+                    onChange={(event) => setSupplierPriceSearch(event.target.value)}
+                    className="pl-9"
+                    placeholder="Código o nombre del producto"
+                    disabled={!selectedSupplierId}
+                  />
+                </div>
+                {!selectedSupplierId && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Selecciona un proveedor para buscar.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {selectedSupplierId && supplierPriceSearch.trim().length >= 2 && (
+              <div className="rounded-md border border-border max-h-52 overflow-y-auto">
+                {isLoadingSupplierPrices ? (
+                  <div className="p-3 text-sm text-muted-foreground">Buscando precios...</div>
+                ) : supplierPriceError ? (
+                  <div className="p-3 text-sm text-muted-foreground">
+                    No hay listas de precios para este proveedor.
+                  </div>
+                ) : supplierPriceLookup?.items.length ? (
+                  supplierPriceLookup.items.map((item) => {
+                    const priceA = formatSupplierPrice(item.unit_price_a)
+                    const priceB = formatSupplierPrice(item.unit_price_b)
+                    return (
+                      <div key={item.id} className="flex items-start justify-between gap-3 p-3 border-b last:border-b-0">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground break-words">{item.product_name}</p>
+                          <p className="text-xs text-muted-foreground">Código: {item.product_code}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            A: {priceA ? `${supplierCurrencySymbol} ${priceA}` : 'N/A'} · B:{' '}
+                            {priceB ? `${supplierCurrencySymbol} ${priceB}` : 'N/A'}
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          {priceA && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleApplySupplierPrice(item, 'A')}
+                            >
+                              Aplicar A
+                            </Button>
+                          )}
+                          {priceB && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleApplySupplierPrice(item, 'B')}
+                            >
+                              Aplicar B
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
+                ) : (
+                  <div className="p-3 text-sm text-muted-foreground">No se encontraron resultados.</div>
+                )}
+              </div>
+            )}
+
+            {supplierPriceLookup?.list && (
+              <p className="text-xs text-muted-foreground">
+                Lista activa: {supplierPriceLookup.list.name} · Moneda {supplierPriceLookup.list.currency}
+              </p>
+            )}
           </div>
 
           {/* Precios */}

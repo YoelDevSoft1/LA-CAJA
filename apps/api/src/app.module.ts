@@ -32,6 +32,7 @@ import { ExchangeModule } from './exchange/exchange.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
 import { TransfersModule } from './transfers/transfers.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
+import { SupplierPriceListsModule } from './supplier-price-lists/supplier-price-lists.module';
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { FiscalConfigsModule } from './fiscal-configs/fiscal-configs.module';
 import { FiscalInvoicesModule } from './fiscal-invoices/fiscal-invoices.module';
@@ -180,6 +181,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     WarehousesModule,
     TransfersModule,
     SuppliersModule,
+    SupplierPriceListsModule,
     PurchaseOrdersModule,
     FiscalConfigsModule,
     FiscalInvoicesModule,

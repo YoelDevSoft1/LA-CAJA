@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Search, Plus, Edit, Trash2, Truck, BarChart3, Package, Phone, Mail, ShoppingBag } from 'lucide-react'
+import { Search, Plus, Edit, Trash2, Truck, BarChart3, Package, Phone, Mail, ShoppingBag, FileText } from 'lucide-react'
 import { suppliersService, Supplier } from '@/services/suppliers.service'
+import SupplierPriceImportModal from '@/components/suppliers/SupplierPriceImportModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,6 +37,7 @@ export default function SuppliersPage() {
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isPriceImportOpen, setIsPriceImportOpen] = useState(false)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
   const [activeTab, setActiveTab] = useState<string>('list')
@@ -206,10 +208,16 @@ export default function SuppliersPage() {
               {filteredSuppliers.length} {filteredSuppliers.length === 1 ? 'proveedor' : 'proveedores'} registrados
             </p>
           </div>
-          <Button onClick={handleCreate} variant="default">
-            <Plus className="w-5 h-5 mr-2" />
-            Nuevo Proveedor
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button onClick={() => setIsPriceImportOpen(true)} variant="outline">
+              <FileText className="w-5 h-5 mr-2" />
+              Importar Lista CSV
+            </Button>
+            <Button onClick={handleCreate} variant="default">
+              <Plus className="w-5 h-5 mr-2" />
+              Nuevo Proveedor
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -654,7 +662,12 @@ export default function SuppliersPage() {
           </form>
         </DialogContent>
       </Dialog>
+      <SupplierPriceImportModal
+        isOpen={isPriceImportOpen}
+        onClose={() => setIsPriceImportOpen(false)}
+        suppliers={suppliers}
+        onImported={() => setIsPriceImportOpen(false)}
+      />
     </div>
   )
 }
-

@@ -60,6 +60,8 @@ export { TransferItem } from './transfer-item.entity';
 
 // Supplier & Purchase entities
 export { Supplier } from './supplier.entity';
+export { SupplierPriceList } from './supplier-price-list.entity';
+export { SupplierPriceListItem } from './supplier-price-list-item.entity';
 export { PurchaseOrder } from './purchase-order.entity';
 export { PurchaseOrderItem } from './purchase-order-item.entity';
 
@@ -150,6 +152,8 @@ import { WarehouseStock } from './warehouse-stock.entity';
 import { Transfer } from './transfer.entity';
 import { TransferItem } from './transfer-item.entity';
 import { Supplier } from './supplier.entity';
+import { SupplierPriceList } from './supplier-price-list.entity';
+import { SupplierPriceListItem } from './supplier-price-list-item.entity';
 import { PurchaseOrder } from './purchase-order.entity';
 import { PurchaseOrderItem } from './purchase-order-item.entity';
 import { FiscalInvoice } from './fiscal-invoice.entity';
@@ -234,6 +238,8 @@ export const ALL_ENTITIES = [
   Transfer,
   TransferItem,
   Supplier,
+  SupplierPriceList,
+  SupplierPriceListItem,
   PurchaseOrder,
   PurchaseOrderItem,
   FiscalInvoice,
