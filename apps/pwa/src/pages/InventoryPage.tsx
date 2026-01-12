@@ -3,6 +3,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useAuth } from '@/stores/auth.store'
 import { Search, Package, AlertTriangle, Plus, TrendingUp, TrendingDown, History, Trash2, AlertOctagon } from 'lucide-react'
 import { inventoryService, StockStatus } from '@/services/inventory.service'
+import { warehousesService } from '@/services/warehouses.service'
 import StockReceivedModal from '@/components/inventory/StockReceivedModal'
 import StockAdjustModal from '@/components/inventory/StockAdjustModal'
 import MovementsModal from '@/components/inventory/MovementsModal'
@@ -25,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import toast from 'react-hot-toast'
 
 export default function InventoryPage() {
@@ -38,6 +40,7 @@ export default function InventoryPage() {
   const [isStockAdjustModalOpen, setIsStockAdjustModalOpen] = useState(false)
   const [isMovementsModalOpen, setIsMovementsModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<StockStatus | null>(null)
+  const [warehouseFilter, setWarehouseFilter] = useState('all')
   // Estados para vaciar stock (solo owners)
   const [isResetProductModalOpen, setIsResetProductModalOpen] = useState(false)
   const [isResetAllModalOpen, setIsResetAllModalOpen] = useState(false)
@@ -47,7 +50,7 @@ export default function InventoryPage() {
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchQuery, showLowStockOnly])
+  }, [searchQuery, showLowStockOnly, warehouseFilter])
 
   const offset = (currentPage - 1) * pageSize
 
@@ -58,6 +61,7 @@ export default function InventoryPage() {
       'stock-status',
       searchQuery,
       showLowStockOnly,
+      warehouseFilter,
       currentPage,
       pageSize,
       user?.store_id,
@@ -65,6 +69,7 @@ export default function InventoryPage() {
     queryFn: () =>
       inventoryService.getStockStatusPaged({
         search: searchQuery || undefined,
+        warehouse_id: warehouseFilter !== 'all' ? warehouseFilter : undefined,
         limit: pageSize,
         offset,
         low_stock_only: showLowStockOnly || undefined,
@@ -75,10 +80,11 @@ export default function InventoryPage() {
   })
 
   const { data: lowStockCountData } = useQuery({
-    queryKey: ['inventory', 'low-stock-count', searchQuery, user?.store_id],
+    queryKey: ['inventory', 'low-stock-count', searchQuery, warehouseFilter, user?.store_id],
     queryFn: () =>
       inventoryService.getStockStatusPaged({
         search: searchQuery || undefined,
+        warehouse_id: warehouseFilter !== 'all' ? warehouseFilter : undefined,
         low_stock_only: true,
         limit: 1,
         offset: 0,
@@ -86,6 +92,12 @@ export default function InventoryPage() {
     enabled: !!user?.store_id && !showLowStockOnly,
     staleTime: 1000 * 60 * 10,
     gcTime: Infinity,
+  })
+
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: () => warehousesService.getAll(),
+    enabled: !!user?.store_id,
   })
 
   const stockItems = stockStatusData?.items || []
@@ -230,6 +242,28 @@ export default function InventoryPage() {
               className="pl-9 sm:pl-10 h-11 sm:h-12 text-base sm:text-lg"
           />
         </div>
+
+        {/* Filtro de bodega */}
+        {warehouses.length > 0 && (
+          <div>
+            <Label className="text-xs text-muted-foreground">Bodega</Label>
+            <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Todas las bodegas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las bodegas</SelectItem>
+                {warehouses
+                  .filter((warehouse) => warehouse.is_active)
+                  .map((warehouse) => (
+                    <SelectItem key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name} {warehouse.is_default ? '(Por defecto)' : ''}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Filtro de stock bajo */}
           <div className="flex items-center space-x-2">

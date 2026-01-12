@@ -148,7 +148,7 @@ export class SalesService {
     dto.cash_session_id = openSession.id;
 
     // Usar transacción para asegurar consistencia (incluye creación/actualización de cliente)
-    return this.dataSource.transaction(async (manager) => {
+    const saleWithDebt = await this.dataSource.transaction(async (manager) => {
       // Manejar información del cliente (opcional para todas las ventas)
       let finalCustomerId: string | null = null;
 
@@ -236,6 +236,21 @@ export class SalesService {
       }
       const saleId = randomUUID();
       const soldAt = new Date();
+
+      // Determinar bodega de venta
+      let warehouseId: string | null = null;
+      if (dto.warehouse_id) {
+        // Validar que la bodega existe y pertenece a la tienda
+        await this.warehousesService.findOne(storeId, dto.warehouse_id);
+        warehouseId = dto.warehouse_id;
+      } else {
+        // Usar bodega por defecto si no se especifica
+        const defaultWarehouse =
+          await this.warehousesService.getDefault(storeId);
+        if (defaultWarehouse) {
+          warehouseId = defaultWarehouse.id;
+        }
+      }
 
       // Obtener productos y calcular totales
       const productMap = new Map<string, Product>();
@@ -376,12 +391,18 @@ export class SalesService {
           }
         } else {
           // Si no tiene lotes, verificar stock normal (por variante si aplica)
-          const currentStock = variant
-            ? await this.productVariantsService.getVariantStock(
+          const currentStock = warehouseId
+            ? await this.warehousesService.getStockQuantity(
                 storeId,
-                variant.id,
+                warehouseId,
+                product.id,
+                variant?.id || null,
               )
-            : await this.getCurrentStock(storeId, product.id);
+            : await this.warehousesService.getTotalStockQuantity(
+                storeId,
+                product.id,
+                variant?.id || null,
+              );
 
           if (currentStock < requestedQty) {
             const variantInfo = variant
@@ -649,21 +670,6 @@ export class SalesService {
         );
       }
 
-      // Determinar bodega de venta
-      let warehouseId: string | null = null;
-      if (dto.warehouse_id) {
-        // Validar que la bodega existe y pertenece a la tienda
-        await this.warehousesService.findOne(storeId, dto.warehouse_id);
-        warehouseId = dto.warehouse_id;
-      } else {
-        // Usar bodega por defecto si no se especifica
-        const defaultWarehouse =
-          await this.warehousesService.getDefault(storeId);
-        if (defaultWarehouse) {
-          warehouseId = defaultWarehouse.id;
-        }
-      }
-
       // Crear movimientos de inventario (descontar stock)
       // Solo si el producto NO tiene lotes (los lotes ya se manejaron arriba)
       for (const item of items) {
@@ -763,22 +769,88 @@ export class SalesService {
       }
 
       // Agregar información de factura fiscal si existe (después de la transacción)
-      // Nota: La factura fiscal se crea después de la venta, así que aquí será null
+      // Nota: La factura fiscal se crea después de la venta
       saleWithDebt.fiscal_invoice = null;
-
-      // Generar asiento contable automático
-      try {
-        await this.accountingService.generateEntryFromSale(storeId, savedSaleWithItems);
-      } catch (error) {
-        // Log error pero no fallar la venta
-        this.logger.error(
-          `Error generando asiento contable para venta ${saleId}`,
-          error instanceof Error ? error.stack : String(error),
-        );
-      }
 
       return saleWithDebt;
     });
+
+    let fiscalInvoiceIssued = false;
+    let fiscalInvoiceFound = false;
+    try {
+      const hasFiscalConfig =
+        await this.fiscalInvoicesService.hasActiveFiscalConfig(storeId);
+      if (hasFiscalConfig) {
+        const existingInvoice = await this.fiscalInvoicesService.findBySale(
+          storeId,
+          saleWithDebt.id,
+        );
+        if (existingInvoice) {
+          fiscalInvoiceFound = true;
+          if (existingInvoice.status === 'draft') {
+            const issuedInvoice = await this.fiscalInvoicesService.issue(
+              storeId,
+              existingInvoice.id,
+            );
+            fiscalInvoiceIssued = issuedInvoice.status === 'issued';
+            saleWithDebt.fiscal_invoice = {
+              id: issuedInvoice.id,
+              invoice_number: issuedInvoice.invoice_number,
+              fiscal_number: issuedInvoice.fiscal_number,
+              status: issuedInvoice.status,
+              issued_at: issuedInvoice.issued_at,
+            };
+          } else {
+            fiscalInvoiceIssued = existingInvoice.status === 'issued';
+            saleWithDebt.fiscal_invoice = {
+              id: existingInvoice.id,
+              invoice_number: existingInvoice.invoice_number,
+              fiscal_number: existingInvoice.fiscal_number,
+              status: existingInvoice.status,
+              issued_at: existingInvoice.issued_at,
+            };
+          }
+        } else {
+          const createdInvoice = await this.fiscalInvoicesService.createFromSale(
+            storeId,
+            saleWithDebt.id,
+            userId || null,
+          );
+          const issuedInvoice = await this.fiscalInvoicesService.issue(
+            storeId,
+            createdInvoice.id,
+          );
+          fiscalInvoiceIssued = issuedInvoice.status === 'issued';
+          fiscalInvoiceFound = true;
+          saleWithDebt.fiscal_invoice = {
+            id: issuedInvoice.id,
+            invoice_number: issuedInvoice.invoice_number,
+            fiscal_number: issuedInvoice.fiscal_number,
+            status: issuedInvoice.status,
+            issued_at: issuedInvoice.issued_at,
+          };
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error emitiendo factura fiscal automática para venta ${saleWithDebt.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+
+    if (!fiscalInvoiceIssued && !fiscalInvoiceFound) {
+      try {
+        await this.accountingService.generateEntryFromSale(storeId, saleWithDebt);
+      } catch (error) {
+        // Log error pero no fallar la venta
+        this.logger.error(
+          `Error generando asiento contable para venta ${saleWithDebt.id}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
+    }
+
+    return saleWithDebt;
   }
 
   async findOne(storeId: string, saleId: string): Promise<Sale> {
@@ -1120,13 +1192,10 @@ export class SalesService {
     storeId: string,
     productId: string,
   ): Promise<number> {
-    const result = await this.movementRepository
-      .createQueryBuilder('movement')
-      .select('COALESCE(SUM(movement.qty_delta), 0)', 'stock')
-      .where('movement.store_id = :storeId', { storeId })
-      .andWhere('movement.product_id = :productId', { productId })
-      .getRawOne();
-
-    return parseFloat(result.stock) || 0;
+    return this.warehousesService.getTotalStockQuantity(
+      storeId,
+      productId,
+      null,
+    );
   }
 }

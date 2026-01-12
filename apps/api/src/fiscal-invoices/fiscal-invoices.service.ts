@@ -96,7 +96,7 @@ export class FiscalInvoicesService {
   async createFromSale(
     storeId: string,
     saleId: string,
-    userId: string,
+    userId: string | null,
   ): Promise<FiscalInvoice> {
     const sale = await this.saleRepository.findOne({
       where: { id: saleId, store_id: storeId },
@@ -196,7 +196,7 @@ export class FiscalInvoicesService {
         currency: sale.currency,
         fiscal_authorization_number: fiscalConfig.fiscal_authorization_number,
         payment_method: sale.payment.method,
-        created_by: userId,
+        created_by: userId || null,
       });
 
       const savedInvoice = await manager.save(FiscalInvoice, fiscalInvoice);
@@ -243,6 +243,13 @@ export class FiscalInvoicesService {
       savedInvoice.items = items;
       return savedInvoice;
     });
+  }
+
+  async hasActiveFiscalConfig(storeId: string): Promise<boolean> {
+    const config = await this.fiscalConfigRepository.findOne({
+      where: { store_id: storeId, is_active: true },
+    });
+    return !!config;
   }
 
   /**

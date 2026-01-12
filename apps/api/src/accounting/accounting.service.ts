@@ -174,11 +174,89 @@ export class AccountingService {
     }) as Promise<JournalEntry>;
   }
 
+  private async calculateSaleCosts(
+    storeId: string,
+    saleItems: SaleItem[],
+  ): Promise<{ costBs: number; costUsd: number }> {
+    let costBs = 0;
+    let costUsd = 0;
+
+    for (const item of saleItems) {
+      let itemCostBs = 0;
+      let itemCostUsd = 0;
+
+      if (item.lot_id && item.lot) {
+        itemCostBs = Number(item.lot.unit_cost_bs || 0) * item.qty;
+        itemCostUsd = Number(item.lot.unit_cost_usd || 0) * item.qty;
+      } else {
+        const movements = await this.inventoryMovementRepository.find({
+          where: {
+            store_id: storeId,
+            product_id: item.product_id,
+            variant_id: item.variant_id ? item.variant_id : IsNull(),
+            movement_type: 'received',
+            approved: true,
+          },
+          order: { happened_at: 'DESC' },
+          take: 10,
+        });
+
+        if (movements.length > 0) {
+          let totalQty = 0;
+          let totalCostBs = 0;
+          let totalCostUsd = 0;
+
+          for (const mov of movements) {
+            const qty = Math.abs(mov.qty_delta);
+            totalQty += qty;
+            totalCostBs += Number(mov.unit_cost_bs || 0) * qty;
+            totalCostUsd += Number(mov.unit_cost_usd || 0) * qty;
+          }
+
+          if (totalQty > 0) {
+            itemCostBs = (totalCostBs / totalQty) * item.qty;
+            itemCostUsd = (totalCostUsd / totalQty) * item.qty;
+          }
+        }
+
+        if (itemCostBs === 0 && itemCostUsd === 0) {
+          itemCostBs = Number(item.product?.cost_bs || 0) * item.qty;
+          itemCostUsd = Number(item.product?.cost_usd || 0) * item.qty;
+        }
+      }
+
+      costBs += itemCostBs;
+      costUsd += itemCostUsd;
+    }
+
+    return { costBs, costUsd };
+  }
+
   /**
    * Generar asiento contable automático desde una venta
    */
   async generateEntryFromSale(storeId: string, sale: Sale): Promise<JournalEntry | null> {
     try {
+      const existingEntry = await this.journalEntryRepository.findOne({
+        where: {
+          store_id: storeId,
+          source_type: 'sale',
+          source_id: sale.id,
+        },
+      });
+
+      if (existingEntry) {
+        return existingEntry;
+      }
+
+      const issuedFiscalInvoice = await this.fiscalInvoiceRepository.findOne({
+        where: { store_id: storeId, sale_id: sale.id, status: 'issued' },
+      });
+
+      if (issuedFiscalInvoice) {
+        return null;
+      }
+
       // Obtener mapeos de cuentas
       const revenueMapping = await this.getAccountMapping(storeId, 'sale_revenue', sale.payment);
       const costMapping = await this.getAccountMapping(storeId, 'sale_cost', sale.payment);
@@ -213,64 +291,10 @@ export class AccountingService {
         relations: ['lot', 'product'],
       });
 
-      let costBs = 0;
-      let costUsd = 0;
-
-      for (const item of saleItems) {
-        let itemCostBs = 0;
-        let itemCostUsd = 0;
-
-        // Si tiene lote, usar costo del lote
-        if (item.lot_id && item.lot) {
-          itemCostBs = Number(item.lot.unit_cost_bs || 0) * item.qty;
-          itemCostUsd = Number(item.lot.unit_cost_usd || 0) * item.qty;
-        } else {
-          // Buscar costo en movimientos de inventario más recientes (promedio ponderado)
-          const movements = await this.inventoryMovementRepository.find({
-            where: {
-              store_id: storeId,
-              product_id: item.product_id,
-              variant_id: item.variant_id ? item.variant_id : IsNull(),
-              movement_type: 'received',
-              approved: true,
-            },
-            order: { happened_at: 'DESC' },
-            take: 10, // Últimos 10 movimientos para calcular promedio
-          });
-
-          if (movements.length > 0) {
-            // Calcular promedio ponderado
-            let totalQty = 0;
-            let totalCostBs = 0;
-            let totalCostUsd = 0;
-
-            for (const mov of movements) {
-              const qty = Math.abs(mov.qty_delta);
-              totalQty += qty;
-              totalCostBs += Number(mov.unit_cost_bs || 0) * qty;
-              totalCostUsd += Number(mov.unit_cost_usd || 0) * qty;
-            }
-
-            if (totalQty > 0) {
-              const avgCostBs = totalCostBs / totalQty;
-              const avgCostUsd = totalCostUsd / totalQty;
-              itemCostBs = avgCostBs * item.qty;
-              itemCostUsd = avgCostUsd * item.qty;
-            } else {
-              // Fallback: usar costo del producto
-              itemCostBs = Number(item.product?.cost_bs || 0) * item.qty;
-              itemCostUsd = Number(item.product?.cost_usd || 0) * item.qty;
-            }
-          } else {
-            // Fallback: usar costo del producto
-            itemCostBs = Number(item.product?.cost_bs || 0) * item.qty;
-            itemCostUsd = Number(item.product?.cost_usd || 0) * item.qty;
-          }
-        }
-
-        costBs += itemCostBs;
-        costUsd += itemCostUsd;
-      }
+      const { costBs, costUsd } = await this.calculateSaleCosts(
+        storeId,
+        saleItems,
+      );
 
       // Si es FIAO, usar cuenta por cobrar
       if (sale.payment.method === 'FIAO') {
@@ -509,7 +533,13 @@ export class AccountingService {
       .addOrderBy('entry.entry_number', 'DESC');
 
     if (dto.entry_type) {
-      query.andWhere('entry.entry_type = :entryType', { entryType: dto.entry_type });
+      if (dto.entry_type === 'fiscal_invoice') {
+        query.andWhere('entry.entry_type IN (:...entryTypes)', {
+          entryTypes: ['fiscal_invoice', 'invoice'],
+        });
+      } else {
+        query.andWhere('entry.entry_type = :entryType', { entryType: dto.entry_type });
+      }
     }
 
     if (dto.status) {
@@ -532,7 +562,11 @@ export class AccountingService {
       query.limit(dto.limit);
     }
 
-    return query.getMany();
+    const entries = await query.getMany();
+    return entries.map((entry) => ({
+      ...entry,
+      entry_type: entry.entry_type === 'invoice' ? 'fiscal_invoice' : entry.entry_type,
+    }));
   }
 
   /**
@@ -546,6 +580,10 @@ export class AccountingService {
 
     if (!entry) {
       throw new NotFoundException('Asiento contable no encontrado');
+    }
+
+    if (entry.entry_type === 'invoice') {
+      entry.entry_type = 'fiscal_invoice';
     }
 
     return entry;
@@ -757,11 +795,42 @@ export class AccountingService {
         return null;
       }
 
+      const existingEntry = await this.journalEntryRepository.findOne({
+        where: {
+          store_id: storeId,
+          source_type: 'fiscal_invoice',
+          source_id: fiscalInvoice.id,
+        },
+      });
+
+      if (existingEntry) {
+        return existingEntry;
+      }
+
+      if (fiscalInvoice.sale_id) {
+        const existingSaleEntry = await this.journalEntryRepository.findOne({
+          where: {
+            store_id: storeId,
+            source_type: 'sale',
+            source_id: fiscalInvoice.sale_id,
+          },
+        });
+
+        if (existingSaleEntry) {
+          this.logger.warn(
+            `Asiento de venta ya existe para la venta ${fiscalInvoice.sale_id}. Se omite asiento fiscal ${fiscalInvoice.id}.`,
+          );
+          return null;
+        }
+      }
+
       // Obtener mapeos de cuentas
       const revenueMapping = await this.getAccountMapping(storeId, 'sale_revenue', null);
       const taxMapping = await this.getAccountMapping(storeId, 'sale_tax', null);
       const receivableMapping = await this.getAccountMapping(storeId, 'accounts_receivable', null);
       const cashMapping = await this.getAccountMapping(storeId, 'cash_asset', null);
+      const costMapping = await this.getAccountMapping(storeId, 'sale_cost', null);
+      const inventoryMapping = await this.getAccountMapping(storeId, 'inventory_asset', null);
 
       if (!revenueMapping) {
         this.logger.warn(`No se encontraron mapeos de cuentas para factura fiscal ${fiscalInvoice.id}`);
@@ -788,6 +857,18 @@ export class AccountingService {
       const taxUsd = Number(fiscalInvoice.tax_amount_usd);
       const totalBs = Number(fiscalInvoice.total_bs);
       const totalUsd = Number(fiscalInvoice.total_usd);
+      let costBs = 0;
+      let costUsd = 0;
+
+      if (fiscalInvoice.sale_id) {
+        const saleItems = await this.saleItemRepository.find({
+          where: { sale_id: fiscalInvoice.sale_id },
+          relations: ['lot', 'product'],
+        });
+        const costs = await this.calculateSaleCosts(storeId, saleItems);
+        costBs = costs.costBs;
+        costUsd = costs.costUsd;
+      }
 
       // Determinar método de pago (si está vinculada a una venta)
       const isCash = fiscalInvoice.payment_method === 'CASH_BS' || fiscalInvoice.payment_method === 'CASH_USD';
@@ -833,15 +914,43 @@ export class AccountingService {
       // Impuesto (si aplica)
       if (taxBs > 0 || taxUsd > 0) {
         if (taxMapping) {
-        lines.push({
-          account_id: taxMapping.account_id,
-          account_code: taxMapping.account_code,
-          account_name: taxMapping.account?.account_name || taxMapping.account_code,
-          debit_amount_bs: 0,
-          credit_amount_bs: taxBs,
-          debit_amount_usd: 0,
+          lines.push({
+            account_id: taxMapping.account_id,
+            account_code: taxMapping.account_code,
+            account_name: taxMapping.account?.account_name || taxMapping.account_code,
+            debit_amount_bs: 0,
+            credit_amount_bs: taxBs,
+            debit_amount_usd: 0,
             credit_amount_usd: taxUsd,
             description: `Factura fiscal ${fiscalInvoice.invoice_number} - IVA`,
+          });
+        }
+      }
+
+      if (costBs > 0 || costUsd > 0) {
+        if (costMapping) {
+          lines.push({
+            account_id: costMapping.account_id,
+            account_code: costMapping.account_code,
+            account_name: costMapping.account?.account_name || costMapping.account_code,
+            debit_amount_bs: costBs,
+            credit_amount_bs: 0,
+            debit_amount_usd: costUsd,
+            credit_amount_usd: 0,
+            description: `Costo de venta - ${fiscalInvoice.invoice_number}`,
+          });
+        }
+
+        if (inventoryMapping) {
+          lines.push({
+            account_id: inventoryMapping.account_id,
+            account_code: inventoryMapping.account_code,
+            account_name: inventoryMapping.account?.account_name || inventoryMapping.account_code,
+            debit_amount_bs: 0,
+            credit_amount_bs: costBs,
+            debit_amount_usd: 0,
+            credit_amount_usd: costUsd,
+            description: `Salida de inventario - ${fiscalInvoice.invoice_number}`,
           });
         }
       }
@@ -852,7 +961,7 @@ export class AccountingService {
         store_id: storeId,
         entry_number: entryNumber,
         entry_date: entryDate,
-        entry_type: 'invoice',
+        entry_type: 'fiscal_invoice',
         source_type: 'fiscal_invoice',
         source_id: fiscalInvoice.id,
         description: `Factura fiscal ${fiscalInvoice.invoice_number}`,

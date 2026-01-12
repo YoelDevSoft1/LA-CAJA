@@ -17,6 +17,7 @@ export type JournalEntryType =
   | 'sale'
   | 'purchase'
   | 'invoice'
+  | 'fiscal_invoice'
   | 'adjustment'
   | 'transfer'
   | 'expense'
@@ -139,7 +140,6 @@ export class JournalEntry {
   @OneToMany(() => JournalEntryLine, (line) => line.entry, { cascade: true })
   lines: JournalEntryLine[];
 }
-
 
 
 

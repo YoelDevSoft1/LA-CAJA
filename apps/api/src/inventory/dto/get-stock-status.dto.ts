@@ -13,6 +13,10 @@ export class GetStockStatusDto {
   @IsOptional()
   product_id?: string;
 
+  @IsUUID()
+  @IsOptional()
+  warehouse_id?: string;
+
   @IsString()
   @IsOptional()
   search?: string;

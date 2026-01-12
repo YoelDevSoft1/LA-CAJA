@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InventoryMovement } from '../database/entities/inventory-movement.entity';
 import { Product } from '../database/entities/product.entity';
+import { WarehouseStock } from '../database/entities/warehouse-stock.entity';
 import { StockReceivedDto } from './dto/stock-received.dto';
 import { StockAdjustedDto } from './dto/stock-adjusted.dto';
 import { WarehousesService } from '../warehouses/warehouses.service';
@@ -20,11 +21,35 @@ export class InventoryService {
     return Math.round(value * 100) / 100;
   }
 
+  private buildWarehouseStockSubquery(
+    storeId: string,
+    warehouseId?: string,
+  ) {
+    const query = this.warehouseStockRepository
+      .createQueryBuilder('stock')
+      .select('stock.product_id', 'product_id')
+      .addSelect('SUM(stock.stock)', 'current_stock')
+      .innerJoin(
+        'warehouses',
+        'warehouse',
+        'warehouse.id = stock.warehouse_id AND warehouse.store_id = :storeId',
+        { storeId },
+      );
+
+    if (warehouseId) {
+      query.andWhere('stock.warehouse_id = :warehouseId', { warehouseId });
+    }
+
+    return query.groupBy('stock.product_id');
+  }
+
   constructor(
     @InjectRepository(InventoryMovement)
     private movementRepository: Repository<InventoryMovement>,
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
+    @InjectRepository(WarehouseStock)
+    private warehouseStockRepository: Repository<WarehouseStock>,
     private warehousesService: WarehousesService,
   ) {}
 
@@ -183,38 +208,55 @@ export class InventoryService {
   }
 
   async getCurrentStock(storeId: string, productId: string): Promise<number> {
-    const result = await this.movementRepository
-      .createQueryBuilder('movement')
-      .select('COALESCE(SUM(movement.qty_delta), 0)', 'stock')
-      .where('movement.store_id = :storeId', { storeId })
-      .andWhere('movement.product_id = :productId', { productId })
-      .andWhere('movement.approved = true')
+    const stockSubquery = this.buildWarehouseStockSubquery(storeId);
+    const result = await this.productRepository
+      .createQueryBuilder('product')
+      .leftJoin(
+        `(${stockSubquery.getQuery()})`,
+        'stock',
+        'stock.product_id = product.id',
+      )
+      .setParameters(stockSubquery.getParameters())
+      .select('COALESCE(stock.current_stock, 0)', 'current_stock')
+      .where('product.store_id = :storeId', { storeId })
+      .andWhere('product.id = :productId', { productId })
       .getRawOne();
 
-    return parseFloat(result.stock) || 0;
+    return parseFloat(result?.current_stock) || 0;
   }
 
   async getStockStatus(
     storeId: string,
     queryDto: GetStockStatusDto = {},
   ): Promise<{ items: any[]; total: number }> {
-    const { product_id: productId, search, limit, offset, low_stock_only } =
-      queryDto;
+    const {
+      product_id: productId,
+      warehouse_id: warehouseId,
+      search,
+      limit,
+      offset,
+      low_stock_only,
+    } = queryDto;
     const normalizedSearch = search?.trim();
     const isPaginated = limit !== undefined || offset !== undefined;
+
+    const stockSubquery = this.buildWarehouseStockSubquery(
+      storeId,
+      warehouseId,
+    );
 
     const query = this.productRepository
       .createQueryBuilder('product')
       .leftJoin(
-        'inventory_movements',
-        'movement',
-        'movement.product_id = product.id AND movement.store_id = :storeId AND movement.approved = true',
-        { storeId },
+        `(${stockSubquery.getQuery()})`,
+        'stock',
+        'stock.product_id = product.id',
       )
+      .setParameters(stockSubquery.getParameters())
       .select('product.id', 'product_id')
       .addSelect('product.name', 'product_name')
       .addSelect('product.low_stock_threshold', 'low_stock_threshold')
-      .addSelect('COALESCE(SUM(movement.qty_delta), 0)', 'current_stock')
+      .addSelect('COALESCE(stock.current_stock, 0)', 'current_stock')
       .where('product.store_id = :storeId', { storeId })
       .andWhere('product.is_active = true');
 
@@ -229,11 +271,9 @@ export class InventoryService {
       );
     }
 
-    query.groupBy('product.id, product.name, product.low_stock_threshold');
-
     if (low_stock_only) {
-      query.having(
-        'COALESCE(SUM(movement.qty_delta), 0) <= product.low_stock_threshold',
+      query.andWhere(
+        'COALESCE(stock.current_stock, 0) <= product.low_stock_threshold',
       );
     }
 
@@ -241,56 +281,35 @@ export class InventoryService {
 
     let total = 0;
     if (isPaginated) {
-      if (low_stock_only) {
-        const countQuery = this.productRepository
-          .createQueryBuilder('product')
-          .leftJoin(
-            'inventory_movements',
-            'movement',
-            'movement.product_id = product.id AND movement.store_id = :storeId AND movement.approved = true',
-            { storeId },
-          )
-          .select('product.id', 'product_id')
-          .where('product.store_id = :storeId', { storeId })
-          .andWhere('product.is_active = true');
+      const countQuery = this.productRepository
+        .createQueryBuilder('product')
+        .leftJoin(
+          `(${stockSubquery.getQuery()})`,
+          'stock',
+          'stock.product_id = product.id',
+        )
+        .setParameters(stockSubquery.getParameters())
+        .where('product.store_id = :storeId', { storeId })
+        .andWhere('product.is_active = true');
 
-        if (productId) {
-          countQuery.andWhere('product.id = :productId', { productId });
-        }
-
-        if (normalizedSearch) {
-          countQuery.andWhere(
-            '(product.name ILIKE :search OR product.sku ILIKE :search OR product.barcode ILIKE :search)',
-            { search: `%${normalizedSearch}%` },
-          );
-        }
-
-        countQuery.groupBy('product.id, product.low_stock_threshold');
-        countQuery.having(
-          'COALESCE(SUM(movement.qty_delta), 0) <= product.low_stock_threshold',
-        );
-
-        const countRows = await countQuery.getRawMany();
-        total = countRows.length;
-      } else {
-        const countQuery = this.productRepository
-          .createQueryBuilder('product')
-          .where('product.store_id = :storeId', { storeId })
-          .andWhere('product.is_active = true');
-
-        if (productId) {
-          countQuery.andWhere('product.id = :productId', { productId });
-        }
-
-        if (normalizedSearch) {
-          countQuery.andWhere(
-            '(product.name ILIKE :search OR product.sku ILIKE :search OR product.barcode ILIKE :search)',
-            { search: `%${normalizedSearch}%` },
-          );
-        }
-
-        total = await countQuery.getCount();
+      if (productId) {
+        countQuery.andWhere('product.id = :productId', { productId });
       }
+
+      if (normalizedSearch) {
+        countQuery.andWhere(
+          '(product.name ILIKE :search OR product.sku ILIKE :search OR product.barcode ILIKE :search)',
+          { search: `%${normalizedSearch}%` },
+        );
+      }
+
+      if (low_stock_only) {
+        countQuery.andWhere(
+          'COALESCE(stock.current_stock, 0) <= product.low_stock_threshold',
+        );
+      }
+
+      total = await countQuery.getCount();
     }
 
     if (limit !== undefined) {

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Search, Plus, Edit, Trash2, Package, CheckCircle, DollarSign, Layers, Boxes, Hash, Upload } from 'lucide-react'
 import { productsService, Product, ProductSearchResponse } from '@/services/products.service'
 import { productsCacheService } from '@/services/products-cache.service'
+import { warehousesService } from '@/services/warehouses.service'
 import { useAuth } from '@/stores/auth.store'
 import { useOnline } from '@/hooks/use-online'
 import toast from 'react-hot-toast'
@@ -16,9 +17,11 @@ import ImportCSVModal from '@/components/products/ImportCSVModal'
 import CleanDuplicatesModal from '@/components/products/CleanDuplicatesModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { inventoryService, StockStatus } from '@/services/inventory.service'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export default function ProductsPage() {
   const { user } = useAuth()
@@ -35,6 +38,7 @@ export default function ProductsPage() {
   const [variantsProduct, setVariantsProduct] = useState<Product | null>(null)
   const [lotsProduct, setLotsProduct] = useState<Product | null>(null)
   const [serialsProduct, setSerialsProduct] = useState<Product | null>(null)
+  const [warehouseFilter, setWarehouseFilter] = useState<string>('all')
   const queryClient = useQueryClient()
 
   // Reset page cuando cambia búsqueda
@@ -46,8 +50,11 @@ export default function ProductsPage() {
   const [initialData, setInitialData] = useState<ProductSearchResponse | undefined>(undefined);
   const { isOnline } = useOnline(); // Usar hook más confiable
   const { data: stockStatus } = useQuery({
-    queryKey: ['inventory', 'status', user?.store_id],
-    queryFn: () => inventoryService.getStockStatus(),
+    queryKey: ['inventory', 'status', user?.store_id, warehouseFilter],
+    queryFn: () =>
+      inventoryService.getStockStatus({
+        warehouse_id: warehouseFilter !== 'all' ? warehouseFilter : undefined,
+      }),
     enabled: !!user?.store_id,
     staleTime: 1000 * 60 * 5,
   })
@@ -94,6 +101,12 @@ export default function ProductsPage() {
     initialData: !isOnline ? initialData : undefined,
     // Si está offline, mantener cache como placeholder
     placeholderData: !isOnline ? initialData : undefined,
+  })
+
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: () => warehousesService.getAll(),
+    enabled: !!user?.store_id,
   })
 
   const products = productsData?.products || []
@@ -217,7 +230,7 @@ export default function ProductsPage() {
       </div>
 
       {/* Barra de búsqueda */}
-      <div className="mb-4 sm:mb-6">
+      <div className="mb-4 sm:mb-6 space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5 z-10" />
           <Input
@@ -229,6 +242,26 @@ export default function ProductsPage() {
             autoFocus
           />
         </div>
+        {warehouses.length > 0 && (
+          <div className="max-w-sm">
+            <Label className="text-xs text-muted-foreground">Stock por bodega</Label>
+            <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Todas las bodegas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las bodegas</SelectItem>
+                {warehouses
+                  .filter((warehouse) => warehouse.is_active)
+                  .map((warehouse) => (
+                    <SelectItem key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name} {warehouse.is_default ? '(Por defecto)' : ''}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {/* Lista de productos */}

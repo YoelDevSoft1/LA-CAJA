@@ -257,6 +257,40 @@ export class WarehousesService {
     );
   }
 
+  async getStockQuantity(
+    storeId: string,
+    warehouseId: string,
+    productId: string,
+    variantId: string | null,
+  ): Promise<number> {
+    await this.findOne(storeId, warehouseId);
+
+    const stock = await this.findStockRecord(warehouseId, productId, variantId);
+    return stock ? Number(stock.stock) || 0 : 0;
+  }
+
+  async getTotalStockQuantity(
+    storeId: string,
+    productId: string,
+    variantId: string | null,
+  ): Promise<number> {
+    const query = this.warehouseStockRepository
+      .createQueryBuilder('stock')
+      .select('COALESCE(SUM(stock.stock), 0)', 'total')
+      .innerJoin('stock.warehouse', 'warehouse')
+      .where('warehouse.store_id = :storeId', { storeId })
+      .andWhere('stock.product_id = :productId', { productId });
+
+    if (variantId) {
+      query.andWhere('stock.variant_id = :variantId', { variantId });
+    } else {
+      query.andWhere('stock.variant_id IS NULL');
+    }
+
+    const result = await query.getRawOne();
+    return Number(result?.total) || 0;
+  }
+
   /**
    * Busca un registro de stock usando raw query para evitar bug de TypeORM
    * Maneja el caso donde la tabla puede o no tener la columna id

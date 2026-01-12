@@ -4,11 +4,12 @@ import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
 import { InventoryMovement } from '../database/entities/inventory-movement.entity';
 import { Product } from '../database/entities/product.entity';
+import { WarehouseStock } from '../database/entities/warehouse-stock.entity';
 import { WarehousesModule } from '../warehouses/warehouses.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([InventoryMovement, Product]),
+    TypeOrmModule.forFeature([InventoryMovement, Product, WarehouseStock]),
     WarehousesModule,
   ],
   controllers: [InventoryController],

@@ -16,6 +16,7 @@ export enum JournalEntryType {
   SALE = 'sale',
   PURCHASE = 'purchase',
   INVOICE = 'invoice',
+  FISCAL_INVOICE = 'fiscal_invoice',
   ADJUSTMENT = 'adjustment',
   TRANSFER = 'transfer',
   EXPENSE = 'expense',
@@ -111,7 +112,6 @@ export class CreateJournalEntryDto {
   @IsObject()
   metadata?: Record<string, any>;
 }
-
 
 
 
