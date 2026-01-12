@@ -22,6 +22,11 @@ export interface CartItemDto {
   discount_bs?: number
   discount_usd?: number
   variant_id?: string | null
+  is_weight_product?: boolean
+  weight_unit?: 'kg' | 'g' | 'lb' | 'oz' | null
+  weight_value?: number | null
+  price_per_weight_bs?: number | null
+  price_per_weight_usd?: number | null
 }
 
 // Pago individual en sistema de pagos divididos
@@ -82,11 +87,81 @@ export interface SaleItem {
   unit_price_usd: number | string
   discount_bs: number | string
   discount_usd: number | string
+  is_weight_product?: boolean
+  weight_unit?: 'kg' | 'g' | 'lb' | 'oz' | null
+  weight_value?: number | null
+  price_per_weight_bs?: number | null
+  price_per_weight_usd?: number | null
   product?: {
     id: string
     name: string
     sku?: string | null
     barcode?: string | null
+  }
+}
+
+function resolveOfflineItemPricing(
+  product: any,
+  item: CartItemDto,
+): {
+  qty: number
+  unit_price_bs: number
+  unit_price_usd: number
+  discount_bs: number
+  discount_usd: number
+  subtotal_bs: number
+  subtotal_usd: number
+  is_weight_product: boolean
+  weight_unit: 'kg' | 'g' | 'lb' | 'oz' | null
+  weight_value: number | null
+  price_per_weight_bs: number | null
+  price_per_weight_usd: number | null
+} {
+  const isWeightProduct = Boolean(item.is_weight_product || product.is_weight_product)
+  const itemDiscountBs = item.discount_bs || 0
+  const itemDiscountUsd = item.discount_usd || 0
+
+  if (isWeightProduct) {
+    const weightValue = item.weight_value || 0
+    const pricePerWeightBs = item.price_per_weight_bs ?? product.price_per_weight_bs ?? 0
+    const pricePerWeightUsd = item.price_per_weight_usd ?? product.price_per_weight_usd ?? 0
+    const unitPriceBs = weightValue * pricePerWeightBs
+    const unitPriceUsd = weightValue * pricePerWeightUsd
+
+    return {
+      qty: 1,
+      unit_price_bs: unitPriceBs,
+      unit_price_usd: unitPriceUsd,
+      discount_bs: itemDiscountBs,
+      discount_usd: itemDiscountUsd,
+      subtotal_bs: unitPriceBs - itemDiscountBs,
+      subtotal_usd: unitPriceUsd - itemDiscountUsd,
+      is_weight_product: true,
+      weight_unit: item.weight_unit || product.weight_unit || null,
+      weight_value: item.weight_value || null,
+      price_per_weight_bs: item.price_per_weight_bs ?? product.price_per_weight_bs ?? null,
+      price_per_weight_usd: item.price_per_weight_usd ?? product.price_per_weight_usd ?? null,
+    }
+  }
+
+  const unitPriceBs = product.price_bs
+  const unitPriceUsd = product.price_usd
+  const subtotalBs = unitPriceBs * item.qty - itemDiscountBs
+  const subtotalUsd = unitPriceUsd * item.qty - itemDiscountUsd
+
+  return {
+    qty: item.qty,
+    unit_price_bs: unitPriceBs,
+    unit_price_usd: unitPriceUsd,
+    discount_bs: itemDiscountBs,
+    discount_usd: itemDiscountUsd,
+    subtotal_bs: subtotalBs,
+    subtotal_usd: subtotalUsd,
+    is_weight_product: false,
+    weight_unit: null,
+    weight_value: null,
+    price_per_weight_bs: null,
+    price_per_weight_usd: null,
   }
 }
 
@@ -210,26 +285,26 @@ export const salesService = {
         const product = await db.getProductById(item.product_id)
         if (!product) continue
 
-        const unitPriceBs = product.price_bs
-        const unitPriceUsd = product.price_usd
-        const itemDiscountBs = item.discount_bs || 0
-        const itemDiscountUsd = item.discount_usd || 0
-        const itemSubtotalBs = unitPriceBs * item.qty
-        const itemSubtotalUsd = unitPriceUsd * item.qty
+        const resolved = resolveOfflineItemPricing(product, item)
 
-        subtotalBs += itemSubtotalBs
-        subtotalUsd += itemSubtotalUsd
-        discountBs += itemDiscountBs
-        discountUsd += itemDiscountUsd
+        subtotalBs += resolved.subtotal_bs
+        subtotalUsd += resolved.subtotal_usd
+        discountBs += resolved.discount_bs
+        discountUsd += resolved.discount_usd
 
         saleItems.push({
           line_id: randomUUID(),
           product_id: item.product_id,
-          qty: item.qty,
-          unit_price_bs: unitPriceBs,
-          unit_price_usd: unitPriceUsd,
-          discount_bs: itemDiscountBs,
-          discount_usd: itemDiscountUsd,
+          qty: resolved.qty,
+          unit_price_bs: resolved.unit_price_bs,
+          unit_price_usd: resolved.unit_price_usd,
+          discount_bs: resolved.discount_bs,
+          discount_usd: resolved.discount_usd,
+          is_weight_product: resolved.is_weight_product,
+          weight_unit: resolved.weight_unit,
+          weight_value: resolved.weight_value,
+          price_per_weight_bs: resolved.price_per_weight_bs,
+          price_per_weight_usd: resolved.price_per_weight_usd,
         })
       }
 
@@ -345,6 +420,11 @@ export const salesService = {
           unit_price_usd: item.unit_price_usd,
           discount_bs: item.discount_bs,
           discount_usd: item.discount_usd,
+          is_weight_product: item.is_weight_product,
+          weight_unit: item.weight_unit,
+          weight_value: item.weight_value,
+          price_per_weight_bs: item.price_per_weight_bs,
+          price_per_weight_usd: item.price_per_weight_usd,
         })),
         payment: {
           method: data.payment_method,
@@ -398,26 +478,26 @@ export const salesService = {
         const product = await db.getProductById(item.product_id)
         if (!product) continue
 
-        const unitPriceBs = product.price_bs
-        const unitPriceUsd = product.price_usd
-        const itemDiscountBs = item.discount_bs || 0
-        const itemDiscountUsd = item.discount_usd || 0
-        const itemSubtotalBs = unitPriceBs * item.qty
-        const itemSubtotalUsd = unitPriceUsd * item.qty
+        const resolved = resolveOfflineItemPricing(product, item)
 
-        subtotalBs += itemSubtotalBs
-        subtotalUsd += itemSubtotalUsd
-        discountBs += itemDiscountBs
-        discountUsd += itemDiscountUsd
+        subtotalBs += resolved.subtotal_bs
+        subtotalUsd += resolved.subtotal_usd
+        discountBs += resolved.discount_bs
+        discountUsd += resolved.discount_usd
 
         saleItems.push({
           line_id: randomUUID(),
           product_id: item.product_id,
-          qty: item.qty,
-          unit_price_bs: unitPriceBs,
-          unit_price_usd: unitPriceUsd,
-          discount_bs: itemDiscountBs,
-          discount_usd: itemDiscountUsd,
+          qty: resolved.qty,
+          unit_price_bs: resolved.unit_price_bs,
+          unit_price_usd: resolved.unit_price_usd,
+          discount_bs: resolved.discount_bs,
+          discount_usd: resolved.discount_usd,
+          is_weight_product: resolved.is_weight_product,
+          weight_unit: resolved.weight_unit,
+          weight_value: resolved.weight_value,
+          price_per_weight_bs: resolved.price_per_weight_bs,
+          price_per_weight_usd: resolved.price_per_weight_usd,
         })
       }
 
@@ -516,6 +596,11 @@ export const salesService = {
           unit_price_usd: item.unit_price_usd,
           discount_bs: item.discount_bs,
           discount_usd: item.discount_usd,
+          is_weight_product: item.is_weight_product,
+          weight_unit: item.weight_unit,
+          weight_value: item.weight_value,
+          price_per_weight_bs: item.price_per_weight_bs,
+          price_per_weight_usd: item.price_per_weight_usd,
         })),
         payment: {
           method: data.payment_method,
@@ -642,26 +727,26 @@ export const salesService = {
           const product = await db.getProductById(item.product_id)
           if (!product) continue
 
-          const unitPriceBs = product.price_bs
-          const unitPriceUsd = product.price_usd
-          const itemDiscountBs = item.discount_bs || 0
-          const itemDiscountUsd = item.discount_usd || 0
-          const itemSubtotalBs = unitPriceBs * item.qty
-          const itemSubtotalUsd = unitPriceUsd * item.qty
+          const resolved = resolveOfflineItemPricing(product, item)
 
-          subtotalBs += itemSubtotalBs
-          subtotalUsd += itemSubtotalUsd
-          discountBs += itemDiscountBs
-          discountUsd += itemDiscountUsd
+          subtotalBs += resolved.subtotal_bs
+          subtotalUsd += resolved.subtotal_usd
+          discountBs += resolved.discount_bs
+          discountUsd += resolved.discount_usd
 
           saleItems.push({
             line_id: randomUUID(),
             product_id: item.product_id,
-            qty: item.qty,
-            unit_price_bs: unitPriceBs,
-            unit_price_usd: unitPriceUsd,
-            discount_bs: itemDiscountBs,
-            discount_usd: itemDiscountUsd,
+            qty: resolved.qty,
+            unit_price_bs: resolved.unit_price_bs,
+            unit_price_usd: resolved.unit_price_usd,
+            discount_bs: resolved.discount_bs,
+            discount_usd: resolved.discount_usd,
+            is_weight_product: resolved.is_weight_product,
+            weight_unit: resolved.weight_unit,
+            weight_value: resolved.weight_value,
+            price_per_weight_bs: resolved.price_per_weight_bs,
+            price_per_weight_usd: resolved.price_per_weight_usd,
           })
         }
 
@@ -764,6 +849,11 @@ export const salesService = {
             unit_price_usd: item.unit_price_usd,
             discount_bs: item.discount_bs,
             discount_usd: item.discount_usd,
+            is_weight_product: item.is_weight_product,
+            weight_unit: item.weight_unit,
+            weight_value: item.weight_value,
+            price_per_weight_bs: item.price_per_weight_bs,
+            price_per_weight_usd: item.price_per_weight_usd,
           })),
         payment: {
           method: data.payment_method,

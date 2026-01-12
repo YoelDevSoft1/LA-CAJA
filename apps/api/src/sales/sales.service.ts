@@ -376,12 +376,16 @@ export class SalesService {
           }
         }
 
+        const isWeightProduct = Boolean(
+          cartItem.is_weight_product || product.is_weight_product,
+        );
+
         // Calcular precios
-        // Primero intentar obtener precio de lista de precio
+        // Primero intentar obtener precio de lista de precio (solo productos normales)
         let priceBs = variant?.price_bs ?? product.price_bs;
         let priceUsd = variant?.price_usd ?? product.price_usd;
 
-        if (dto.price_list_id) {
+        if (dto.price_list_id && !isWeightProduct) {
           const listPrice = await this.priceListsService.getProductPrice(
             storeId,
             product.id,
@@ -396,10 +400,44 @@ export class SalesService {
           }
         }
 
+        let effectiveQty = cartItem.qty;
+        let itemSubtotalBs = 0;
+        let itemSubtotalUsd = 0;
+
+        if (isWeightProduct) {
+          const weightValue = cartItem.weight_value || 0;
+          if (weightValue <= 0) {
+            throw new BadRequestException(
+              `Peso inválido para el producto ${product.name}`,
+            );
+          }
+
+          const pricePerWeightBs =
+            cartItem.price_per_weight_bs ?? product.price_per_weight_bs ?? 0;
+          const pricePerWeightUsd =
+            cartItem.price_per_weight_usd ?? product.price_per_weight_usd ?? 0;
+
+          if (pricePerWeightBs <= 0 && pricePerWeightUsd <= 0) {
+            throw new BadRequestException(
+              `Precio por peso inválido para el producto ${product.name}`,
+            );
+          }
+
+          // Para productos por peso guardamos qty=1 y unit_price como total calculado
+          priceBs = weightValue * pricePerWeightBs;
+          priceUsd = weightValue * pricePerWeightUsd;
+          effectiveQty = 1;
+          itemSubtotalBs = priceBs;
+          itemSubtotalUsd = priceUsd;
+        } else {
+          itemSubtotalBs = priceBs * cartItem.qty;
+          itemSubtotalUsd = priceUsd * cartItem.qty;
+        }
+
         const itemDiscountBs = cartItem.discount_bs || 0;
         const itemDiscountUsd = cartItem.discount_usd || 0;
-        const itemSubtotalBs = priceBs * cartItem.qty - itemDiscountBs;
-        const itemSubtotalUsd = priceUsd * cartItem.qty - itemDiscountUsd;
+        itemSubtotalBs -= itemDiscountBs;
+        itemSubtotalUsd -= itemDiscountUsd;
 
         subtotalBs += itemSubtotalBs;
         subtotalUsd += itemSubtotalUsd;
@@ -413,11 +451,22 @@ export class SalesService {
           product_id: product.id,
           variant_id: variant?.id || null,
           lot_id: lotId,
-          qty: cartItem.qty,
+          qty: effectiveQty,
           unit_price_bs: priceBs,
           unit_price_usd: priceUsd,
           discount_bs: itemDiscountBs,
           discount_usd: itemDiscountUsd,
+          is_weight_product: isWeightProduct,
+          weight_unit: isWeightProduct
+            ? cartItem.weight_unit || product.weight_unit || null
+            : null,
+          weight_value: isWeightProduct ? cartItem.weight_value || null : null,
+          price_per_weight_bs: isWeightProduct
+            ? cartItem.price_per_weight_bs ?? product.price_per_weight_bs ?? null
+            : null,
+          price_per_weight_usd: isWeightProduct
+            ? cartItem.price_per_weight_usd ?? product.price_per_weight_usd ?? null
+            : null,
         });
 
         items.push(saleItem);

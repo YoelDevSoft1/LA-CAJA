@@ -242,6 +242,22 @@ export class ProjectionsService {
           unit_price_usd: Number(item.unit_price_usd) || 0,
           discount_bs: Number(item.discount_bs) || 0,
           discount_usd: Number(item.discount_usd) || 0,
+          is_weight_product: Boolean(item.is_weight_product),
+          weight_unit: item.weight_unit || null,
+          weight_value:
+            item.weight_value !== undefined && item.weight_value !== null
+              ? Number(item.weight_value)
+              : null,
+          price_per_weight_bs:
+            item.price_per_weight_bs !== undefined &&
+            item.price_per_weight_bs !== null
+              ? Number(item.price_per_weight_bs)
+              : null,
+          price_per_weight_usd:
+            item.price_per_weight_usd !== undefined &&
+            item.price_per_weight_usd !== null
+              ? Number(item.price_per_weight_usd)
+              : null,
         }),
       );
 

@@ -124,6 +124,11 @@ export interface SaleItem {
   unit_price_usd: number;
   discount_bs: number;
   discount_usd: number;
+  is_weight_product?: boolean;
+  weight_unit?: 'kg' | 'g' | 'lb' | 'oz' | null;
+  weight_value?: number | null;
+  price_per_weight_bs?: number | null;
+  price_per_weight_usd?: number | null;
 }
 
 export interface SaleCreatedPayload {
@@ -193,5 +198,4 @@ export interface DebtPaymentRecordedPayload {
   method: Exclude<PaymentMethod, 'SPLIT' | 'FIAO'>;
   note?: string;
 }
-
 

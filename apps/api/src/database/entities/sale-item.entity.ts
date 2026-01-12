@@ -51,4 +51,19 @@ export class SaleItem {
 
   @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
   discount_usd: number;
+
+  @Column({ type: 'boolean', default: false })
+  is_weight_product: boolean;
+
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  weight_unit: 'kg' | 'g' | 'lb' | 'oz' | null;
+
+  @Column({ type: 'numeric', precision: 18, scale: 3, nullable: true })
+  weight_value: number | null;
+
+  @Column({ type: 'numeric', precision: 18, scale: 2, nullable: true })
+  price_per_weight_bs: number | null;
+
+  @Column({ type: 'numeric', precision: 18, scale: 2, nullable: true })
+  price_per_weight_usd: number | null;
 }
