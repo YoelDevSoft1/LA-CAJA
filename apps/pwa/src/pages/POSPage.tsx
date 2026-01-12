@@ -95,8 +95,12 @@ export default function POSPage() {
         weight_unit: quickProduct.product.weight_unit,
         price_per_weight_bs: Number(quickProduct.product.price_per_weight_bs) || 0,
         price_per_weight_usd: Number(quickProduct.product.price_per_weight_usd) || 0,
-        min_weight: quickProduct.product.min_weight,
-        max_weight: quickProduct.product.max_weight,
+        min_weight: quickProduct.product.min_weight != null
+          ? Number(quickProduct.product.min_weight)
+          : null,
+        max_weight: quickProduct.product.max_weight != null
+          ? Number(quickProduct.product.max_weight)
+          : null,
       })
       setShowWeightModal(true)
       return
