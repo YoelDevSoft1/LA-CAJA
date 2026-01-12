@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Zap } from 'lucide-react'
+import { Zap, Scale } from 'lucide-react'
 import { fastCheckoutService, QuickProduct } from '@/services/fast-checkout.service'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -65,8 +65,11 @@ export default function QuickProductsGrid({
                 )}
                 style={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                <div className="w-full flex items-center justify-center mb-1">
+                <div className="w-full flex items-center justify-center mb-1 gap-1">
                   <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                  {product.is_weight_product && (
+                    <Scale className="w-3.5 h-3.5 text-primary" />
+                  )}
                 </div>
                 <div className="text-xs sm:text-sm font-mono font-bold text-primary mb-1">
                   {quickProduct.quick_key}
@@ -75,7 +78,14 @@ export default function QuickProductsGrid({
                   {product.name}
                 </div>
                 <div className="text-[10px] text-muted-foreground mt-1">
-                  ${Number(product.price_usd).toFixed(2)}
+                  {product.is_weight_product && product.price_per_weight_usd ? (
+                    <>
+                      ${Number(product.price_per_weight_usd).toFixed(2)}/
+                      {product.weight_unit}
+                    </>
+                  ) : (
+                    <>${Number(product.price_usd).toFixed(2)}</>
+                  )}
                 </div>
               </button>
             )
@@ -85,4 +95,3 @@ export default function QuickProductsGrid({
     </Card>
   )
 }
-

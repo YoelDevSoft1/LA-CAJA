@@ -81,6 +81,27 @@ export default function POSPage() {
       return
     }
 
+    if (quickProduct.product.is_weight_product && quickProduct.product.weight_unit) {
+      const hasPricePerWeight = Boolean(
+        quickProduct.product.price_per_weight_usd || quickProduct.product.price_per_weight_bs
+      )
+      if (!hasPricePerWeight) {
+        toast.error('Este producto por peso no tiene precio configurado')
+        return
+      }
+      setSelectedWeightProduct({
+        id: quickProduct.product.id,
+        name: quickProduct.product.name,
+        weight_unit: quickProduct.product.weight_unit,
+        price_per_weight_bs: Number(quickProduct.product.price_per_weight_bs) || 0,
+        price_per_weight_usd: Number(quickProduct.product.price_per_weight_usd) || 0,
+        min_weight: quickProduct.product.min_weight,
+        max_weight: quickProduct.product.max_weight,
+      })
+      setShowWeightModal(true)
+      return
+    }
+
     // Verificar si el producto tiene variantes activas
     try {
       const variants = await productVariantsService.getVariantsByProduct(quickProduct.product_id)
@@ -246,7 +267,14 @@ export default function POSPage() {
 
   const handleProductClick = async (product: any) => {
     // Verificar si es un producto por peso
-    if (product.is_weight_product && product.weight_unit && product.price_per_weight_usd) {
+    if (product.is_weight_product && product.weight_unit) {
+      const hasPricePerWeight = Boolean(
+        product.price_per_weight_usd || product.price_per_weight_bs
+      )
+      if (!hasPricePerWeight) {
+        toast.error('Este producto por peso no tiene precio configurado')
+        return
+      }
       setSelectedWeightProduct({
         id: product.id,
         name: product.name,

@@ -37,6 +37,12 @@ export interface QuickProduct {
     price_bs: number | string
     price_usd: number | string
     barcode?: string | null
+    is_weight_product?: boolean
+    weight_unit?: 'kg' | 'g' | 'lb' | 'oz' | null
+    price_per_weight_bs?: number | string | null
+    price_per_weight_usd?: number | string | null
+    min_weight?: number | string | null
+    max_weight?: number | string | null
   }
 }
 
@@ -115,4 +121,3 @@ export const fastCheckoutService = {
     return response.data
   },
 }
-
