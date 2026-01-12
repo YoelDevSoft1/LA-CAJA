@@ -652,9 +652,9 @@ export default function CheckoutModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-1 sm:p-4">
-      <Card className="max-w-md w-full h-[85vh] sm:h-[90vh] flex flex-col border border-border overflow-hidden">
+      <Card className="w-full max-w-md lg:max-w-4xl xl:max-w-5xl h-[85vh] sm:h-[90vh] lg:h-[85vh] flex flex-col border border-border overflow-hidden">
         {/* Header */}
-        <div className="sticky top-0 bg-background border-b border-border px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between z-10 rounded-t-lg">
+        <div className="sticky top-0 bg-background border-b border-border px-3 sm:px-4 lg:px-6 py-2 sm:py-3 flex items-center justify-between z-10 rounded-t-lg">
           <h2 className="text-lg sm:text-xl font-bold text-foreground">Procesar Venta</h2>
           <Button
             variant="ghost"
@@ -667,15 +667,18 @@ export default function CheckoutModal({
           </Button>
         </div>
 
-        {/* Content */}
-        <CardContent className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 overflow-y-auto flex-1 min-h-0 overscroll-contain">
+        {/* Content - Two columns on desktop */}
+        <CardContent className="p-3 sm:p-4 lg:p-6 overflow-y-auto flex-1 min-h-0 overscroll-contain">
+          <div className="lg:grid lg:grid-cols-2 lg:gap-6 space-y-4 sm:space-y-6 lg:space-y-0">
+            {/* LEFT COLUMN */}
+            <div className="space-y-4 sm:space-y-6">
           {/* Resumen */}
           <Card className="border border-border">
             <CardContent className="p-3 sm:p-4">
               <h3 className="font-semibold text-foreground mb-3">Resumen de la venta</h3>
             <div className="space-y-3 text-sm">
               {/* Lista de productos */}
-                <div className="h-24 sm:h-28">
+                <div className="h-24 sm:h-28 lg:h-40 lg:max-h-48">
                   <ScrollArea className="h-full">
                     <div>
                       {items.map((item, index) => (
@@ -1243,9 +1246,13 @@ export default function CheckoutModal({
               </p>
             </div>
           )}
+            </div>
 
+            {/* RIGHT COLUMN - Tasa + Cliente */}
+            <div className="space-y-4 sm:space-y-6">
           {/* Tasa de cambio */}
-          <div>
+          <Card className="border border-border">
+            <CardContent className="p-3 sm:p-4">
             <label className="block text-sm font-semibold text-foreground mb-2">
               Tasa de Cambio (Bs/USD)
             </label>
@@ -1283,10 +1290,12 @@ export default function CheckoutModal({
                   ? 'Tasa obtenida automáticamente del BCV. Puede ajustarla si lo desea.'
                   : 'Tasa de cambio oficial del BCV. Usada para calcular totales mixtos'}
             </p>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Información del Cliente (Opcional para todas las ventas) */}
-          <div className="border-t border-border pt-4">
+          <Card className="border border-border">
+            <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between mb-3">
               <label className="block text-sm font-semibold text-foreground">
                 Información del Cliente (Opcional)
@@ -1459,7 +1468,8 @@ export default function CheckoutModal({
                 ? 'Los datos del cliente son requeridos para ventas FIAO (nombre y cédula)'
                 : 'Opcional: Si proporcionas el nombre, la cédula es obligatoria'}
             </p>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Error */}
           {error && (
@@ -1469,11 +1479,12 @@ export default function CheckoutModal({
               </CardContent>
             </Card>
           )}
-
+            </div>
+          </div>
         </CardContent>
 
-        <div className="flex-shrink-0 border-t border-border px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+        <div className="flex-shrink-0 border-t border-border px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 lg:max-w-md lg:ml-auto">
             <Button
               variant="outline"
               onClick={onClose}
