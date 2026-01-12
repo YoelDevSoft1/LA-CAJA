@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Search, Plus, Minus, ShoppingCart, Trash2 } from 'lucide-react'
+import { Search, Plus, Minus, ShoppingCart, Trash2, Scale } from 'lucide-react'
 import { productsService, ProductSearchResponse } from '@/services/products.service'
 import { productsCacheService } from '@/services/products-cache.service'
 import { salesService } from '@/services/sales.service'
@@ -17,6 +17,7 @@ import toast from 'react-hot-toast'
 import CheckoutModal from '@/components/pos/CheckoutModal'
 import QuickProductsGrid from '@/components/fast-checkout/QuickProductsGrid'
 import VariantSelector from '@/components/variants/VariantSelector'
+import WeightInputModal, { WeightProduct } from '@/components/pos/WeightInputModal'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -39,6 +40,9 @@ export default function POSPage() {
   } | null>(null)
   const [pendingSerials, setPendingSerials] = useState<Record<string, string[]>>({})
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null)
+  // Estado para productos por peso
+  const [showWeightModal, setShowWeightModal] = useState(false)
+  const [selectedWeightProduct, setSelectedWeightProduct] = useState<WeightProduct | null>(null)
   const { items, addItem, updateItem, removeItem, clear, getTotal } = useCart()
   const lastCartSnapshot = useRef<CartItem[]>([])
 
@@ -241,6 +245,21 @@ export default function POSPage() {
   }
 
   const handleProductClick = async (product: any) => {
+    // Verificar si es un producto por peso
+    if (product.is_weight_product && product.weight_unit && product.price_per_weight_usd) {
+      setSelectedWeightProduct({
+        id: product.id,
+        name: product.name,
+        weight_unit: product.weight_unit,
+        price_per_weight_bs: Number(product.price_per_weight_bs) || 0,
+        price_per_weight_usd: Number(product.price_per_weight_usd) || 0,
+        min_weight: product.min_weight,
+        max_weight: product.max_weight,
+      })
+      setShowWeightModal(true)
+      return
+    }
+
     // Verificar si el producto tiene variantes activas
     try {
       const variants = await productVariantsService.getVariantsByProduct(product.id)
@@ -258,6 +277,33 @@ export default function POSPage() {
       // Si hay error, agregar sin variante
       handleAddToCart(product, null)
     }
+  }
+
+  // Handler para confirmar peso de producto
+  const handleWeightConfirm = (weightValue: number, calculatedPriceBs: number, calculatedPriceUsd: number) => {
+    if (!selectedWeightProduct) return
+
+    const unitLabel = selectedWeightProduct.weight_unit === 'g' ? 'g' :
+                      selectedWeightProduct.weight_unit === 'kg' ? 'kg' :
+                      selectedWeightProduct.weight_unit === 'lb' ? 'lb' : 'oz'
+
+    // Agregar al carrito con qty=1 pero el precio ya calculado por peso
+    addItem({
+      product_id: selectedWeightProduct.id,
+      product_name: `${selectedWeightProduct.name} (${weightValue} ${unitLabel})`,
+      qty: 1, // Siempre 1 porque el precio ya incluye el peso
+      unit_price_bs: calculatedPriceBs,
+      unit_price_usd: calculatedPriceUsd,
+      // Guardar info de peso para el backend
+      is_weight_product: true,
+      weight_unit: selectedWeightProduct.weight_unit,
+      weight_value: weightValue,
+      price_per_weight_bs: selectedWeightProduct.price_per_weight_bs,
+      price_per_weight_usd: selectedWeightProduct.price_per_weight_usd,
+    })
+
+    toast.success(`${selectedWeightProduct.name} (${weightValue} ${unitLabel}) agregado al carrito`)
+    setSelectedWeightProduct(null)
   }
 
   const handleVariantSelect = (variant: ProductVariant | null) => {
@@ -534,7 +580,10 @@ export default function POSPage() {
                     <div className="absolute left-0 top-0 bottom-0 w-0 bg-primary opacity-0 group-hover:opacity-100 group-hover:w-0.5 transition-all duration-200" />
                     <div className="flex items-start justify-between gap-3 min-w-0">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-sm sm:text-base text-foreground break-words leading-snug group-hover:text-primary transition-colors">
+                        <h3 className="font-semibold text-sm sm:text-base text-foreground break-words leading-snug group-hover:text-primary transition-colors flex items-center gap-1.5">
+                          {product.is_weight_product && (
+                            <Scale className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                          )}
                           {product.name}
                         </h3>
                         {product.category && (
@@ -549,12 +598,25 @@ export default function POSPage() {
                         )}
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="font-bold text-base sm:text-lg text-foreground">
-                          ${Number(product.price_usd).toFixed(2)}
-                        </p>
-                        <p className="text-xs sm:text-sm text-muted-foreground">
-                          Bs. {Number(product.price_bs).toFixed(2)}
-                        </p>
+                        {product.is_weight_product && product.price_per_weight_usd ? (
+                          <>
+                            <p className="font-bold text-base sm:text-lg text-foreground">
+                              ${Number(product.price_per_weight_usd).toFixed(2)}/{product.weight_unit}
+                            </p>
+                            <p className="text-xs sm:text-sm text-muted-foreground">
+                              Bs. {Number(product.price_per_weight_bs).toFixed(2)}/{product.weight_unit}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-bold text-base sm:text-lg text-foreground">
+                              ${Number(product.price_usd).toFixed(2)}
+                            </p>
+                            <p className="text-xs sm:text-sm text-muted-foreground">
+                              Bs. {Number(product.price_bs).toFixed(2)}
+                            </p>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -616,13 +678,20 @@ export default function POSPage() {
                       <div className="flex items-start justify-between mb-2 gap-2 min-w-0">
                         <div className="flex-1 min-w-0">
                           <p
-                            className="font-medium text-xs sm:text-sm text-foreground break-words leading-snug"
+                            className="font-medium text-xs sm:text-sm text-foreground break-words leading-snug flex items-center gap-1"
                             title={item.product_name}
                           >
+                            {item.is_weight_product && (
+                              <Scale className="w-3 h-3 text-primary flex-shrink-0" />
+                            )}
                             {item.product_name}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            ${item.unit_price_usd.toFixed(2)} c/u
+                            {item.is_weight_product && item.weight_value && item.price_per_weight_usd ? (
+                              <>{item.weight_value} {item.weight_unit} × ${Number(item.price_per_weight_usd).toFixed(2)}/{item.weight_unit}</>
+                            ) : (
+                              <>${item.unit_price_usd.toFixed(2)} c/u</>
+                            )}
                           </p>
                         </div>
                         <Button
@@ -639,35 +708,42 @@ export default function POSPage() {
                         </Button>
                       </div>
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleUpdateQty(item.id, item.qty - 1)
-                            }}
-                            className="h-8 w-8"
-                            aria-label="Disminuir cantidad"
-                          >
-                            <Minus className="w-3 h-3" />
-                          </Button>
-                          <span className="w-8 text-center font-semibold text-sm sm:text-base tabular-nums">
-                            {item.qty}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleUpdateQty(item.id, item.qty + 1)
-                            }}
-                            className="h-8 w-8"
-                            aria-label="Aumentar cantidad"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </Button>
-                        </div>
+                        {/* Solo mostrar controles de cantidad para productos normales */}
+                        {item.is_weight_product ? (
+                          <div className="text-xs text-muted-foreground">
+                            Producto por peso
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleUpdateQty(item.id, item.qty - 1)
+                              }}
+                              className="h-8 w-8"
+                              aria-label="Disminuir cantidad"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </Button>
+                            <span className="w-8 text-center font-semibold text-sm sm:text-base tabular-nums">
+                              {item.qty}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleUpdateQty(item.id, item.qty + 1)
+                              }}
+                              className="h-8 w-8"
+                              aria-label="Aumentar cantidad"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        )}
                         <p className="font-semibold text-sm sm:text-base text-foreground tabular-nums">
                           ${(item.qty * item.unit_price_usd).toFixed(2)}
                         </p>
@@ -745,6 +821,17 @@ export default function POSPage() {
           onSelect={handleVariantSelect}
         />
       )}
+
+      {/* Modal de entrada de peso */}
+      <WeightInputModal
+        isOpen={showWeightModal}
+        onClose={() => {
+          setShowWeightModal(false)
+          setSelectedWeightProduct(null)
+        }}
+        product={selectedWeightProduct}
+        onConfirm={handleWeightConfirm}
+      />
     </div>
   )
 }
