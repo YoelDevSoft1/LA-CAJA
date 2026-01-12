@@ -279,6 +279,8 @@ export class AdminController {
   /**
    * Eliminar una tienda completa y todos sus datos asociados
    * ADVERTENCIA: Esta operación es irreversible
+   *
+   * Compatible con Supabase (sin necesidad de privilegios de superusuario)
    */
   @Delete('stores/:id')
   async deleteStore(@Param('id') storeId: string) {
@@ -287,97 +289,94 @@ export class AdminController {
       throw new NotFoundException('Store no encontrada');
     }
 
-    // Usar una transacción para eliminar todo de forma segura
     const queryRunner = this.storeRepo.manager.connection.createQueryRunner();
     await queryRunner.connect();
-    await queryRunner.startTransaction();
 
     try {
-      // Eliminar en orden inverso de dependencias
-      // Tablas que dependen de store_id (orden basado en foreign keys)
-      const tablesToClear = [
-        // Offline sync events
-        'sync_events',
-        // Fiscal
+      // Orden correcto de eliminación basado en dependencias de FK
+      // Las tablas hijas (que referencian otras) van primero
+      const tablesToDelete = [
+        // Nivel 4: tablas que referencian otras tablas de datos
+        'sale_payments',
+        'sale_items',
+        'order_items',
+        'transfer_items',
+        'purchase_order_items',
+        'debt_payments',
+        'promotion_rules',
+        'price_list_products',
+        'product_variant_prices',
+        'discount_authorizations',
+        'accounting_entries',
+        'warehouse_stock',
+        // Nivel 3: tablas principales de transacciones
+        'sales',
+        'orders',
+        'transfers',
+        'purchase_orders',
         'fiscal_invoices',
-        'fiscal_configs',
-        // ML y analytics
+        'cash_movements',
+        'cash_cuts',
+        'debts',
         'demand_predictions',
         'anomaly_detections',
         'realtime_events',
-        'push_subscriptions',
-        // Compras y proveedores
-        'purchase_order_items',
-        'purchase_orders',
-        'suppliers',
-        // Transferencias y almacenes
-        'transfer_items',
-        'transfers',
-        'warehouse_stock',
-        'warehouses',
-        // Contabilidad
-        'accounting_entries',
-        'accounting_accounts',
-        // Promociones y listas de precios
-        'promotion_rules',
+        'sync_events',
+        // Nivel 2: tablas de configuración y catálogos
+        'cash_sessions',
+        'shifts',
         'promotions',
-        'price_list_products',
         'price_lists',
-        // Mesas y órdenes
-        'order_items',
-        'orders',
-        'tables',
-        // Periféricos
-        'peripherals',
-        // Series de factura
-        'invoice_series',
-        // Productos y variantes
+        'discounts',
+        'payment_methods',
         'product_serials',
         'product_lots',
-        'product_variant_prices',
         'product_variants',
-        // Fast checkout
-        'fast_checkout_configs',
-        // Descuentos
-        'discount_authorizations',
-        'discounts',
-        // Pagos
-        'payment_methods',
-        // Turnos
-        'cash_cuts',
-        'shifts',
-        // Caja
-        'cash_movements',
-        'cash_sessions',
-        // Deudas y clientes
-        'debt_payments',
-        'debts',
-        'customers',
-        // Ventas
-        'sale_payments',
-        'sale_items',
-        'sales',
-        // Inventario
         'inventory_movements',
         'inventory',
-        // Productos
         'products',
-        // Eventos
+        'tables',
+        'peripherals',
+        'invoice_series',
+        'fast_checkout_configs',
+        'customers',
+        'suppliers',
+        'warehouses',
+        'accounting_accounts',
+        'fiscal_configs',
+        'push_subscriptions',
+        // Nivel 1: tablas base
         'events',
-        // Refresh tokens
         'refresh_tokens',
-        // Miembros (ya tiene CASCADE pero lo hacemos explícito)
         'store_members',
       ];
 
-      for (const table of tablesToClear) {
+      // Iniciar transacción
+      await queryRunner.startTransaction();
+
+      let tablesCleared = 0;
+
+      // Eliminar datos de cada tabla en orden
+      for (const tableName of tablesToDelete) {
         try {
-          await queryRunner.query(
-            `DELETE FROM "${table}" WHERE store_id = $1`,
+          const result = await queryRunner.query(
+            `DELETE FROM "${tableName}" WHERE store_id = $1`,
             [storeId],
           );
-        } catch {
-          // Ignorar si la tabla no existe o no tiene store_id
+          if (result && result[1] > 0) {
+            tablesCleared++;
+          }
+        } catch (err: any) {
+          // Si la tabla no existe, continuar
+          if (err.code === '42P01') {
+            continue;
+          }
+          // Si la columna no existe, continuar
+          if (err.code === '42703') {
+            continue;
+          }
+          // Otros errores, propagar
+          throw err;
         }
       }
 
@@ -390,9 +389,12 @@ export class AdminController {
         ok: true,
         message: `Tienda "${store.name}" y todos sus datos eliminados exitosamente`,
         deleted_store_id: storeId,
+        tables_cleared: tablesCleared,
       };
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
       throw new BadRequestException(
         `Error al eliminar tienda: ${error.message || 'Error desconocido'}`,
       );
