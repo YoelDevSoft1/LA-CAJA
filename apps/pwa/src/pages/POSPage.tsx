@@ -74,6 +74,10 @@ export default function POSPage() {
     }
   }, [defaultWarehouse, selectedWarehouseId])
 
+  const getWeightPriceDecimals = useCallback((unit?: string | null) => {
+    return unit === 'g' || unit === 'oz' ? 4 : 2
+  }, [])
+
   const resolveWeightProduct = useCallback(async (source: any): Promise<WeightProduct | null> => {
     const normalize = (item: any): WeightProduct | null => {
       const pricePerWeightBs = Number(item.price_per_weight_bs) || 0
@@ -649,10 +653,14 @@ export default function POSPage() {
                         {product.is_weight_product && product.price_per_weight_usd ? (
                           <>
                             <p className="font-bold text-base sm:text-lg text-foreground">
-                              ${Number(product.price_per_weight_usd).toFixed(2)}/{product.weight_unit}
+                              ${Number(product.price_per_weight_usd).toFixed(
+                                getWeightPriceDecimals(product.weight_unit)
+                              )}/{product.weight_unit}
                             </p>
                             <p className="text-xs sm:text-sm text-muted-foreground">
-                              Bs. {Number(product.price_per_weight_bs).toFixed(2)}/{product.weight_unit}
+                              Bs. {Number(product.price_per_weight_bs).toFixed(
+                                getWeightPriceDecimals(product.weight_unit)
+                              )}/{product.weight_unit}
                             </p>
                           </>
                         ) : (
@@ -738,7 +746,9 @@ export default function POSPage() {
                             {item.is_weight_product && item.weight_value ? (
                               <>
                                 {item.weight_value} {item.weight_unit || 'kg'} × $
-                                {Number(item.price_per_weight_usd ?? item.unit_price_usd).toFixed(2)}/
+                                {Number(item.price_per_weight_usd ?? item.unit_price_usd).toFixed(
+                                  getWeightPriceDecimals(item.weight_unit)
+                                )}/
                                 {item.weight_unit || 'kg'}
                               </>
                             ) : (

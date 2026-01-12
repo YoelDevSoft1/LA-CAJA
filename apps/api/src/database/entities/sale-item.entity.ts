@@ -40,10 +40,10 @@ export class SaleItem {
   @Column({ type: 'numeric', precision: 18, scale: 3 })
   qty: number;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
+  @Column({ type: 'numeric', precision: 18, scale: 4, default: 0 })
   unit_price_bs: number;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
+  @Column({ type: 'numeric', precision: 18, scale: 4, default: 0 })
   unit_price_usd: number;
 
   @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
@@ -61,9 +61,9 @@ export class SaleItem {
   @Column({ type: 'numeric', precision: 18, scale: 3, nullable: true })
   weight_value: number | null;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, nullable: true })
+  @Column({ type: 'numeric', precision: 18, scale: 4, nullable: true })
   price_per_weight_bs: number | null;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, nullable: true })
+  @Column({ type: 'numeric', precision: 18, scale: 4, nullable: true })
   price_per_weight_usd: number | null;
 }

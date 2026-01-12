@@ -48,10 +48,10 @@ export class FiscalInvoiceItem {
   @Column({ type: 'numeric', precision: 18, scale: 3 })
   quantity: number;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
+  @Column({ type: 'numeric', precision: 18, scale: 4, default: 0 })
   unit_price_bs: number;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
+  @Column({ type: 'numeric', precision: 18, scale: 4, default: 0 })
   unit_price_usd: number;
 
   @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })

@@ -71,6 +71,7 @@ export default function WeightInputModal({
   const unit = product.weight_unit || 'kg'
   const pricePerWeightUsd = Number(product.price_per_weight_usd) || 0
   const pricePerWeightBs = Number(product.price_per_weight_bs) || 0
+  const unitPriceDecimals = unit === 'g' || unit === 'oz' ? 4 : 2
 
   // Calcular totales
   const totalUsd = weightValue * pricePerWeightUsd
@@ -146,7 +147,7 @@ export default function WeightInputModal({
           <div className="bg-muted/50 rounded-lg p-3">
             <p className="font-medium text-foreground">{product.name}</p>
             <p className="text-sm text-muted-foreground mt-1">
-              ${pricePerWeightUsd.toFixed(2)} / {UNIT_SHORT[unit]} • Bs. {pricePerWeightBs.toFixed(2)} / {UNIT_SHORT[unit]}
+              ${pricePerWeightUsd.toFixed(unitPriceDecimals)} / {UNIT_SHORT[unit]} • Bs. {pricePerWeightBs.toFixed(unitPriceDecimals)} / {UNIT_SHORT[unit]}
             </p>
           </div>
 
@@ -214,7 +215,7 @@ export default function WeightInputModal({
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-sm text-muted-foreground">
-                  {weightValue} {UNIT_SHORT[unit]} × ${pricePerWeightUsd.toFixed(2)}
+                  {weightValue} {UNIT_SHORT[unit]} × ${pricePerWeightUsd.toFixed(unitPriceDecimals)}
                 </span>
                 <span className="text-xl font-bold text-foreground">
                   ${totalUsd.toFixed(2)}
@@ -222,7 +223,7 @@ export default function WeightInputModal({
               </div>
               <div className="flex items-baseline justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {weightValue} {UNIT_SHORT[unit]} × Bs. {pricePerWeightBs.toFixed(2)}
+                  {weightValue} {UNIT_SHORT[unit]} × Bs. {pricePerWeightBs.toFixed(unitPriceDecimals)}
                 </span>
                 <span className="font-medium text-muted-foreground">
                   Bs. {totalBs.toFixed(2)}

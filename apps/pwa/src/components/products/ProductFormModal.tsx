@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -43,6 +43,19 @@ const productSchema = z.object({
 })
 
 type ProductFormData = z.infer<typeof productSchema>
+type WeightUnit = 'kg' | 'g' | 'lb' | 'oz'
+
+const WEIGHT_UNIT_TO_KG: Record<WeightUnit, number> = {
+  kg: 1,
+  g: 0.001,
+  lb: 0.45359237,
+  oz: 0.028349523125,
+}
+
+const roundTo = (value: number, decimals: number): number => {
+  const factor = 10 ** decimals
+  return Math.round(value * factor) / factor
+}
 
 interface ProductFormModalProps {
   isOpen: boolean
@@ -66,6 +79,7 @@ export default function ProductFormModal({
     reset,
     control,
     setValue,
+    getValues,
   } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
     defaultValues: {
@@ -98,6 +112,14 @@ export default function ProductFormModal({
   const pricePerWeightUsd = useWatch({ control, name: 'price_per_weight_usd' })
   const weightUnit = useWatch({ control, name: 'weight_unit' })
 
+  const previousWeightUnitRef = useRef<WeightUnit | null>(null)
+  const weightUnitInitializedRef = useRef(false)
+
+  const weightPriceDecimals =
+    weightUnit === 'g' || weightUnit === 'oz' ? 4 : 2
+  const weightPriceStep =
+    weightUnit === 'g' || weightUnit === 'oz' ? '0.0001' : '0.01'
+
   // Calcular automáticamente price_bs y cost_bs cuando cambian los valores USD
   useEffect(() => {
     if (bcvRateData?.available && bcvRateData.rate) {
@@ -117,11 +139,84 @@ export default function ProductFormModal({
 
       // Calcular price_per_weight_bs desde price_per_weight_usd
       if (pricePerWeightUsd !== undefined && pricePerWeightUsd !== null) {
-        const calculatedPricePerWeightBs = Math.round((pricePerWeightUsd * exchangeRate) * 100) / 100
+        const calculatedPricePerWeightBs = roundTo(
+          pricePerWeightUsd * exchangeRate,
+          weightPriceDecimals,
+        )
         setValue('price_per_weight_bs', calculatedPricePerWeightBs, { shouldValidate: false })
       }
     }
-  }, [priceUsd, costUsd, pricePerWeightUsd, bcvRateData, setValue])
+  }, [priceUsd, costUsd, pricePerWeightUsd, bcvRateData, setValue, weightPriceDecimals])
+
+  useEffect(() => {
+    if (!isOpen) {
+      previousWeightUnitRef.current = null
+      weightUnitInitializedRef.current = false
+      return
+    }
+
+    const currentUnit = (weightUnit || 'kg') as WeightUnit
+
+    if (!isWeightProduct) {
+      previousWeightUnitRef.current = currentUnit
+      return
+    }
+
+    if (!weightUnitInitializedRef.current) {
+      previousWeightUnitRef.current = currentUnit
+      weightUnitInitializedRef.current = true
+      return
+    }
+
+    const previousUnit = previousWeightUnitRef.current
+    if (!previousUnit || previousUnit === currentUnit) {
+      previousWeightUnitRef.current = currentUnit
+      return
+    }
+
+    const previousToKg = WEIGHT_UNIT_TO_KG[previousUnit]
+    const currentToKg = WEIGHT_UNIT_TO_KG[currentUnit]
+    const priceFactor = currentToKg / previousToKg
+    const weightFactor = previousToKg / currentToKg
+
+    const currentPriceUsd = getValues('price_per_weight_usd')
+    if (currentPriceUsd !== null && currentPriceUsd !== undefined && !Number.isNaN(currentPriceUsd)) {
+      setValue(
+        'price_per_weight_usd',
+        roundTo(currentPriceUsd * priceFactor, 6),
+        { shouldValidate: false },
+      )
+    }
+
+    const currentPriceBs = getValues('price_per_weight_bs')
+    if (currentPriceBs !== null && currentPriceBs !== undefined && !Number.isNaN(currentPriceBs)) {
+      setValue(
+        'price_per_weight_bs',
+        roundTo(currentPriceBs * priceFactor, 6),
+        { shouldValidate: false },
+      )
+    }
+
+    const currentMinWeight = getValues('min_weight')
+    if (currentMinWeight !== null && currentMinWeight !== undefined && !Number.isNaN(currentMinWeight)) {
+      setValue(
+        'min_weight',
+        roundTo(currentMinWeight * weightFactor, 3),
+        { shouldValidate: false },
+      )
+    }
+
+    const currentMaxWeight = getValues('max_weight')
+    if (currentMaxWeight !== null && currentMaxWeight !== undefined && !Number.isNaN(currentMaxWeight)) {
+      setValue(
+        'max_weight',
+        roundTo(currentMaxWeight * weightFactor, 3),
+        { shouldValidate: false },
+      )
+    }
+
+    previousWeightUnitRef.current = currentUnit
+  }, [getValues, isOpen, isWeightProduct, setValue, weightUnit])
 
   // Limpiar formulario cuando se cierra el modal
   useEffect(() => {
@@ -199,6 +294,13 @@ export default function ProductFormModal({
       })
     }
   }, [isOpen, product, reset])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    previousWeightUnitRef.current = (product?.weight_unit || 'kg') as WeightUnit
+    weightUnitInitializedRef.current = false
+  }, [isOpen, product?.id])
 
   // Obtener storeId del usuario autenticado
   const { user } = useAuth()
@@ -510,12 +612,13 @@ export default function ProductFormModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="price_per_weight_usd" className="text-sm font-semibold">
-                    Precio por Peso USD <span className="text-destructive">*</span>
+                    Precio por Peso USD ({weightUnit || 'kg'})
+                    <span className="text-destructive"> *</span>
                   </Label>
                   <Input
                     id="price_per_weight_usd"
                     type="number"
-                    step="0.01"
+                    step={weightPriceStep}
                     {...register('price_per_weight_usd', { valueAsNumber: true })}
                     className="mt-2 text-base"
                     placeholder="0.00"
@@ -528,7 +631,8 @@ export default function ProductFormModal({
                 </div>
                 <div>
                   <Label htmlFor="price_per_weight_bs" className="text-sm font-semibold">
-                    Precio por Peso Bs <span className="text-destructive">*</span>
+                    Precio por Peso Bs ({weightUnit || 'kg'})
+                    <span className="text-destructive"> *</span>
                     <span className="text-xs font-normal text-muted-foreground ml-2">
                       (Calculado automáticamente)
                     </span>
@@ -536,7 +640,7 @@ export default function ProductFormModal({
                   <Input
                     id="price_per_weight_bs"
                     type="number"
-                    step="0.01"
+                    step={weightPriceStep}
                     {...register('price_per_weight_bs', { valueAsNumber: true })}
                     className="mt-2 text-base bg-muted cursor-not-allowed"
                     placeholder="0.00"

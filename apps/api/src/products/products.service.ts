@@ -19,6 +19,13 @@ import { randomUUID } from 'crypto';
 export class ProductsService {
   private readonly logger = new Logger(ProductsService.name);
 
+  private readonly weightUnitToKg: Record<'kg' | 'g' | 'lb' | 'oz', number> = {
+    kg: 1,
+    g: 0.001,
+    lb: 0.45359237,
+    oz: 0.028349523125,
+  };
+
   constructor(
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
@@ -30,6 +37,31 @@ export class ProductsService {
    */
   private roundToTwoDecimals(value: number): number {
     return Math.round(value * 100) / 100;
+  }
+
+  private roundToDecimals(value: number, decimals: number): number {
+    const factor = 10 ** decimals;
+    return Math.round(value * factor) / factor;
+  }
+
+  private convertWeightValue(
+    value: number,
+    fromUnit: 'kg' | 'g' | 'lb' | 'oz',
+    toUnit: 'kg' | 'g' | 'lb' | 'oz',
+  ): number {
+    return (
+      value * (this.weightUnitToKg[fromUnit] / this.weightUnitToKg[toUnit])
+    );
+  }
+
+  private convertWeightPrice(
+    value: number,
+    fromUnit: 'kg' | 'g' | 'lb' | 'oz',
+    toUnit: 'kg' | 'g' | 'lb' | 'oz',
+  ): number {
+    return (
+      value * (this.weightUnitToKg[toUnit] / this.weightUnitToKg[fromUnit])
+    );
   }
 
   async create(storeId: string, dto: CreateProductDto): Promise<Product> {
@@ -50,11 +82,11 @@ export class ProductsService {
     const isWeightProduct = dto.is_weight_product ?? false;
     const pricePerWeightUsd =
       isWeightProduct && dto.price_per_weight_usd != null
-        ? this.roundToTwoDecimals(dto.price_per_weight_usd)
+        ? this.roundToDecimals(dto.price_per_weight_usd, 4)
         : null;
     const pricePerWeightBs =
       isWeightProduct && pricePerWeightUsd !== null
-        ? this.roundToTwoDecimals(pricePerWeightUsd * exchangeRate)
+        ? this.roundToDecimals(pricePerWeightUsd * exchangeRate, 4)
         : isWeightProduct
           ? dto.price_per_weight_bs ?? null
           : null;
@@ -200,7 +232,77 @@ export class ProductsService {
       product.scale_plu = null;
       product.scale_department = null;
     } else {
+      const previousUnit = (product.weight_unit || 'kg') as
+        | 'kg'
+        | 'g'
+        | 'lb'
+        | 'oz';
       if (dto.weight_unit !== undefined) product.weight_unit = dto.weight_unit;
+      const currentUnit = (product.weight_unit || 'kg') as
+        | 'kg'
+        | 'g'
+        | 'lb'
+        | 'oz';
+      const unitChanged = previousUnit !== currentUnit;
+
+      if (unitChanged) {
+        if (dto.price_per_weight_usd == null && dto.price_per_weight_bs == null) {
+          if (product.price_per_weight_usd != null) {
+            product.price_per_weight_usd = this.roundToDecimals(
+              this.convertWeightPrice(
+                product.price_per_weight_usd,
+                previousUnit,
+                currentUnit,
+              ),
+              4,
+            );
+          }
+
+          if (
+            product.price_per_weight_bs != null &&
+            (product.price_per_weight_usd == null || exchangeRate === null)
+          ) {
+            product.price_per_weight_bs = this.roundToDecimals(
+              this.convertWeightPrice(
+                product.price_per_weight_bs,
+                previousUnit,
+                currentUnit,
+              ),
+              4,
+            );
+          }
+
+          if (product.price_per_weight_usd != null && exchangeRate !== null) {
+            product.price_per_weight_bs = this.roundToDecimals(
+              product.price_per_weight_usd * exchangeRate,
+              4,
+            );
+          }
+        }
+
+        if (dto.min_weight === undefined && product.min_weight != null) {
+          product.min_weight = this.roundToDecimals(
+            this.convertWeightValue(
+              product.min_weight,
+              previousUnit,
+              currentUnit,
+            ),
+            3,
+          );
+        }
+
+        if (dto.max_weight === undefined && product.max_weight != null) {
+          product.max_weight = this.roundToDecimals(
+            this.convertWeightValue(
+              product.max_weight,
+              previousUnit,
+              currentUnit,
+            ),
+            3,
+          );
+        }
+      }
+
       if (dto.min_weight !== undefined) product.min_weight = dto.min_weight;
       if (dto.max_weight !== undefined) product.max_weight = dto.max_weight;
       if (dto.scale_plu !== undefined) product.scale_plu = dto.scale_plu;
@@ -208,15 +310,18 @@ export class ProductsService {
         product.scale_department = dto.scale_department;
 
       if (dto.price_per_weight_usd != null && exchangeRate !== null) {
-        product.price_per_weight_usd = this.roundToTwoDecimals(
+        product.price_per_weight_usd = this.roundToDecimals(
           dto.price_per_weight_usd,
+          4,
         );
-        product.price_per_weight_bs = this.roundToTwoDecimals(
+        product.price_per_weight_bs = this.roundToDecimals(
           dto.price_per_weight_usd * exchangeRate,
+          4,
         );
       } else if (dto.price_per_weight_bs != null) {
-        product.price_per_weight_bs = this.roundToTwoDecimals(
+        product.price_per_weight_bs = this.roundToDecimals(
           dto.price_per_weight_bs,
+          4,
         );
       }
     }

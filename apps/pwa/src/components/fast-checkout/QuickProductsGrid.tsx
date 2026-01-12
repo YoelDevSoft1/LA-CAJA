@@ -14,6 +14,9 @@ export default function QuickProductsGrid({
   onProductClick,
   className,
 }: QuickProductsGridProps) {
+  const getWeightPriceDecimals = (unit?: string | null) =>
+    unit === 'g' || unit === 'oz' ? 4 : 2
+
   const { data: quickProducts, isLoading } = useQuery({
     queryKey: ['fast-checkout', 'quick-products'],
     queryFn: () => fastCheckoutService.getQuickProducts(),
@@ -80,7 +83,9 @@ export default function QuickProductsGrid({
                 <div className="text-[10px] text-muted-foreground mt-1">
                   {product.is_weight_product && product.price_per_weight_usd ? (
                     <>
-                      ${Number(product.price_per_weight_usd).toFixed(2)}/
+                      ${Number(product.price_per_weight_usd).toFixed(
+                        getWeightPriceDecimals(product.weight_unit)
+                      )}/
                       {product.weight_unit}
                     </>
                   ) : (
