@@ -94,6 +94,18 @@ export class CreateProductDto {
   @IsNumber()
   @Min(0)
   @IsOptional()
+  cost_per_weight_bs?: number | null;
+
+  @Transform(({ value }) => toOptionalNumber(value))
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  cost_per_weight_usd?: number | null;
+
+  @Transform(({ value }) => toOptionalNumber(value))
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
   min_weight?: number | null;
 
   @Transform(({ value }) => toOptionalNumber(value))

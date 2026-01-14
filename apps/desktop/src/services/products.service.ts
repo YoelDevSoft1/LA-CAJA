@@ -18,6 +18,8 @@ export interface Product {
   weight_unit?: 'kg' | 'g' | 'lb' | 'oz' | null
   price_per_weight_bs?: number | string | null
   price_per_weight_usd?: number | string | null
+  cost_per_weight_bs?: number | string | null
+  cost_per_weight_usd?: number | string | null
   min_weight?: number | null
   max_weight?: number | null
   scale_plu?: string | null

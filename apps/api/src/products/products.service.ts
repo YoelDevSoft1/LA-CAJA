@@ -149,6 +149,18 @@ export class ProductsService {
           ? dto.price_per_weight_bs ?? null
           : null;
 
+    // Calcular costo por peso
+    const costPerWeightUsd =
+      isWeightProduct && dto.cost_per_weight_usd != null
+        ? this.roundToDecimals(dto.cost_per_weight_usd, 6)
+        : null;
+    const costPerWeightBs =
+      isWeightProduct && costPerWeightUsd !== null
+        ? this.roundToDecimals(costPerWeightUsd * exchangeRate, 6)
+        : isWeightProduct
+          ? dto.cost_per_weight_bs ?? null
+          : null;
+
     const product = this.productRepository.create({
       id: randomUUID(),
       store_id: storeId,
@@ -166,6 +178,8 @@ export class ProductsService {
       weight_unit: isWeightProduct ? dto.weight_unit ?? null : null,
       price_per_weight_bs: pricePerWeightBs,
       price_per_weight_usd: pricePerWeightUsd,
+      cost_per_weight_bs: costPerWeightBs,
+      cost_per_weight_usd: costPerWeightUsd,
       min_weight: isWeightProduct ? dto.min_weight ?? null : null,
       max_weight: isWeightProduct ? dto.max_weight ?? null : null,
       scale_plu: isWeightProduct ? dto.scale_plu ?? null : null,
@@ -301,6 +315,8 @@ export class ProductsService {
         product.weight_unit = null;
         product.price_per_weight_bs = null;
         product.price_per_weight_usd = null;
+        product.cost_per_weight_bs = null;
+        product.cost_per_weight_usd = null;
         product.min_weight = null;
         product.max_weight = null;
         product.scale_plu = null;
@@ -399,6 +415,23 @@ export class ProductsService {
           product.price_per_weight_bs = this.roundToDecimals(
             dto.price_per_weight_bs,
             4,
+          );
+        }
+
+        // Manejar cost_per_weight
+        if (dto.cost_per_weight_usd != null && exchangeRate !== null) {
+          product.cost_per_weight_usd = this.roundToDecimals(
+            dto.cost_per_weight_usd,
+            6,
+          );
+          product.cost_per_weight_bs = this.roundToDecimals(
+            dto.cost_per_weight_usd * exchangeRate,
+            6,
+          );
+        } else if (dto.cost_per_weight_bs != null) {
+          product.cost_per_weight_bs = this.roundToDecimals(
+            dto.cost_per_weight_bs,
+            6,
           );
         }
       }

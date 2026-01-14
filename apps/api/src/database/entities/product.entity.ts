@@ -62,6 +62,12 @@ export class Product {
   @Column({ type: 'numeric', precision: 18, scale: 4, nullable: true })
   price_per_weight_usd: number | null;
 
+  @Column({ type: 'numeric', precision: 18, scale: 6, nullable: true })
+  cost_per_weight_bs: number | null;
+
+  @Column({ type: 'numeric', precision: 18, scale: 6, nullable: true })
+  cost_per_weight_usd: number | null;
+
   @Column({ type: 'numeric', precision: 10, scale: 3, nullable: true })
   min_weight: number | null;
 

@@ -42,6 +42,20 @@ interface ProductItem {
   unit_cost_bs: number
 }
 
+type WeightUnit = 'kg' | 'g' | 'lb' | 'oz'
+
+const WEIGHT_UNIT_TO_KG: Record<WeightUnit, number> = {
+  kg: 1,
+  g: 0.001,
+  lb: 0.45359237,
+  oz: 0.028349523125,
+}
+
+const getCostPerWeightFromBase = (costPerKg: number, unit: WeightUnit | null) => {
+  if (!unit) return costPerKg
+  return costPerKg * WEIGHT_UNIT_TO_KG[unit]
+}
+
 export default function StockReceivedModal({
   isOpen,
   onClose,
@@ -142,14 +156,38 @@ export default function StockReceivedModal({
 
       // Buscar el producto completo para obtener los costos predeterminados
       const fullProduct = products.find((p: any) => p.id === product.product_id)
-      // Convertir a número si viene como string (PostgreSQL devuelve NUMERIC como string)
-      const defaultCostUsd = fullProduct?.cost_usd ? Number(fullProduct.cost_usd) : 0
-      const defaultCostBs = fullProduct?.cost_bs ? Number(fullProduct.cost_bs) : 0
 
       // Usar is_weight_product y weight_unit del StockStatus (viene del backend)
       // Si no está en StockStatus, intentar obtener del producto completo
       const isWeightProduct = product.is_weight_product ?? fullProduct?.is_weight_product ?? false
       const weightUnit = product.weight_unit ?? fullProduct?.weight_unit ?? null
+
+      // Para productos por peso, usar cost_per_weight si existe
+      // Si no existe, usar cost_usd (podría estar en unidad base como kg)
+      let defaultCostUsd: number
+      let defaultCostBs: number
+
+      const costPerWeightUsd =
+        fullProduct?.cost_per_weight_usd ?? product.cost_per_weight_usd ?? null
+      const costPerWeightBs =
+        fullProduct?.cost_per_weight_bs ?? product.cost_per_weight_bs ?? null
+
+      if (isWeightProduct && costPerWeightUsd != null) {
+        // Usar costo por unidad de peso (ej: costo por gramo)
+        defaultCostUsd = Number(costPerWeightUsd) || 0
+        defaultCostBs = costPerWeightBs != null
+          ? Number(costPerWeightBs)
+          : Math.round(defaultCostUsd * exchangeRate * 1000000) / 1000000
+      } else if (isWeightProduct && fullProduct?.cost_usd) {
+        // Fallback: asumir costo base por kg y convertir a la unidad de peso
+        const baseCostUsd = Number(fullProduct.cost_usd) || 0
+        defaultCostUsd = getCostPerWeightFromBase(baseCostUsd, weightUnit)
+        defaultCostBs = Math.round(defaultCostUsd * exchangeRate * 1000000) / 1000000
+      } else {
+        // Producto normal o sin costo por peso configurado
+        defaultCostUsd = fullProduct?.cost_usd ? Number(fullProduct.cost_usd) : 0
+        defaultCostBs = fullProduct?.cost_bs ? Number(fullProduct.cost_bs) : 0
+      }
 
       return [
         {
@@ -160,7 +198,7 @@ export default function StockReceivedModal({
           weight_unit: weightUnit,
           qty: isWeightProduct ? 0 : 1, // Para productos por peso, iniciar en 0 para forzar al usuario a ingresar
           unit_cost_usd: defaultCostUsd,
-          unit_cost_bs: defaultCostBs > 0 ? defaultCostBs : Math.round(defaultCostUsd * exchangeRate * 100) / 100,
+          unit_cost_bs: defaultCostBs > 0 ? defaultCostBs : Math.round(defaultCostUsd * exchangeRate * 1000000) / 1000000,
         },
       ]
     })
@@ -189,20 +227,40 @@ export default function StockReceivedModal({
   }, [isOpen, productItems.length])
 
   const addProduct = (product: Product) => {
-    // Cargar costos predeterminados del producto si existen, sino usar 0
-    // Convertir a número si viene como string (PostgreSQL devuelve NUMERIC como string)
-    const defaultCostUsd = Number(product.cost_usd) || 0
-    const defaultCostBs = Number(product.cost_bs) || 0
+    const isWeightProduct = !!product.is_weight_product
+    let defaultCostUsd: number
+    let defaultCostBs: number
+
+    const weightUnit = (product.weight_unit ?? null) as WeightUnit | null
+    const costPerWeightUsd = product.cost_per_weight_usd ?? null
+    const costPerWeightBs = product.cost_per_weight_bs ?? null
+
+    if (isWeightProduct && costPerWeightUsd != null) {
+      // Para productos por peso, usar costo por unidad de peso
+      defaultCostUsd = Number(costPerWeightUsd) || 0
+      defaultCostBs = costPerWeightBs != null
+        ? Number(costPerWeightBs)
+        : Math.round(defaultCostUsd * exchangeRate * 1000000) / 1000000
+    } else if (isWeightProduct && product.cost_usd) {
+      // Fallback: asumir costo base por kg y convertir a la unidad de peso
+      const baseCostUsd = Number(product.cost_usd) || 0
+      defaultCostUsd = getCostPerWeightFromBase(baseCostUsd, weightUnit)
+      defaultCostBs = Math.round(defaultCostUsd * exchangeRate * 1000000) / 1000000
+    } else {
+      // Producto normal
+      defaultCostUsd = Number(product.cost_usd) || 0
+      defaultCostBs = Number(product.cost_bs) || 0
+    }
 
     const newItem: ProductItem = {
       id: `item-${Date.now()}-${Math.random()}`,
       product_id: product.id,
       product_name: product.name,
-      is_weight_product: !!product.is_weight_product,
+      is_weight_product: isWeightProduct,
       weight_unit: product.weight_unit ?? null,
-      qty: 1,
+      qty: isWeightProduct ? 0 : 1,
       unit_cost_usd: defaultCostUsd,
-      unit_cost_bs: defaultCostBs > 0 ? defaultCostBs : Math.round(defaultCostUsd * exchangeRate * 100) / 100,
+      unit_cost_bs: defaultCostBs > 0 ? defaultCostBs : Math.round(defaultCostUsd * exchangeRate * 1000000) / 1000000,
     }
     setProductItems((prev) => [...prev, newItem])
     setSearchQuery('')

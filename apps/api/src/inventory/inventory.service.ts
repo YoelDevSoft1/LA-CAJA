@@ -259,6 +259,8 @@ export class InventoryService {
       .addSelect('COALESCE(stock.current_stock, 0)', 'current_stock')
       .addSelect('product.is_weight_product', 'is_weight_product')
       .addSelect('product.weight_unit', 'weight_unit')
+      .addSelect('product.cost_per_weight_bs', 'cost_per_weight_bs')
+      .addSelect('product.cost_per_weight_usd', 'cost_per_weight_usd')
       .where('product.store_id = :storeId', { storeId })
       .andWhere('product.is_active = true');
 
@@ -332,6 +334,8 @@ export class InventoryService {
         (parseFloat(row.current_stock) || 0) <= row.low_stock_threshold,
       is_weight_product: row.is_weight_product || false,
       weight_unit: row.weight_unit || null,
+      cost_per_weight_bs: row.cost_per_weight_bs ?? null,
+      cost_per_weight_usd: row.cost_per_weight_usd ?? null,
     }));
 
     if (!isPaginated) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -18,9 +18,32 @@ const productSchema = z.object({
   cost_bs: z.number().min(0, 'El costo debe ser mayor o igual a 0'),
   cost_usd: z.number().min(0, 'El costo debe ser mayor o igual a 0'),
   low_stock_threshold: z.number().min(0, 'El umbral debe ser mayor o igual a 0').optional(),
+  is_weight_product: z.boolean().optional(),
+  weight_unit: z.enum(['kg', 'g', 'lb', 'oz']).nullable().optional(),
+  price_per_weight_bs: z.number().min(0).nullable().optional(),
+  price_per_weight_usd: z.number().min(0).nullable().optional(),
+  cost_per_weight_bs: z.number().min(0).nullable().optional(),
+  cost_per_weight_usd: z.number().min(0).nullable().optional(),
+  min_weight: z.number().min(0).nullable().optional(),
+  max_weight: z.number().min(0).nullable().optional(),
+  scale_plu: z.string().nullable().optional(),
+  scale_department: z.number().min(1).nullable().optional(),
 })
 
 type ProductFormData = z.infer<typeof productSchema>
+type WeightUnit = 'kg' | 'g' | 'lb' | 'oz'
+
+const WEIGHT_UNIT_TO_KG: Record<WeightUnit, number> = {
+  kg: 1,
+  g: 0.001,
+  lb: 0.45359237,
+  oz: 0.028349523125,
+}
+
+const roundTo = (value: number, decimals: number): number => {
+  const factor = 10 ** decimals
+  return Math.round(value * factor) / factor
+}
 
 interface ProductFormModalProps {
   isOpen: boolean
@@ -44,6 +67,7 @@ export default function ProductFormModal({
     reset,
     control,
     setValue,
+    getValues,
   } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
     defaultValues: {
@@ -56,6 +80,16 @@ export default function ProductFormModal({
       cost_bs: 0,
       cost_usd: 0,
       low_stock_threshold: 0,
+      is_weight_product: false,
+      weight_unit: null,
+      price_per_weight_bs: null,
+      price_per_weight_usd: null,
+      cost_per_weight_bs: null,
+      cost_per_weight_usd: null,
+      min_weight: null,
+      max_weight: null,
+      scale_plu: null,
+      scale_department: null,
     },
   })
 
@@ -70,6 +104,18 @@ export default function ProductFormModal({
   // Observar cambios en price_usd y cost_usd para calcular automáticamente los valores en Bs
   const priceUsd = useWatch({ control, name: 'price_usd' })
   const costUsd = useWatch({ control, name: 'cost_usd' })
+  const isWeightProduct = useWatch({ control, name: 'is_weight_product' })
+  const weightUnit = useWatch({ control, name: 'weight_unit' })
+  const pricePerWeightUsd = useWatch({ control, name: 'price_per_weight_usd' })
+  const costPerWeightUsd = useWatch({ control, name: 'cost_per_weight_usd' })
+
+  const previousWeightUnitRef = useRef<WeightUnit | null>(null)
+  const weightUnitInitializedRef = useRef(false)
+
+  const weightPriceDecimals =
+    weightUnit === 'g' || weightUnit === 'oz' ? 4 : 2
+  const weightPriceStep =
+    weightUnit === 'g' || weightUnit === 'oz' ? '0.0001' : '0.01'
 
   // Calcular automáticamente price_bs y cost_bs cuando cambian los valores USD
   useEffect(() => {
@@ -87,8 +133,114 @@ export default function ProductFormModal({
         const calculatedCostBs = Math.round((costUsd * exchangeRate) * 100) / 100
         setValue('cost_bs', calculatedCostBs, { shouldValidate: false })
       }
+
+      // Calcular price_per_weight_bs desde price_per_weight_usd
+      if (pricePerWeightUsd !== undefined && pricePerWeightUsd !== null) {
+        const calculatedPricePerWeightBs = roundTo(
+          pricePerWeightUsd * exchangeRate,
+          weightPriceDecimals,
+        )
+        setValue('price_per_weight_bs', calculatedPricePerWeightBs, { shouldValidate: false })
+      }
+
+      // Calcular cost_per_weight_bs desde cost_per_weight_usd
+      if (costPerWeightUsd !== undefined && costPerWeightUsd !== null) {
+        const calculatedCostPerWeightBs = roundTo(
+          costPerWeightUsd * exchangeRate,
+          weightPriceDecimals,
+        )
+        setValue('cost_per_weight_bs', calculatedCostPerWeightBs, { shouldValidate: false })
+      }
     }
-  }, [priceUsd, costUsd, bcvRateData, setValue])
+  }, [priceUsd, costUsd, pricePerWeightUsd, costPerWeightUsd, bcvRateData, setValue, weightPriceDecimals])
+
+  useEffect(() => {
+    if (!isOpen) {
+      previousWeightUnitRef.current = null
+      weightUnitInitializedRef.current = false
+      return
+    }
+
+    const currentUnit = (weightUnit || 'kg') as WeightUnit
+
+    if (!isWeightProduct) {
+      previousWeightUnitRef.current = currentUnit
+      return
+    }
+
+    if (!weightUnitInitializedRef.current) {
+      previousWeightUnitRef.current = currentUnit
+      weightUnitInitializedRef.current = true
+      return
+    }
+
+    const previousUnit = previousWeightUnitRef.current
+    if (!previousUnit || previousUnit === currentUnit) {
+      previousWeightUnitRef.current = currentUnit
+      return
+    }
+
+    const previousToKg = WEIGHT_UNIT_TO_KG[previousUnit]
+    const currentToKg = WEIGHT_UNIT_TO_KG[currentUnit]
+    const priceFactor = currentToKg / previousToKg
+    const weightFactor = previousToKg / currentToKg
+
+    const currentPriceUsd = getValues('price_per_weight_usd')
+    if (currentPriceUsd !== null && currentPriceUsd !== undefined && !Number.isNaN(currentPriceUsd)) {
+      setValue(
+        'price_per_weight_usd',
+        roundTo(currentPriceUsd * priceFactor, 6),
+        { shouldValidate: false },
+      )
+    }
+
+    const currentPriceBs = getValues('price_per_weight_bs')
+    if (currentPriceBs !== null && currentPriceBs !== undefined && !Number.isNaN(currentPriceBs)) {
+      setValue(
+        'price_per_weight_bs',
+        roundTo(currentPriceBs * priceFactor, 6),
+        { shouldValidate: false },
+      )
+    }
+
+    const currentCostUsd = getValues('cost_per_weight_usd')
+    if (currentCostUsd !== null && currentCostUsd !== undefined && !Number.isNaN(currentCostUsd)) {
+      setValue(
+        'cost_per_weight_usd',
+        roundTo(currentCostUsd * priceFactor, 6),
+        { shouldValidate: false },
+      )
+    }
+
+    const currentCostBs = getValues('cost_per_weight_bs')
+    if (currentCostBs !== null && currentCostBs !== undefined && !Number.isNaN(currentCostBs)) {
+      setValue(
+        'cost_per_weight_bs',
+        roundTo(currentCostBs * priceFactor, 6),
+        { shouldValidate: false },
+      )
+    }
+
+    const currentMinWeight = getValues('min_weight')
+    if (currentMinWeight !== null && currentMinWeight !== undefined && !Number.isNaN(currentMinWeight)) {
+      setValue(
+        'min_weight',
+        roundTo(currentMinWeight * weightFactor, 3),
+        { shouldValidate: false },
+      )
+    }
+
+    const currentMaxWeight = getValues('max_weight')
+    if (currentMaxWeight !== null && currentMaxWeight !== undefined && !Number.isNaN(currentMaxWeight)) {
+      setValue(
+        'max_weight',
+        roundTo(currentMaxWeight * weightFactor, 3),
+        { shouldValidate: false },
+      )
+    }
+
+    previousWeightUnitRef.current = currentUnit
+  }, [getValues, isOpen, isWeightProduct, setValue, weightUnit])
 
   // Cargar datos del producto si está en modo edición
   useEffect(() => {
@@ -103,6 +255,24 @@ export default function ProductFormModal({
         cost_bs: Number(product.cost_bs),
         cost_usd: Number(product.cost_usd),
         low_stock_threshold: product.low_stock_threshold || 0,
+        is_weight_product: product.is_weight_product || false,
+        weight_unit: product.weight_unit || null,
+        price_per_weight_bs: product.price_per_weight_bs
+          ? Number(product.price_per_weight_bs)
+          : null,
+        price_per_weight_usd: product.price_per_weight_usd
+          ? Number(product.price_per_weight_usd)
+          : null,
+        cost_per_weight_bs: product.cost_per_weight_bs
+          ? Number(product.cost_per_weight_bs)
+          : null,
+        cost_per_weight_usd: product.cost_per_weight_usd
+          ? Number(product.cost_per_weight_usd)
+          : null,
+        min_weight: product.min_weight ? Number(product.min_weight) : null,
+        max_weight: product.max_weight ? Number(product.max_weight) : null,
+        scale_plu: product.scale_plu || null,
+        scale_department: product.scale_department || null,
       })
     } else {
       reset({
@@ -115,9 +285,26 @@ export default function ProductFormModal({
         cost_bs: 0,
         cost_usd: 0,
         low_stock_threshold: 0,
+        is_weight_product: false,
+        weight_unit: null,
+        price_per_weight_bs: null,
+        price_per_weight_usd: null,
+        cost_per_weight_bs: null,
+        cost_per_weight_usd: null,
+        min_weight: null,
+        max_weight: null,
+        scale_plu: null,
+        scale_department: null,
       })
     }
   }, [product, reset])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    previousWeightUnitRef.current = (product?.weight_unit || 'kg') as WeightUnit
+    weightUnitInitializedRef.current = false
+  }, [isOpen, product?.id])
 
   // Mutación para crear/actualizar
   const createMutation = useMutation({
@@ -145,17 +332,39 @@ export default function ProductFormModal({
   })
 
   const onSubmit = (data: ProductFormData) => {
+    const payload: Partial<Product> = {
+      ...data,
+      is_weight_product: data.is_weight_product || false,
+      weight_unit: data.is_weight_product ? (data.weight_unit || null) : null,
+      price_per_weight_bs: data.is_weight_product
+        ? (data.price_per_weight_bs || null)
+        : null,
+      price_per_weight_usd: data.is_weight_product
+        ? (data.price_per_weight_usd || null)
+        : null,
+      cost_per_weight_bs: data.is_weight_product
+        ? (data.cost_per_weight_bs || null)
+        : null,
+      cost_per_weight_usd: data.is_weight_product
+        ? (data.cost_per_weight_usd || null)
+        : null,
+      min_weight: data.is_weight_product ? (data.min_weight || null) : null,
+      max_weight: data.is_weight_product ? (data.max_weight || null) : null,
+      scale_plu: data.is_weight_product ? (data.scale_plu || null) : null,
+      scale_department: data.is_weight_product ? (data.scale_department || null) : null,
+    }
+
     if (isEditing) {
       // Al actualizar, solo enviar price_usd y cost_usd, el backend calculará los Bs
       const updateData = {
-        ...data,
+        ...payload,
         // No enviar price_bs ni cost_bs, el backend los calculará desde USD
         price_bs: undefined,
         cost_bs: undefined,
       }
       updateMutation.mutate(updateData)
     } else {
-      createMutation.mutate(data)
+      createMutation.mutate(payload)
     }
   }
 
@@ -322,6 +531,203 @@ export default function ProductFormModal({
             <p className="mt-1 text-xs text-gray-500">
               Se mostrará una alerta cuando el stock esté por debajo de este valor
             </p>
+          </div>
+
+          {/* Producto con peso */}
+          <div className="border-t border-gray-200 pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700">
+                  Producto con Peso
+                </label>
+                <p className="text-xs text-gray-500">
+                  Activa esta opción si el producto se vende por peso (ej: carne, frutas, verduras)
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={isWeightProduct || false}
+                onChange={(e) => {
+                  const checked = e.target.checked
+                  setValue('is_weight_product', checked)
+                  if (checked && !weightUnit) {
+                    setValue('weight_unit', 'kg')
+                  }
+                }}
+                className="h-5 w-5 accent-blue-600"
+                disabled={isLoading}
+              />
+            </div>
+
+            {isWeightProduct && (
+              <div className="mt-4 space-y-4 border border-blue-100 rounded-lg p-4 bg-blue-50">
+                <h3 className="text-sm font-semibold text-gray-800">Configuración de Peso</h3>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Unidad de Peso <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={weightUnit || 'kg'}
+                    onChange={(e) =>
+                      setValue('weight_unit', e.target.value as WeightUnit)
+                    }
+                    className="w-full px-3 sm:px-4 py-2 text-base border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={isLoading}
+                  >
+                    <option value="kg">Kilogramos (kg)</option>
+                    <option value="g">Gramos (g)</option>
+                    <option value="lb">Libras (lb)</option>
+                    <option value="oz">Onzas (oz)</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Precio por Peso USD ({weightUnit || 'kg'})
+                    </label>
+                    <input
+                      type="number"
+                      step={weightPriceStep}
+                      {...register('price_per_weight_usd', { valueAsNumber: true })}
+                      className="w-full px-3 sm:px-4 py-2 text-base border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="0.00"
+                    />
+                    {errors.price_per_weight_usd && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {errors.price_per_weight_usd.message}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Precio por Peso Bs ({weightUnit || 'kg'})
+                      <span className="text-xs font-normal text-gray-500 ml-2">(Calculado automáticamente)</span>
+                    </label>
+                    <input
+                      type="number"
+                      step={weightPriceStep}
+                      {...register('price_per_weight_bs', { valueAsNumber: true })}
+                      className="w-full px-3 sm:px-4 py-2 text-base border-2 border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                      placeholder="0.00"
+                      readOnly
+                    />
+                    {errors.price_per_weight_bs && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {errors.price_per_weight_bs.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Costo por Peso USD ({weightUnit || 'kg'})
+                    </label>
+                    <input
+                      type="number"
+                      step={weightPriceStep}
+                      {...register('cost_per_weight_usd', { valueAsNumber: true })}
+                      className="w-full px-3 sm:px-4 py-2 text-base border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="0.00"
+                    />
+                    {errors.cost_per_weight_usd && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {errors.cost_per_weight_usd.message}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Costo por Peso Bs ({weightUnit || 'kg'})
+                      <span className="text-xs font-normal text-gray-500 ml-2">(Calculado automáticamente)</span>
+                    </label>
+                    <input
+                      type="number"
+                      step={weightPriceStep}
+                      {...register('cost_per_weight_bs', { valueAsNumber: true })}
+                      className="w-full px-3 sm:px-4 py-2 text-base border-2 border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                      placeholder="0.00"
+                      readOnly
+                    />
+                    {errors.cost_per_weight_bs && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {errors.cost_per_weight_bs.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Peso Mínimo
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      {...register('min_weight', { valueAsNumber: true })}
+                      className="w-full px-3 sm:px-4 py-2 text-base border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="0.000"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Peso mínimo permitido para la venta
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Peso Máximo
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      {...register('max_weight', { valueAsNumber: true })}
+                      className="w-full px-3 sm:px-4 py-2 text-base border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="0.000"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Peso máximo permitido para la venta
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      PLU de Balanza
+                    </label>
+                    <input
+                      type="text"
+                      {...register('scale_plu')}
+                      className="w-full px-3 sm:px-4 py-2 text-base border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Ej: 001"
+                      maxLength={50}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Código PLU para identificar el producto en la balanza
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Departamento de Balanza
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      min="1"
+                      {...register('scale_department', { valueAsNumber: true })}
+                      className="w-full px-3 sm:px-4 py-2 text-base border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="1"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Número de departamento para la balanza
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           </div>
 

@@ -38,6 +38,8 @@ const productSchema = z.object({
   weight_unit: z.enum(['kg', 'g', 'lb', 'oz']).nullable().optional(),
   price_per_weight_bs: z.number().min(0).nullable().optional(),
   price_per_weight_usd: z.number().min(0).nullable().optional(),
+  cost_per_weight_bs: z.number().min(0).nullable().optional(),
+  cost_per_weight_usd: z.number().min(0).nullable().optional(),
   min_weight: z.number().min(0).nullable().optional(),
   max_weight: z.number().min(0).nullable().optional(),
   scale_plu: z.string().nullable().optional(),
@@ -94,6 +96,8 @@ export default function ProductFormModal({
       cost_bs: 0,
       cost_usd: 0,
       low_stock_threshold: 0,
+      cost_per_weight_bs: null,
+      cost_per_weight_usd: null,
     },
   })
   const [supplierPriceSearch, setSupplierPriceSearch] = useState('')
@@ -142,6 +146,7 @@ export default function ProductFormModal({
   const costUsd = useWatch({ control, name: 'cost_usd' })
   const isWeightProduct = useWatch({ control, name: 'is_weight_product' })
   const pricePerWeightUsd = useWatch({ control, name: 'price_per_weight_usd' })
+  const costPerWeightUsd = useWatch({ control, name: 'cost_per_weight_usd' })
   const weightUnit = useWatch({ control, name: 'weight_unit' })
 
   const previousWeightUnitRef = useRef<WeightUnit | null>(null)
@@ -177,8 +182,17 @@ export default function ProductFormModal({
         )
         setValue('price_per_weight_bs', calculatedPricePerWeightBs, { shouldValidate: false })
       }
+
+      // Calcular cost_per_weight_bs desde cost_per_weight_usd
+      if (costPerWeightUsd !== undefined && costPerWeightUsd !== null) {
+        const calculatedCostPerWeightBs = roundTo(
+          costPerWeightUsd * exchangeRate,
+          weightPriceDecimals,
+        )
+        setValue('cost_per_weight_bs', calculatedCostPerWeightBs, { shouldValidate: false })
+      }
     }
-  }, [priceUsd, costUsd, pricePerWeightUsd, bcvRateData, setValue, weightPriceDecimals])
+  }, [priceUsd, costUsd, pricePerWeightUsd, costPerWeightUsd, bcvRateData, setValue, weightPriceDecimals])
 
   useEffect(() => {
     if (!isOpen) {
@@ -229,6 +243,24 @@ export default function ProductFormModal({
       )
     }
 
+    const currentCostUsd = getValues('cost_per_weight_usd')
+    if (currentCostUsd !== null && currentCostUsd !== undefined && !Number.isNaN(currentCostUsd)) {
+      setValue(
+        'cost_per_weight_usd',
+        roundTo(currentCostUsd * priceFactor, 6),
+        { shouldValidate: false },
+      )
+    }
+
+    const currentCostBs = getValues('cost_per_weight_bs')
+    if (currentCostBs !== null && currentCostBs !== undefined && !Number.isNaN(currentCostBs)) {
+      setValue(
+        'cost_per_weight_bs',
+        roundTo(currentCostBs * priceFactor, 6),
+        { shouldValidate: false },
+      )
+    }
+
     const currentMinWeight = getValues('min_weight')
     if (currentMinWeight !== null && currentMinWeight !== undefined && !Number.isNaN(currentMinWeight)) {
       setValue(
@@ -270,6 +302,8 @@ export default function ProductFormModal({
         weight_unit: null,
         price_per_weight_bs: null,
         price_per_weight_usd: null,
+        cost_per_weight_bs: null,
+        cost_per_weight_usd: null,
         min_weight: null,
         max_weight: null,
         scale_plu: null,
@@ -302,6 +336,12 @@ export default function ProductFormModal({
         price_per_weight_usd: product.price_per_weight_usd
           ? Number(product.price_per_weight_usd)
           : null,
+        cost_per_weight_bs: product.cost_per_weight_bs
+          ? Number(product.cost_per_weight_bs)
+          : null,
+        cost_per_weight_usd: product.cost_per_weight_usd
+          ? Number(product.cost_per_weight_usd)
+          : null,
         min_weight: product.min_weight ? Number(product.min_weight) : null,
         max_weight: product.max_weight ? Number(product.max_weight) : null,
         scale_plu: product.scale_plu || null,
@@ -322,6 +362,8 @@ export default function ProductFormModal({
         weight_unit: null,
         price_per_weight_bs: null,
         price_per_weight_usd: null,
+        cost_per_weight_bs: null,
+        cost_per_weight_usd: null,
         min_weight: null,
         max_weight: null,
         scale_plu: null,
@@ -385,6 +427,12 @@ export default function ProductFormModal({
         price_per_weight_usd: data.is_weight_product
           ? (data.price_per_weight_usd || null)
           : null,
+        cost_per_weight_bs: data.is_weight_product
+          ? (data.cost_per_weight_bs || null)
+          : null,
+        cost_per_weight_usd: data.is_weight_product
+          ? (data.cost_per_weight_usd || null)
+          : null,
         min_weight: data.is_weight_product ? (data.min_weight || null) : null,
         max_weight: data.is_weight_product ? (data.max_weight || null) : null,
         scale_plu: data.is_weight_product ? (data.scale_plu || null) : null,
@@ -408,6 +456,12 @@ export default function ProductFormModal({
           : null,
         price_per_weight_usd: data.is_weight_product
           ? (data.price_per_weight_usd || null)
+          : null,
+        cost_per_weight_bs: data.is_weight_product
+          ? (data.cost_per_weight_bs || null)
+          : null,
+        cost_per_weight_usd: data.is_weight_product
+          ? (data.cost_per_weight_usd || null)
           : null,
         min_weight: data.is_weight_product ? (data.min_weight || null) : null,
         max_weight: data.is_weight_product ? (data.max_weight || null) : null,
@@ -851,6 +905,50 @@ export default function ProductFormModal({
                   {errors.price_per_weight_bs && (
                     <p className="mt-1 text-xs text-destructive">
                       {errors.price_per_weight_bs.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Costo por peso */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="cost_per_weight_usd" className="text-sm font-semibold">
+                    Costo por Peso USD ({weightUnit || 'kg'})
+                  </Label>
+                  <Input
+                    id="cost_per_weight_usd"
+                    type="number"
+                    step={weightPriceStep}
+                    {...register('cost_per_weight_usd', { valueAsNumber: true })}
+                    className="mt-2 text-base"
+                    placeholder="0.00"
+                  />
+                  {errors.cost_per_weight_usd && (
+                    <p className="mt-1 text-xs text-destructive">
+                      {errors.cost_per_weight_usd.message}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="cost_per_weight_bs" className="text-sm font-semibold">
+                    Costo por Peso Bs ({weightUnit || 'kg'})
+                    <span className="text-xs font-normal text-muted-foreground ml-2">
+                      (Calculado automáticamente)
+                    </span>
+                  </Label>
+                  <Input
+                    id="cost_per_weight_bs"
+                    type="number"
+                    step={weightPriceStep}
+                    {...register('cost_per_weight_bs', { valueAsNumber: true })}
+                    className="mt-2 text-base bg-muted cursor-not-allowed"
+                    placeholder="0.00"
+                    readOnly
+                  />
+                  {errors.cost_per_weight_bs && (
+                    <p className="mt-1 text-xs text-destructive">
+                      {errors.cost_per_weight_bs.message}
                     </p>
                   )}
                 </div>

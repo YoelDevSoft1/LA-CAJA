@@ -9,6 +9,8 @@ export interface StockStatus {
   // Campos para productos por peso
   is_weight_product?: boolean
   weight_unit?: 'kg' | 'g' | 'lb' | 'oz' | null
+  cost_per_weight_bs?: number | string | null
+  cost_per_weight_usd?: number | string | null
 }
 
 export interface StockStatusResponse {
