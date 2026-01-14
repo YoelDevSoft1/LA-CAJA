@@ -8,6 +8,15 @@ interface SaleDetailModalProps {
   sale: Sale | null
 }
 
+const formatWeightValue = (value: number, unit?: string | null) => {
+  const safeUnit = unit || 'kg'
+  const decimals = safeUnit === 'g' || safeUnit === 'oz' ? 0 : 3
+  const safeValue = Number.isFinite(value) ? value : 0
+  const fixed = safeValue.toFixed(decimals)
+  const trimmed = fixed.replace(/\.?0+$/, '')
+  return `${trimmed} ${safeUnit}`
+}
+
 const paymentMethodLabels: Record<string, string> = {
   CASH_BS: 'Efectivo Bs',
   CASH_USD: 'Efectivo USD',
@@ -330,6 +339,8 @@ export default function SaleDetailModal({
                     const discountUsd = Number(item.discount_usd || 0)
                     const subtotalBs = unitPriceBs * item.qty - discountBs
                     const subtotalUsd = unitPriceUsd * item.qty - discountUsd
+                    const isWeightProduct = Boolean(item.is_weight_product)
+                    const weightValue = Number(item.weight_value ?? item.qty ?? 0)
 
                     return (
                       <div key={item.id} className="p-3 sm:p-4 hover:bg-gray-50 transition-colors">
@@ -349,7 +360,11 @@ export default function SaleDetailModal({
                             <div className="ml-6 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs sm:text-sm">
                               <div>
                                 <span className="text-gray-600">Cantidad:</span>
-                                <span className="ml-1 font-semibold text-gray-900">{item.qty}</span>
+                                <span className="ml-1 font-semibold text-gray-900">
+                                  {isWeightProduct
+                                    ? formatWeightValue(weightValue, item.weight_unit)
+                                    : item.qty}
+                                </span>
                               </div>
                               <div>
                                 <span className="text-gray-600">Precio unit:</span>
@@ -434,4 +449,3 @@ export default function SaleDetailModal({
     </div>
   )
 }
-
