@@ -29,6 +29,28 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import toast from 'react-hot-toast'
 
+type WeightUnit = 'kg' | 'g' | 'lb' | 'oz'
+
+const WEIGHT_UNIT_TO_KG: Record<WeightUnit, number> = {
+  kg: 1,
+  g: 0.001,
+  lb: 0.45359237,
+  oz: 0.028349523125,
+}
+
+const formatKg = (value: number) => {
+  const fixed = value.toFixed(3)
+  return fixed.replace(/\.?0+$/, '')
+}
+
+const formatStockValue = (item: StockStatus, value: number) => {
+  const isWeight = item.is_weight_product ?? Boolean(item.weight_unit)
+  if (!isWeight) return `${value}`
+  const unit = (item.weight_unit || 'kg') as WeightUnit
+  const kgValue = value * WEIGHT_UNIT_TO_KG[unit]
+  return `${formatKg(kgValue)} kg`
+}
+
 export default function InventoryPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
@@ -362,7 +384,7 @@ export default function InventoryPage() {
                                 isLowStock ? 'text-orange-600' : 'text-foreground'
                               )}
                       >
-                        {item.current_stock}
+                        {formatStockValue(item, item.current_stock)}
                       </span>
                             {/* Indicador de progreso visual */}
                             <div className="w-16 mx-auto">
@@ -377,7 +399,7 @@ export default function InventoryPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-center text-sm text-muted-foreground hidden sm:table-cell">
-                      {item.low_stock_threshold}
+                      {formatStockValue(item, item.low_stock_threshold)}
                         </TableCell>
                         <TableCell className="text-center hidden md:table-cell">
                           {isLowStock ? (
@@ -528,7 +550,9 @@ export default function InventoryPage() {
               <div className="p-3 bg-muted rounded-lg">
                 <p className="font-semibold">{selectedProduct.product_name}</p>
                 <p className="text-sm text-muted-foreground">
-                  Stock actual: <span className="font-bold text-foreground">{selectedProduct.current_stock}</span> unidades
+                  Stock actual: <span className="font-bold text-foreground">
+                    {formatStockValue(selectedProduct, selectedProduct.current_stock)}
+                  </span>
                 </p>
               </div>
 

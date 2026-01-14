@@ -6,6 +6,28 @@ import StockReceivedModal from '@/components/inventory/StockReceivedModal'
 import StockAdjustModal from '@/components/inventory/StockAdjustModal'
 import MovementsModal from '@/components/inventory/MovementsModal'
 
+type WeightUnit = 'kg' | 'g' | 'lb' | 'oz'
+
+const WEIGHT_UNIT_TO_KG: Record<WeightUnit, number> = {
+  kg: 1,
+  g: 0.001,
+  lb: 0.45359237,
+  oz: 0.028349523125,
+}
+
+const formatKg = (value: number) => {
+  const fixed = value.toFixed(3)
+  return fixed.replace(/\.?0+$/, '')
+}
+
+const formatStockValue = (item: StockStatus, value: number) => {
+  const isWeight = item.is_weight_product ?? Boolean(item.weight_unit)
+  if (!isWeight) return `${value}`
+  const unit = (item.weight_unit || 'kg') as WeightUnit
+  const kgValue = value * WEIGHT_UNIT_TO_KG[unit]
+  return `${formatKg(kgValue)} kg`
+}
+
 export default function InventoryPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
@@ -229,11 +251,11 @@ export default function InventoryPage() {
                           item.is_low_stock ? 'text-orange-600' : 'text-gray-900'
                         }`}
                       >
-                        {item.current_stock}
+                        {formatStockValue(item, item.current_stock)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center text-sm text-gray-600 hidden sm:table-cell">
-                      {item.low_stock_threshold}
+                      {formatStockValue(item, item.low_stock_threshold)}
                     </td>
                     <td className="px-4 py-3 text-center hidden md:table-cell">
                       {item.is_low_stock ? (

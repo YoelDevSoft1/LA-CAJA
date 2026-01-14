@@ -254,7 +254,8 @@ export class ProductsService {
     if (
       dto.price_usd !== undefined ||
       dto.cost_usd !== undefined ||
-      dto.price_per_weight_usd != null
+      dto.price_per_weight_usd != null ||
+      dto.cost_per_weight_usd != null
     ) {
       const bcvRate = await this.exchangeService.getBCVRate();
       exchangeRate = bcvRate?.rate || 36;
@@ -369,6 +370,43 @@ export class ProductsService {
               product.price_per_weight_bs = this.roundToDecimals(
                 product.price_per_weight_usd * exchangeRate,
                 4,
+              );
+            }
+          }
+
+          if (
+            dto.cost_per_weight_usd == null &&
+            dto.cost_per_weight_bs == null
+          ) {
+            if (product.cost_per_weight_usd != null) {
+              product.cost_per_weight_usd = this.roundToDecimals(
+                this.convertWeightPrice(
+                  product.cost_per_weight_usd,
+                  previousUnit,
+                  currentUnit,
+                ),
+                6,
+              );
+            }
+
+            if (
+              product.cost_per_weight_bs != null &&
+              (product.cost_per_weight_usd == null || exchangeRate === null)
+            ) {
+              product.cost_per_weight_bs = this.roundToDecimals(
+                this.convertWeightPrice(
+                  product.cost_per_weight_bs,
+                  previousUnit,
+                  currentUnit,
+                ),
+                6,
+              );
+            }
+
+            if (product.cost_per_weight_usd != null && exchangeRate !== null) {
+              product.cost_per_weight_bs = this.roundToDecimals(
+                product.cost_per_weight_usd * exchangeRate,
+                6,
               );
             }
           }

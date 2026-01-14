@@ -23,6 +23,30 @@ import { Badge } from '@/components/ui/badge'
 import { inventoryService, StockStatus } from '@/services/inventory.service'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
+type WeightUnit = 'kg' | 'g' | 'lb' | 'oz'
+
+const WEIGHT_UNIT_TO_KG: Record<WeightUnit, number> = {
+  kg: 1,
+  g: 0.001,
+  lb: 0.45359237,
+  oz: 0.028349523125,
+}
+
+const formatKg = (value: number) => {
+  const fixed = value.toFixed(3)
+  return fixed.replace(/\.?0+$/, '')
+}
+
+const formatStockValue = (product: Product, item?: StockStatus) => {
+  const isWeight =
+    item?.is_weight_product ?? product.is_weight_product ?? false
+  if (!isWeight) return `${item?.current_stock ?? 0}`
+  const unit = (item?.weight_unit || product.weight_unit || 'kg') as WeightUnit
+  const value = item?.current_stock ?? 0
+  const kgValue = value * WEIGHT_UNIT_TO_KG[unit]
+  return `${formatKg(kgValue)} kg`
+}
+
 export default function ProductsPage() {
   const { user } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
@@ -359,7 +383,7 @@ export default function ProductsPage() {
                       {stockByProduct[product.id] ? (
                         <div className="flex flex-col items-center gap-1">
                           <span className="text-sm font-semibold">
-                            {stockByProduct[product.id].current_stock}
+                            {formatStockValue(product, stockByProduct[product.id])}
                           </span>
                           {stockByProduct[product.id].is_low_stock && (
                             <Badge variant="destructive" className="text-[10px]">
