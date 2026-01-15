@@ -10,6 +10,7 @@ import { invoiceSeriesService } from '@/services/invoice-series.service'
 import { priceListsService } from '@/services/price-lists.service'
 import { promotionsService } from '@/services/promotions.service'
 import { warehousesService } from '@/services/warehouses.service'
+import { useAuth } from '@/stores/auth.store'
 import { calculateRoundedChange, roundToNearestDenomination, calculateChange, formatChangeBreakdown } from '@/utils/vzla-denominations'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -79,6 +80,7 @@ export default function CheckoutModal({
   onConfirm,
   isLoading = false,
 }: CheckoutModalProps) {
+  const { user } = useAuth()
   const [selectedMethod, setSelectedMethod] = useState<'CASH_BS' | 'CASH_USD' | 'PAGO_MOVIL' | 'TRANSFER' | 'OTHER' | 'FIAO'>('CASH_USD')
   const [paymentMode, setPaymentMode] = useState<'SINGLE' | 'SPLIT'>('SINGLE')
   const [splitPayments, setSplitPayments] = useState<SplitPaymentItem[]>([])
@@ -91,6 +93,7 @@ export default function CheckoutModal({
   const [customerSearch, setCustomerSearch] = useState<string>('')
   const [showCustomerResults, setShowCustomerResults] = useState(false)
   const customerSearchRef = useRef<HTMLDivElement>(null)
+  const confirmActionRef = useRef<() => void>(() => {})
   const [error, setError] = useState<string>('')
   
   // Estados para manejo de efectivo USD con cambio en Bs
@@ -434,9 +437,10 @@ export default function CheckoutModal({
     )
   }
 
-  if (!isOpen) return null
-
   const handleConfirm = () => {
+    if (isLoading || items.length === 0 || exchangeRate <= 0) {
+      return
+    }
     // Validación: Si hay nombre, la cédula es obligatoria
     if (customerName.trim() && !customerDocumentId.trim()) {
       setError('Si proporcionas el nombre del cliente, la cédula es obligatoria')
@@ -459,6 +463,20 @@ export default function CheckoutModal({
         setError(`Faltan $${splitRemainingUsd.toFixed(2)} USD por pagar. Agrega más pagos.`)
         return
       }
+      if (!isOwner && paymentConfigs) {
+        const blocked = splitPayments
+          .map((payment) => payment.method)
+          .filter((method) =>
+            paymentConfigs.find(
+              (config) => config.method === method && config.requires_authorization
+            )
+          )
+
+        if (blocked.length > 0) {
+          setError(`Los métodos ${blocked.join(', ')} requieren autorización de owner`)
+          return
+        }
+      }
     }
 
     // Validación CASH_USD: verificar que el monto recibido sea suficiente (solo en modo SINGLE)
@@ -475,6 +493,10 @@ export default function CheckoutModal({
         // Verificar si el método está habilitado
         if (!config.enabled) {
           setError(`El método de pago ${selectedMethod} está deshabilitado`)
+          return
+        }
+        if (config.requires_authorization && !isOwner) {
+          setError(`El método de pago ${selectedMethod} requiere autorización de owner`)
           return
         }
 
@@ -638,6 +660,36 @@ export default function CheckoutModal({
     setError('')
   }
 
+  useEffect(() => {
+    confirmActionRef.current = handleConfirm
+  }, [handleConfirm])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+        return
+      }
+
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      confirmActionRef.current()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen])
+
+  if (!isOpen) return null
+
   // Handler para buscar promoción por código
   const handlePromotionCodeSearch = async () => {
     if (!promotionCode.trim()) {
@@ -669,7 +721,9 @@ export default function CheckoutModal({
     }
   }
 
-  const methods = [
+  const isOwner = user?.role === 'owner'
+
+  const methodDefinitions = [
     { id: 'CASH_USD', label: 'Efectivo USD', icon: Banknote, color: 'text-success' },
     { id: 'CASH_BS', label: 'Efectivo Bs', icon: Banknote, color: 'text-success' },
     { id: 'PAGO_MOVIL', label: 'Pago Móvil', icon: Wallet, color: 'text-info' },
@@ -677,6 +731,22 @@ export default function CheckoutModal({
     { id: 'OTHER', label: 'Otro', icon: CreditCard, color: 'text-muted-foreground' },
     { id: 'FIAO', label: 'FIAO', icon: User, color: 'text-warning' },
   ]
+
+  const methods = [...methodDefinitions].sort((a, b) => {
+    const fallbackOrder = (id: string) =>
+      methodDefinitions.findIndex((m) => m.id === id) * 10
+    const configA = paymentConfigs?.find((config) => config.method === a.id)
+    const configB = paymentConfigs?.find((config) => config.method === b.id)
+    const orderA =
+      configA && typeof configA.sort_order === 'number' && configA.sort_order > 0
+        ? configA.sort_order
+        : fallbackOrder(a.id)
+    const orderB =
+      configB && typeof configB.sort_order === 'number' && configB.sort_order > 0
+        ? configB.sort_order
+        : fallbackOrder(b.id)
+    return orderA - orderB
+  })
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-1 sm:p-4">
@@ -862,7 +932,8 @@ export default function CheckoutModal({
                       }}
                       disabled={(() => {
                         const config = paymentConfigs?.find((c) => c.method === method.id)
-                        return config ? !config.enabled : false
+                        if (!config) return false
+                        return !config.enabled || (!isOwner && config.requires_authorization)
                       })()}
                       className={cn(
                         "p-3 border rounded-lg transition-all",
@@ -871,7 +942,9 @@ export default function CheckoutModal({
                           : 'border-border hover:border-primary/50',
                         (() => {
                           const config = paymentConfigs?.find((c) => c.method === method.id)
-                          return config && !config.enabled ? 'opacity-50 cursor-not-allowed' : ''
+                          return config && (!config.enabled || (!isOwner && config.requires_authorization))
+                            ? 'opacity-50 cursor-not-allowed'
+                            : ''
                         })()
                       )}
                     >

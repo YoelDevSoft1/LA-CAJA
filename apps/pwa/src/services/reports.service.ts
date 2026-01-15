@@ -33,6 +33,8 @@ export interface TopProduct {
   profit_bs: number
   profit_usd: number
   profit_margin: number
+  is_weight_product: boolean
+  weight_unit: 'kg' | 'g' | 'lb' | 'oz' | null
 }
 
 export interface DebtSummaryReport {

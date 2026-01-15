@@ -4,9 +4,13 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, IsNull } from 'typeorm';
+import { Repository, DataSource, IsNull, Brackets } from 'typeorm';
 import { CashSession } from '../database/entities/cash-session.entity';
 import { Sale } from '../database/entities/sale.entity';
+import {
+  CashMovement,
+  CashMovementType,
+} from '../database/entities/cash-movement.entity';
 import { OpenCashSessionDto } from './dto/open-cash-session.dto';
 import { CloseCashSessionDto } from './dto/close-cash-session.dto';
 import { randomUUID } from 'crypto';
@@ -18,6 +22,8 @@ export class CashService {
     private cashSessionRepository: Repository<CashSession>,
     @InjectRepository(Sale)
     private saleRepository: Repository<Sale>,
+    @InjectRepository(CashMovement)
+    private cashMovementRepository: Repository<CashMovement>,
     private dataSource: DataSource,
   ) {}
 
@@ -30,12 +36,13 @@ export class CashService {
     const openSession = await this.cashSessionRepository.findOne({
       where: {
         store_id: storeId,
+        opened_by: userId,
         closed_at: IsNull(), // Sesión abierta si closed_at es null
       },
     });
 
     if (openSession) {
-      throw new BadRequestException('Ya existe una sesión de caja abierta');
+      throw new BadRequestException('Ya tienes una sesión de caja abierta');
     }
 
     const session = this.cashSessionRepository.create({
@@ -51,10 +58,14 @@ export class CashService {
     return this.cashSessionRepository.save(session);
   }
 
-  async getCurrentSession(storeId: string): Promise<CashSession | null> {
+  async getCurrentSession(
+    storeId: string,
+    userId: string,
+  ): Promise<CashSession | null> {
     return this.cashSessionRepository.findOne({
       where: {
         store_id: storeId,
+        opened_by: userId,
         closed_at: IsNull(), // Sesión abierta si closed_at es null
       },
     });
@@ -214,6 +225,22 @@ export class CashService {
       // PAGO_MOVIL, TRANSFER, OTHER, FIAO no se suman al efectivo
     }
 
+    // Ajustar por movimientos de efectivo asociados a la sesión
+    const closedAt = new Date();
+    const movementTotals = await this.getMovementTotals(
+      storeId,
+      session,
+      closedAt,
+    );
+    expectedBs =
+      Math.round((expectedBs + movementTotals.net_bs) * 100) / 100;
+    expectedUsd =
+      Math.round((expectedUsd + movementTotals.net_usd) * 100) / 100;
+    expectedBsVerify =
+      Math.round((expectedBsVerify + movementTotals.net_bs) * 100) / 100;
+    expectedUsdVerify =
+      Math.round((expectedUsdVerify + movementTotals.net_usd) * 100) / 100;
+
     // 5. VERIFICACIÓN DE INTEGRIDAD: Los dos cálculos deben coincidir exactamente
     if (
       Math.abs(expectedBs - expectedBsVerify) > 0.01 ||
@@ -246,9 +273,6 @@ export class CashService {
     // Las diferencias se calculan pero se usan implícitamente en el objeto counted
     Math.round((countedBs - expectedBs) * 100) / 100;
     Math.round((countedUsd - expectedUsd) * 100) / 100;
-
-    // 8. Registrar timestamp preciso antes de guardar
-    const closedAt = new Date();
 
     // 9. Guardar sesión cerrada (TODO ES INMUTABLE DESDE AQUÍ)
     session.closed_at = closedAt;
@@ -331,6 +355,8 @@ export class CashService {
         opening_usd: session.opening_amount_usd,
         sales_bs: 0,
         sales_usd: 0,
+        movements_bs: 0,
+        movements_usd: 0,
         expected_bs: 0,
         expected_usd: 0,
       },
@@ -348,7 +374,11 @@ export class CashService {
       const method = payment.method;
 
       if (method in summary.sales.by_method) {
-        summary.sales.by_method[method] += totalBs;
+        if (method === 'CASH_USD') {
+          summary.sales.by_method.CASH_USD += totalUsd;
+        } else {
+          summary.sales.by_method[method] += totalBs;
+        }
       }
 
       // Sumar efectivo - LÓGICA IDÉNTICA A closeSession para garantizar consistencia
@@ -396,12 +426,25 @@ export class CashService {
       }
     }
 
+    const summaryEndAt = session.closed_at || new Date();
+    const summaryMovements = await this.getMovementTotals(
+      storeId,
+      session,
+      summaryEndAt,
+    );
+
     summary.cash_flow.opening_bs = Number(session.opening_amount_bs) || 0;
     summary.cash_flow.opening_usd = Number(session.opening_amount_usd) || 0;
+    summary.cash_flow.movements_bs = summaryMovements.net_bs;
+    summary.cash_flow.movements_usd = summaryMovements.net_usd;
     summary.cash_flow.expected_bs =
-      summary.cash_flow.opening_bs + summary.cash_flow.sales_bs;
+      summary.cash_flow.opening_bs +
+      summary.cash_flow.sales_bs +
+      summary.cash_flow.movements_bs;
     summary.cash_flow.expected_usd =
-      summary.cash_flow.opening_usd + summary.cash_flow.sales_usd;
+      summary.cash_flow.opening_usd +
+      summary.cash_flow.sales_usd +
+      summary.cash_flow.movements_usd;
 
     if (session.counted && session.expected) {
       summary['closing'] = {
@@ -414,6 +457,66 @@ export class CashService {
     }
 
     return summary;
+  }
+
+  private async getMovementTotals(
+    storeId: string,
+    session: CashSession,
+    endAt: Date,
+  ): Promise<{
+    entries_bs: number;
+    entries_usd: number;
+    exits_bs: number;
+    exits_usd: number;
+    net_bs: number;
+    net_usd: number;
+    total: number;
+  }> {
+    const movements = await this.cashMovementRepository
+      .createQueryBuilder('movement')
+      .where('movement.store_id = :storeId', { storeId })
+      .andWhere(
+        new Brackets((qb) => {
+          qb.where('movement.cash_session_id = :sessionId', {
+            sessionId: session.id,
+          }).orWhere(
+            'movement.cash_session_id IS NULL AND movement.created_at >= :openedAt AND movement.created_at <= :endAt AND movement.created_by = :openedBy',
+            {
+              openedAt: session.opened_at,
+              endAt,
+              openedBy: session.opened_by,
+            },
+          );
+        }),
+      )
+      .getMany();
+
+    let entriesBs = 0;
+    let entriesUsd = 0;
+    let exitsBs = 0;
+    let exitsUsd = 0;
+
+    for (const movement of movements) {
+      if (movement.movement_type === CashMovementType.ENTRY) {
+        entriesBs += Number(movement.amount_bs || 0);
+        entriesUsd += Number(movement.amount_usd || 0);
+      } else {
+        exitsBs += Number(movement.amount_bs || 0);
+        exitsUsd += Number(movement.amount_usd || 0);
+      }
+    }
+
+    const roundTwo = (value: number) => Math.round(value * 100) / 100;
+
+    return {
+      entries_bs: roundTwo(entriesBs),
+      entries_usd: roundTwo(entriesUsd),
+      exits_bs: roundTwo(exitsBs),
+      exits_usd: roundTwo(exitsUsd),
+      net_bs: roundTwo(entriesBs - exitsBs),
+      net_usd: roundTwo(entriesUsd - exitsUsd),
+      total: movements.length,
+    };
   }
 
   async listSessions(

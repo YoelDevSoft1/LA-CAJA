@@ -149,6 +149,21 @@ export default function ProductFormModal({
   const costPerWeightUsd = useWatch({ control, name: 'cost_per_weight_usd' })
   const weightUnit = useWatch({ control, name: 'weight_unit' })
 
+  const safeNumber = (value: number | null | undefined) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : 0
+
+  const priceUsdValue = safeNumber(priceUsd)
+  const costUsdValue = safeNumber(costUsd)
+  const profitUsd = priceUsdValue - costUsdValue
+  const marginPercent =
+    priceUsdValue > 0 ? (profitUsd / priceUsdValue) * 100 : 0
+
+  const weightPriceUsdValue = safeNumber(pricePerWeightUsd)
+  const weightCostUsdValue = safeNumber(costPerWeightUsd)
+  const weightProfitUsd = weightPriceUsdValue - weightCostUsdValue
+  const weightMarginPercent =
+    weightPriceUsdValue > 0 ? (weightProfitUsd / weightPriceUsdValue) * 100 : 0
+
   const previousWeightUnitRef = useRef<WeightUnit | null>(null)
   const weightUnitInitializedRef = useRef(false)
 
@@ -795,6 +810,40 @@ export default function ProductFormModal({
                 <p className="mt-1 text-xs sm:text-sm text-destructive">{errors.cost_bs.message}</p>
               )}
             </div>
+          </div>
+
+          <div className="rounded-lg border border-border p-3 sm:p-4 bg-muted/40">
+            <p className="text-sm font-semibold text-foreground">Preview de margen de ganancia</p>
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Utilidad USD</span>
+                <span className={`font-semibold ${profitUsd >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  ${profitUsd.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Margen</span>
+                <span className={`font-semibold ${profitUsd >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {marginPercent.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+            {isWeightProduct && (
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Utilidad por peso USD</span>
+                  <span className={`font-semibold ${weightProfitUsd >= 0 ? 'text-success' : 'text-destructive'}`}>
+                    ${weightProfitUsd.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Margen por peso</span>
+                  <span className={`font-semibold ${weightProfitUsd >= 0 ? 'text-success' : 'text-destructive'}`}>
+                    {weightMarginPercent.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Umbral de stock bajo */}

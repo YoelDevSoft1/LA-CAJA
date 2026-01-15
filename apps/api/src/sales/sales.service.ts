@@ -3,11 +3,13 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository,
   DataSource,
+  EntityManager,
   In,
   MoreThanOrEqual,
   LessThanOrEqual,
@@ -21,10 +23,11 @@ import { Customer } from '../database/entities/customer.entity';
 import { Debt, DebtStatus } from '../database/entities/debt.entity';
 import { DebtPayment } from '../database/entities/debt-payment.entity';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { ReturnSaleDto } from './dto/return-sale.dto';
 import { randomUUID } from 'crypto';
 import { CashSession } from '../database/entities/cash-session.entity';
 import { IsNull } from 'typeorm';
-import { PaymentRulesService } from '../payments/payment-rules.service';
+import { PaymentRulesService, PaymentSplit } from '../payments/payment-rules.service';
 import { DiscountRulesService } from '../discounts/discount-rules.service';
 import { FastCheckoutRulesService } from '../fast-checkout/fast-checkout-rules.service';
 import { ProductVariant } from '../database/entities/product-variant.entity';
@@ -42,10 +45,144 @@ import { WarehousesService } from '../warehouses/warehouses.service';
 import { FiscalInvoicesService } from '../fiscal-invoices/fiscal-invoices.service';
 import { AccountingService } from '../accounting/accounting.service';
 import { ConfigValidationService } from '../config/config-validation.service';
+import { SaleReturn } from '../database/entities/sale-return.entity';
+import { SaleReturnItem } from '../database/entities/sale-return-item.entity';
 
 @Injectable()
 export class SalesService {
   private readonly logger = new Logger(SalesService.name);
+
+  private buildSplitSummary(
+    splitPayments: CreateSaleDto['split_payments'],
+    exchangeRate: number,
+  ): PaymentSplit | null {
+    if (!splitPayments || splitPayments.length === 0) {
+      return null;
+    }
+
+    const summary: PaymentSplit = {};
+    const safeRate = exchangeRate > 0 ? exchangeRate : 1;
+    let hasAmount = false;
+
+    for (const payment of splitPayments) {
+      if (!payment) continue;
+
+      const amountUsd = Number(payment.amount_usd ?? 0);
+      const amountBs = Number(payment.amount_bs ?? 0);
+
+      if (amountUsd <= 0 && amountBs <= 0) {
+        continue;
+      }
+
+      hasAmount = true;
+
+      switch (payment.method) {
+        case 'CASH_BS':
+          summary.cash_bs =
+            (summary.cash_bs || 0) + (amountBs || amountUsd * safeRate);
+          break;
+        case 'CASH_USD':
+          summary.cash_usd =
+            (summary.cash_usd || 0) + (amountUsd || amountBs / safeRate);
+          break;
+        case 'PAGO_MOVIL':
+          summary.pago_movil_bs =
+            (summary.pago_movil_bs || 0) + (amountBs || amountUsd * safeRate);
+          break;
+        case 'TRANSFER':
+          summary.transfer_bs =
+            (summary.transfer_bs || 0) + (amountBs || amountUsd * safeRate);
+          break;
+        case 'OTHER':
+          summary.other_bs =
+            (summary.other_bs || 0) + (amountBs || amountUsd * safeRate);
+          break;
+        default:
+          break;
+      }
+    }
+
+    return hasAmount ? summary : null;
+  }
+
+  private getSplitMethods(dto: CreateSaleDto): string[] {
+    const methods = new Set<string>();
+
+    if (dto.split_payments && dto.split_payments.length > 0) {
+      for (const payment of dto.split_payments) {
+        if (!payment) continue;
+        const amountUsd = Number(payment.amount_usd ?? 0);
+        const amountBs = Number(payment.amount_bs ?? 0);
+        if (amountUsd > 0 || amountBs > 0) {
+          methods.add(payment.method);
+        }
+      }
+      return Array.from(methods);
+    }
+
+    if (dto.split) {
+      if ((dto.split.cash_bs || 0) > 0) methods.add('CASH_BS');
+      if ((dto.split.cash_usd || 0) > 0) methods.add('CASH_USD');
+      if ((dto.split.pago_movil_bs || 0) > 0) methods.add('PAGO_MOVIL');
+      if ((dto.split.transfer_bs || 0) > 0) methods.add('TRANSFER');
+      if ((dto.split.other_bs || 0) > 0) methods.add('OTHER');
+    }
+
+    return Array.from(methods);
+  }
+
+  private async validatePaymentAuthorization(
+    storeId: string,
+    dto: CreateSaleDto,
+    userRole?: string,
+  ): Promise<void> {
+    const role = userRole || 'cashier';
+    if (role === 'owner') {
+      return;
+    }
+
+    const methodsToCheck =
+      dto.payment_method === 'SPLIT'
+        ? this.getSplitMethods(dto)
+        : [dto.payment_method];
+
+    if (methodsToCheck.length === 0) {
+      return;
+    }
+
+    const configs = await this.paymentRulesService.getConfigs(storeId);
+    const blocked = configs
+      .filter((config) => config.requires_authorization)
+      .filter((config) => methodsToCheck.includes(config.method));
+
+    if (blocked.length > 0) {
+      const methodList = blocked.map((config) => config.method).join(', ');
+      throw new BadRequestException(
+        `Los métodos de pago ${methodList} requieren autorización de owner`,
+      );
+    }
+  }
+
+  private async getNextSaleNumber(
+    manager: EntityManager,
+    storeId: string,
+  ): Promise<number> {
+    const result = await manager.query(
+      `INSERT INTO sale_sequences (store_id, current_number, created_at, updated_at)
+       VALUES ($1, 1, NOW(), NOW())
+       ON CONFLICT (store_id)
+       DO UPDATE SET current_number = sale_sequences.current_number + 1, updated_at = NOW()
+       RETURNING current_number`,
+      [storeId],
+    );
+    const nextNumber = Number(result?.[0]?.current_number ?? 0);
+    if (!nextNumber) {
+      throw new InternalServerErrorException(
+        'No se pudo generar el numero de venta',
+      );
+    }
+    return nextNumber;
+  }
 
   constructor(
     @InjectRepository(Sale)
@@ -62,6 +199,10 @@ export class SalesService {
     private debtRepository: Repository<Debt>,
     @InjectRepository(DebtPayment)
     private debtPaymentRepository: Repository<DebtPayment>,
+    @InjectRepository(SaleReturn)
+    private saleReturnRepository: Repository<SaleReturn>,
+    @InjectRepository(SaleReturnItem)
+    private saleReturnItemRepository: Repository<SaleReturnItem>,
     @InjectRepository(CashSession)
     private cashSessionRepository: Repository<CashSession>,
     private dataSource: DataSource,
@@ -85,6 +226,7 @@ export class SalesService {
     storeId: string,
     dto: CreateSaleDto,
     userId?: string,
+    userRole?: string,
   ): Promise<Sale> {
     // ⚙️ VALIDAR CONFIGURACIÓN DEL SISTEMA ANTES DE GENERAR VENTA
     const canGenerate = await this.configValidationService.canGenerateSale(
@@ -127,20 +269,32 @@ export class SalesService {
     }
 
     // Validar que exista una sesión de caja abierta
+    const openSessionWhere: Record<string, any> = {
+      store_id: storeId,
+      closed_at: IsNull(),
+    };
+    if (userId) {
+      openSessionWhere.opened_by = userId;
+    }
+
     const openSession = await this.cashSessionRepository.findOne({
-      where: { store_id: storeId, closed_at: IsNull() },
+      where: openSessionWhere,
     });
 
     if (!openSession) {
       throw new BadRequestException(
-        'No hay una sesión de caja abierta. Abre caja para registrar ventas.',
+        userId
+          ? 'No hay una sesión de caja abierta para este usuario. Abre caja para registrar ventas.'
+          : 'No hay una sesión de caja abierta. Abre caja para registrar ventas.',
       );
     }
 
     // Si se envía cash_session_id debe coincidir con la sesión abierta
     if (dto.cash_session_id && dto.cash_session_id !== openSession.id) {
       throw new BadRequestException(
-        'La venta debe asociarse a la sesión de caja abierta actual.',
+        userId
+          ? 'La venta debe asociarse a tu sesión de caja abierta actual.'
+          : 'La venta debe asociarse a la sesión de caja abierta actual.',
       );
     }
 
@@ -246,10 +400,8 @@ export class SalesService {
       } else {
         // Usar bodega por defecto si no se especifica
         const defaultWarehouse =
-          await this.warehousesService.getDefault(storeId);
-        if (defaultWarehouse) {
-          warehouseId = defaultWarehouse.id;
-        }
+          await this.warehousesService.getDefaultOrFirst(storeId);
+        warehouseId = defaultWarehouse.id;
       }
 
       // Obtener productos y calcular totales
@@ -257,6 +409,8 @@ export class SalesService {
       const items: SaleItem[] = [];
       let subtotalBs = 0;
       let subtotalUsd = 0;
+      let netSubtotalBs = 0;
+      let netSubtotalUsd = 0;
       let discountBs = 0;
       let discountUsd = 0;
 
@@ -462,11 +616,13 @@ export class SalesService {
 
         const itemDiscountBs = cartItem.discount_bs || 0;
         const itemDiscountUsd = cartItem.discount_usd || 0;
-        itemSubtotalBs -= itemDiscountBs;
-        itemSubtotalUsd -= itemDiscountUsd;
+        const itemNetSubtotalBs = itemSubtotalBs - itemDiscountBs;
+        const itemNetSubtotalUsd = itemSubtotalUsd - itemDiscountUsd;
 
         subtotalBs += itemSubtotalBs;
         subtotalUsd += itemSubtotalUsd;
+        netSubtotalBs += itemNetSubtotalBs;
+        netSubtotalUsd += itemNetSubtotalUsd;
         discountBs += itemDiscountBs;
         discountUsd += itemDiscountUsd;
 
@@ -512,8 +668,8 @@ export class SalesService {
         const validation = await this.promotionsService.validatePromotion(
           storeId,
           dto.promotion_id,
-          subtotalBs,
-          subtotalUsd,
+          netSubtotalBs,
+          netSubtotalUsd,
           finalCustomerId,
         );
 
@@ -527,8 +683,8 @@ export class SalesService {
         const promotionDiscount =
           this.promotionsService.calculatePromotionDiscount(
             promotion,
-            subtotalBs,
-            subtotalUsd,
+            netSubtotalBs,
+            netSubtotalUsd,
           );
 
         promotionDiscountBs = promotionDiscount.discount_bs;
@@ -546,13 +702,11 @@ export class SalesService {
       // Validar descuentos si hay alguno
       if (discountBs > 0 || discountUsd > 0) {
         // Calcular porcentaje de descuento basado en el subtotal original
-        const originalSubtotalBs = subtotalBs + discountBs;
-        const originalSubtotalUsd = subtotalUsd + discountUsd;
         const discountPercentage =
-          originalSubtotalBs > 0
-            ? (discountBs / originalSubtotalBs) * 100
-            : originalSubtotalUsd > 0
-              ? (discountUsd / originalSubtotalUsd) * 100
+          subtotalBs > 0
+            ? (discountBs / subtotalBs) * 100
+            : subtotalUsd > 0
+              ? (discountUsd / subtotalUsd) * 100
               : 0;
 
         const discountValidation =
@@ -575,16 +729,30 @@ export class SalesService {
         }
       }
 
+      const splitSummary =
+        dto.payment_method === 'SPLIT'
+          ? dto.split || this.buildSplitSummary(dto.split_payments, dto.exchange_rate)
+          : dto.split;
+
       // Validar método de pago según configuración de topes
-      if (dto.payment_method === 'SPLIT' && dto.split) {
-        // Validar pago split
-        const splitValidation =
-          await this.paymentRulesService.validateSplitPayment(
-            storeId,
-            dto.split,
+      if (dto.payment_method === 'SPLIT') {
+        if (!splitSummary && (!dto.split_payments || dto.split_payments.length === 0)) {
+          throw new BadRequestException(
+            'Debes especificar los pagos divididos para ventas mixtas',
           );
-        if (!splitValidation.valid) {
-          throw new BadRequestException(splitValidation.error);
+        }
+
+        if (splitSummary) {
+          // Validar pago split
+          const splitValidation =
+            await this.paymentRulesService.validateSplitPayment(
+              storeId,
+              splitSummary,
+            );
+
+          if (!splitValidation.valid) {
+            throw new BadRequestException(splitValidation.error);
+          }
         }
       } else {
         // Validar método de pago individual
@@ -600,6 +768,8 @@ export class SalesService {
           throw new BadRequestException(validation.error);
         }
       }
+
+      await this.validatePaymentAuthorization(storeId, dto, userRole);
 
       // Generar número de factura automáticamente
       let invoiceSeriesId: string | null = null;
@@ -621,12 +791,15 @@ export class SalesService {
         console.warn('No se pudo generar número de factura:', error);
       }
 
+      const saleNumber = await this.getNextSaleNumber(manager, storeId);
+
       // Crear la venta
       const sale = manager.create(Sale, {
         id: saleId,
         store_id: storeId,
         cash_session_id: dto.cash_session_id || null,
         sold_at: soldAt,
+        sale_number: saleNumber,
         exchange_rate: dto.exchange_rate,
         currency: dto.currency,
         totals: {
@@ -639,7 +812,11 @@ export class SalesService {
         },
         payment: {
           method: dto.payment_method,
-          split: dto.split || undefined,
+          split: splitSummary || undefined,
+          split_payments:
+            dto.split_payments && dto.split_payments.length > 0
+              ? dto.split_payments
+              : undefined,
           cash_payment: dto.cash_payment || undefined,
           cash_payment_bs: dto.cash_payment_bs || undefined,
         },
@@ -701,6 +878,7 @@ export class SalesService {
               item.product_id,
               item.variant_id || null,
               -item.qty, // Negativo para descontar
+              storeId,
             );
           }
         }
@@ -1165,6 +1343,7 @@ export class SalesService {
             item.product_id,
             item.variant_id || null,
             item.qty,
+            storeId,
           );
         }
       }
@@ -1185,6 +1364,357 @@ export class SalesService {
       sale.void_reason = reason || null;
 
       return manager.save(Sale, sale);
+    });
+  }
+
+  async returnItems(
+    storeId: string,
+    saleId: string,
+    dto: ReturnSaleDto,
+    userId: string,
+  ): Promise<SaleReturn> {
+    if (!dto.items || dto.items.length === 0) {
+      throw new BadRequestException('Debes especificar items a devolver');
+    }
+
+    const roundTwo = (value: number) => Math.round(value * 100) / 100;
+
+    return this.dataSource.transaction(async (manager) => {
+      const sale = await manager.findOne(Sale, {
+        where: { id: saleId, store_id: storeId },
+        relations: ['items'],
+      });
+
+      if (!sale) {
+        throw new NotFoundException('Venta no encontrada');
+      }
+
+      if (sale.voided_at) {
+        throw new BadRequestException('La venta está anulada');
+      }
+
+      const fiscalInvoice = await this.fiscalInvoicesService.findBySale(
+        storeId,
+        saleId,
+      );
+      if (fiscalInvoice && fiscalInvoice.status === 'issued') {
+        throw new BadRequestException(
+          'La venta tiene una factura fiscal emitida. Debe anularse con una nota de crédito.',
+        );
+      }
+
+      const debt = await manager.findOne(Debt, {
+        where: { sale_id: saleId, store_id: storeId },
+      });
+      if (debt) {
+        const paymentsCount = await manager.count(DebtPayment, {
+          where: { debt_id: debt.id },
+        });
+        if (paymentsCount > 0) {
+          throw new BadRequestException(
+            'La venta tiene pagos asociados. Debes reversar los pagos antes de devolver.',
+          );
+        }
+      }
+
+      const saleItems =
+        sale.items?.length > 0
+          ? sale.items
+          : await manager.find(SaleItem, { where: { sale_id: saleId } });
+
+      const saleItemById = new Map(
+        saleItems.map((item) => [item.id, item]),
+      );
+
+      const saleItemIds = saleItems.map((item) => item.id);
+      const existingReturns = saleItemIds.length
+        ? await manager
+            .createQueryBuilder(SaleReturnItem, 'return_item')
+            .select('return_item.sale_item_id', 'sale_item_id')
+            .addSelect('SUM(return_item.qty)', 'returned_qty')
+            .where('return_item.sale_item_id IN (:...saleItemIds)', {
+              saleItemIds,
+            })
+            .groupBy('return_item.sale_item_id')
+            .getRawMany()
+        : [];
+
+      const returnedQtyByItem = new Map<string, number>();
+      for (const row of existingReturns) {
+        returnedQtyByItem.set(
+          row.sale_item_id,
+          parseFloat(row.returned_qty) || 0,
+        );
+      }
+
+      const saleMovements = await manager
+        .createQueryBuilder(InventoryMovement, 'movement')
+        .where('movement.store_id = :storeId', { storeId })
+        .andWhere("movement.ref ->> 'sale_id' = :saleId", { saleId })
+        .getMany();
+
+      const warehouseByItemKey = new Map<string, string | null>();
+      for (const movement of saleMovements) {
+        const key = `${movement.product_id}:${movement.variant_id || 'null'}`;
+        if (!warehouseByItemKey.has(key)) {
+          warehouseByItemKey.set(key, movement.warehouse_id || null);
+        }
+      }
+
+      const defaultWarehouse =
+        await this.warehousesService.getDefaultOrFirst(storeId);
+      const returnId = randomUUID();
+      const now = new Date();
+
+      let returnSubtotalBs = 0;
+      let returnSubtotalUsd = 0;
+      let returnDiscountBs = 0;
+      let returnDiscountUsd = 0;
+      let returnTotalBs = 0;
+      let returnTotalUsd = 0;
+
+      const returnItems: SaleReturnItem[] = [];
+
+      for (const itemDto of dto.items) {
+        const saleItem = saleItemById.get(itemDto.sale_item_id);
+        if (!saleItem) {
+          throw new BadRequestException(
+            `Item ${itemDto.sale_item_id} no pertenece a la venta`,
+          );
+        }
+
+        const returnQty = Number(itemDto.qty);
+        if (!Number.isFinite(returnQty) || returnQty <= 0) {
+          throw new BadRequestException('Cantidad inválida para devolución');
+        }
+
+        const isWeightProduct = Boolean(saleItem.is_weight_product);
+        if (!isWeightProduct && !Number.isInteger(returnQty)) {
+          throw new BadRequestException(
+            'La cantidad devuelta debe ser entera para productos no pesados',
+          );
+        }
+
+        const alreadyReturned = returnedQtyByItem.get(saleItem.id) || 0;
+        const remainingQty = Number(saleItem.qty) - alreadyReturned;
+        if (returnQty > remainingQty + 0.0001) {
+          throw new BadRequestException(
+            `Cantidad a devolver excede lo disponible. Disponible: ${remainingQty}`,
+          );
+        }
+
+        const serialsForItem = await manager.find(ProductSerial, {
+          where: { sale_item_id: saleItem.id },
+        });
+
+        if (serialsForItem.length > 0) {
+          if (!itemDto.serial_ids || itemDto.serial_ids.length === 0) {
+            throw new BadRequestException(
+              'Debes especificar los seriales a devolver',
+            );
+          }
+          if (!Number.isInteger(returnQty)) {
+            throw new BadRequestException(
+              'La cantidad devuelta debe ser entera para seriales',
+            );
+          }
+          if (itemDto.serial_ids.length !== returnQty) {
+            throw new BadRequestException(
+              'La cantidad de seriales debe coincidir con la cantidad devuelta',
+            );
+          }
+
+          const serialsToReturn = await manager.find(ProductSerial, {
+            where: { id: In(itemDto.serial_ids) },
+          });
+
+          if (serialsToReturn.length !== itemDto.serial_ids.length) {
+            throw new BadRequestException(
+              'No se encontraron todos los seriales especificados',
+            );
+          }
+
+          for (const serial of serialsToReturn) {
+            if (serial.sale_item_id !== saleItem.id || serial.status !== 'sold') {
+              throw new BadRequestException(
+                `El serial ${serial.id} no pertenece a esta venta o no está vendido`,
+              );
+            }
+
+            serial.status = 'returned';
+            serial.sale_id = null;
+            serial.sale_item_id = null;
+            serial.sold_at = null;
+            serial.updated_at = now;
+            await manager.save(ProductSerial, serial);
+          }
+        }
+
+        if (saleItem.lot_id) {
+          const lot = await manager.findOne(ProductLot, {
+            where: { id: saleItem.lot_id },
+          });
+          if (lot) {
+            lot.remaining_quantity =
+              Number(lot.remaining_quantity) + Number(returnQty);
+            lot.updated_at = now;
+            await manager.save(ProductLot, lot);
+
+            const lotMovement = manager.create(LotMovement, {
+              id: randomUUID(),
+              lot_id: lot.id,
+              movement_type: 'adjusted',
+              qty_delta: returnQty,
+              happened_at: now,
+              sale_id: saleId,
+              note: itemDto.note || dto.reason || `Devolución parcial ${saleId}`,
+            });
+            await manager.save(LotMovement, lotMovement);
+          }
+        }
+
+        const key = `${saleItem.product_id}:${saleItem.variant_id || 'null'}`;
+        const warehouseId = warehouseByItemKey.get(key) || defaultWarehouse.id;
+
+        const movement = manager.create(InventoryMovement, {
+          id: randomUUID(),
+          store_id: storeId,
+          product_id: saleItem.product_id,
+          variant_id: saleItem.variant_id || null,
+          movement_type: 'adjust',
+          qty_delta: returnQty,
+          unit_cost_bs: 0,
+          unit_cost_usd: 0,
+          warehouse_id: warehouseId,
+          note: itemDto.note || dto.reason || `Devolución parcial ${saleId}`,
+          ref: {
+            sale_id: saleId,
+            sale_item_id: saleItem.id,
+            return_id: returnId,
+            return: true,
+            warehouse_id: warehouseId,
+          },
+          happened_at: now,
+          approved: true,
+          requested_by: userId,
+          approved_by: userId,
+          approved_at: now,
+        });
+        await manager.save(InventoryMovement, movement);
+
+        if (warehouseId) {
+          await this.warehousesService.updateStock(
+            warehouseId,
+            saleItem.product_id,
+            saleItem.variant_id || null,
+            returnQty,
+            storeId,
+          );
+        }
+
+        const unitPriceBs = Number(saleItem.unit_price_bs || 0);
+        const unitPriceUsd = Number(saleItem.unit_price_usd || 0);
+        const itemQty = Number(saleItem.qty) || 1;
+        const perUnitDiscountBs =
+          itemQty > 0 ? Number(saleItem.discount_bs || 0) / itemQty : 0;
+        const perUnitDiscountUsd =
+          itemQty > 0 ? Number(saleItem.discount_usd || 0) / itemQty : 0;
+
+        const lineSubtotalBs = unitPriceBs * returnQty;
+        const lineSubtotalUsd = unitPriceUsd * returnQty;
+        const lineDiscountBs = perUnitDiscountBs * returnQty;
+        const lineDiscountUsd = perUnitDiscountUsd * returnQty;
+        const lineTotalBs = lineSubtotalBs - lineDiscountBs;
+        const lineTotalUsd = lineSubtotalUsd - lineDiscountUsd;
+
+        returnSubtotalBs += lineSubtotalBs;
+        returnSubtotalUsd += lineSubtotalUsd;
+        returnDiscountBs += lineDiscountBs;
+        returnDiscountUsd += lineDiscountUsd;
+        returnTotalBs += lineTotalBs;
+        returnTotalUsd += lineTotalUsd;
+
+        const returnItem = manager.create(SaleReturnItem, {
+          id: randomUUID(),
+          return_id: returnId,
+          sale_item_id: saleItem.id,
+          product_id: saleItem.product_id,
+          variant_id: saleItem.variant_id || null,
+          lot_id: saleItem.lot_id || null,
+          qty: returnQty,
+          unit_price_bs: unitPriceBs,
+          unit_price_usd: unitPriceUsd,
+          discount_bs: roundTwo(lineDiscountBs),
+          discount_usd: roundTwo(lineDiscountUsd),
+          total_bs: roundTwo(lineTotalBs),
+          total_usd: roundTwo(lineTotalUsd),
+          serial_ids: itemDto.serial_ids || null,
+          note: itemDto.note || null,
+        });
+
+        returnItems.push(returnItem);
+      }
+
+      const totals = sale.totals || {};
+      const updatedSubtotalBs = Math.max(
+        0,
+        roundTwo(Number(totals.subtotal_bs || 0) - roundTwo(returnSubtotalBs)),
+      );
+      const updatedSubtotalUsd = Math.max(
+        0,
+        roundTwo(Number(totals.subtotal_usd || 0) - roundTwo(returnSubtotalUsd)),
+      );
+      const updatedDiscountBs = Math.max(
+        0,
+        roundTwo(Number(totals.discount_bs || 0) - roundTwo(returnDiscountBs)),
+      );
+      const updatedDiscountUsd = Math.max(
+        0,
+        roundTwo(Number(totals.discount_usd || 0) - roundTwo(returnDiscountUsd)),
+      );
+      const updatedTotalBs = Math.max(
+        0,
+        roundTwo(updatedSubtotalBs - updatedDiscountBs),
+      );
+      const updatedTotalUsd = Math.max(
+        0,
+        roundTwo(updatedSubtotalUsd - updatedDiscountUsd),
+      );
+
+      sale.totals = {
+        ...totals,
+        subtotal_bs: updatedSubtotalBs,
+        subtotal_usd: updatedSubtotalUsd,
+        discount_bs: updatedDiscountBs,
+        discount_usd: updatedDiscountUsd,
+        total_bs: updatedTotalBs,
+        total_usd: updatedTotalUsd,
+      };
+      await manager.save(Sale, sale);
+
+      if (debt) {
+        debt.amount_bs = updatedTotalBs;
+        debt.amount_usd = updatedTotalUsd;
+        debt.status =
+          updatedTotalUsd <= 0 ? DebtStatus.PAID : DebtStatus.OPEN;
+        await manager.save(Debt, debt);
+      }
+
+      const saleReturn = manager.create(SaleReturn, {
+        id: returnId,
+        store_id: storeId,
+        sale_id: saleId,
+        created_by: userId,
+        reason: dto.reason || null,
+        total_bs: roundTwo(returnTotalBs),
+        total_usd: roundTwo(returnTotalUsd),
+      });
+
+      const savedReturn = await manager.save(SaleReturn, saleReturn);
+      await manager.save(SaleReturnItem, returnItems);
+      savedReturn.items = returnItems;
+
+      return savedReturn;
     });
   }
 

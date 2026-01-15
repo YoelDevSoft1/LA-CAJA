@@ -14,12 +14,14 @@ import { ProductLotsService } from './product-lots.service';
 import { CreateProductLotDto } from './dto/create-product-lot.dto';
 import { CreateLotMovementDto } from './dto/create-lot-movement.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 /**
  * Controlador para gestión de lotes de productos
  */
 @Controller('product-lots')
 @UseGuards(JwtAuthGuard)
+@Roles('owner')
 export class ProductLotsController {
   constructor(private readonly lotsService: ProductLotsService) {}
 

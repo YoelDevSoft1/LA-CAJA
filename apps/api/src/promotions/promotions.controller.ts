@@ -15,6 +15,7 @@ import {
 import { PromotionsService } from './promotions.service';
 import { CreatePromotionDto } from './dto/create-promotion.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 /**
  * Controlador para gestión de promociones
@@ -28,6 +29,7 @@ export class PromotionsController {
    * Crea una nueva promoción
    */
   @Post()
+  @Roles('owner')
   @HttpCode(HttpStatus.CREATED)
   async createPromotion(@Body() dto: CreatePromotionDto, @Request() req: any) {
     const storeId = req.user.store_id;

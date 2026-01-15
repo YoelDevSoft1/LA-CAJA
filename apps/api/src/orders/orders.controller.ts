@@ -150,7 +150,8 @@ export class OrdersController {
   ) {
     const storeId = req.user.store_id;
     const userId = req.user.user_id;
-    return this.ordersService.closeOrder(storeId, id, dto, userId);
+    const userRole = req.user.role;
+    return this.ordersService.closeOrder(storeId, id, dto, userId, userRole);
   }
 
   /**

@@ -63,6 +63,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useNotificationsSync } from '@/hooks/useNotificationsSync'
+import { isRouteAllowed, type Role } from '@/lib/permissions'
 
 type NavItem = {
   path: string
@@ -166,6 +167,16 @@ export default function MainLayout() {
   // Usar el hook de sincronización que combina ambos sistemas
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotificationsSync()
   const storeId = user?.store_id
+  const userRole = (user?.role || 'cashier') as Role
+
+  const filteredNavSections = useMemo(() => {
+    return navSections
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => isRouteAllowed(item.path, userRole)),
+      }))
+      .filter((section) => section.items.length > 0)
+  }, [userRole])
 
   // Licencia (solo lectura)
   const licenseStatus = user?.license_status || 'active'
@@ -195,8 +206,12 @@ export default function MainLayout() {
   // Prefetch inteligente cuando el usuario navega entre páginas
   useEffect(() => {
     if (!user?.store_id) return
+    if (!isRouteAllowed(location.pathname, userRole)) return
 
-    const pathToPage: Record<string, 'pos' | 'products' | 'inventory' | 'sales' | 'cash' | 'customers' | 'debts' | 'reports'> = {
+    const pathToPage: Record<
+      string,
+      'pos' | 'products' | 'inventory' | 'sales' | 'cash' | 'customers' | 'debts' | 'reports'
+    > = {
       '/app/pos': 'pos',
       '/app/products': 'products',
       '/app/inventory': 'inventory',
@@ -214,7 +229,7 @@ export default function MainLayout() {
         // Silenciar errores
       })
     }
-  }, [location.pathname, user?.store_id, queryClient])
+  }, [location.pathname, user?.store_id, userRole, queryClient])
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const handleLogout = () => {
@@ -289,7 +304,9 @@ export default function MainLayout() {
     // Si la ruta actual empieza con este path, verificar que no haya una ruta más específica
     if (currentPath.startsWith(path + '/')) {
       // Buscar en todas las secciones si hay alguna ruta más específica que también coincida
-      const allPaths = navSections.flatMap(section => section.items.map(item => item.path))
+      const allPaths = filteredNavSections.flatMap((section) =>
+        section.items.map((item) => item.path)
+      )
       const hasMoreSpecificMatch = allPaths.some(itemPath => 
         itemPath !== path && 
         currentPath.startsWith(itemPath + '/') &&
@@ -300,15 +317,15 @@ export default function MainLayout() {
     }
     
     return false
-  }, [location.pathname])
+  }, [location.pathname, filteredNavSections])
 
   // Encontrar la sección que contiene la ruta activa
   const activeSectionId = useMemo(() => {
-    const activeSection = navSections.find((section) =>
+    const activeSection = filteredNavSections.find((section) =>
       section.items.some((item) => isActive(item.path))
     )
     return activeSection?.id
-  }, [isActive])
+  }, [filteredNavSections, isActive])
 
   // Estado controlado para las secciones abiertas
   const [openSections, setOpenSections] = useState<string[]>([])
@@ -352,7 +369,7 @@ export default function MainLayout() {
         <div className="flex flex-col h-full min-h-0">
           <ScrollArea className="flex-1 min-h-0 px-2 py-4">
             <nav className="space-y-1">
-              {navSections.map((section) => {
+              {filteredNavSections.map((section) => {
                 const SectionIcon = section.icon
                 const hasActiveItem = section.items.some((item) => isActive(item.path))
                 const isOpen = openPopover === section.id
@@ -490,7 +507,7 @@ export default function MainLayout() {
               onValueChange={setOpenSections}
               className="w-full"
             >
-              {navSections.map((section) => {
+              {filteredNavSections.map((section) => {
                 const SectionIcon = section.icon
                 const hasActiveItem = section.items.some((item) => isActive(item.path))
 
@@ -607,7 +624,7 @@ export default function MainLayout() {
           {/* Page Title (Mobile) */}
           <div className="flex-1 lg:hidden">
             <h1 className="text-lg font-semibold">
-              {navSections
+              {filteredNavSections
                 .flatMap((section) => section.items)
                 .find((item) => isActive(item.path))?.label || 'LA CAJA'}
             </h1>

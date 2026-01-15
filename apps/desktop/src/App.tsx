@@ -36,13 +36,34 @@ function App() {
             >
               <Route index element={<Navigate to="/pos" replace />} />
               <Route path="pos" element={<POSPage />} />
-              <Route path="products" element={<ProductsPage />} />
-              <Route path="inventory" element={<InventoryPage />} />
+              <Route
+                path="products"
+                element={
+                  <ProtectedRoute allowedRoles={['owner']}>
+                    <ProductsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="inventory"
+                element={
+                  <ProtectedRoute allowedRoles={['owner']}>
+                    <InventoryPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="sales" element={<SalesPage />} />
               <Route path="cash" element={<CashPage />} />
               <Route path="customers" element={<CustomersPage />} />
               <Route path="debts" element={<DebtsPage />} />
-              <Route path="reports" element={<ReportsPage />} />
+              <Route
+                path="reports"
+                element={
+                  <ProtectedRoute allowedRoles={['owner']}>
+                    <ReportsPage />
+                  </ProtectedRoute>
+                }
+              />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -54,4 +75,3 @@ function App() {
 }
 
 export default App
-

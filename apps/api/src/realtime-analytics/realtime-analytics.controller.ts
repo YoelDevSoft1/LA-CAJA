@@ -13,6 +13,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { RealTimeAnalyticsService } from './realtime-analytics.service';
 import { GetMetricsDto } from './dto/get-metrics.dto';
 import { CreateThresholdDto } from './dto/create-threshold.dto';
@@ -26,6 +27,7 @@ import { NotificationsGateway } from '../notifications/notifications.gateway';
 
 @Controller('realtime-analytics')
 @UseGuards(JwtAuthGuard)
+@Roles('owner')
 export class RealTimeAnalyticsController {
   constructor(
     private readonly analyticsService: RealTimeAnalyticsService,

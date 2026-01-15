@@ -13,6 +13,50 @@ import {
 import { Type, Transform } from 'class-transformer';
 import { CartItemDto } from './cart-item.dto';
 
+export class SplitPaymentDto {
+  @IsString()
+  @IsIn([
+    'CASH_USD',
+    'CASH_BS',
+    'PAGO_MOVIL',
+    'TRANSFER',
+    'POINT_OF_SALE',
+    'ZELLE',
+    'OTHER',
+  ])
+  method: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  amount_usd?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  amount_bs?: number;
+
+  @IsOptional()
+  @IsString()
+  reference?: string;
+
+  @IsOptional()
+  @IsString()
+  bank_code?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  card_last_4?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
 export class CreateSaleDto {
   @IsArray()
   @ValidateNested({ each: true })
@@ -48,6 +92,12 @@ export class CreateSaleDto {
     transfer_bs?: number;
     other_bs?: number;
   };
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SplitPaymentDto)
+  split_payments?: SplitPaymentDto[];
 
   // Para pagos en efectivo USD con cambio en Bs
   @IsOptional()

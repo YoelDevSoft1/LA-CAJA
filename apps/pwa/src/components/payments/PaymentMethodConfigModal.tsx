@@ -22,6 +22,8 @@ const paymentMethodConfigSchema = z.object({
   max_amount_usd: z.number().min(0).nullable().optional(),
   enabled: z.boolean().optional(),
   requires_authorization: z.boolean().optional(),
+  sort_order: z.number().int().min(0).nullable().optional(),
+  commission_percentage: z.number().min(0).max(100).nullable().optional(),
 })
 
 type PaymentMethodConfigFormData = z.infer<typeof paymentMethodConfigSchema>
@@ -67,6 +69,8 @@ export default function PaymentMethodConfigModal({
       max_amount_usd: null,
       enabled: true,
       requires_authorization: false,
+      sort_order: null,
+      commission_percentage: null,
     },
   })
 
@@ -82,6 +86,8 @@ export default function PaymentMethodConfigModal({
         max_amount_usd: config.max_amount_usd ?? null,
         enabled: config.enabled,
         requires_authorization: config.requires_authorization,
+        sort_order: config.sort_order ?? null,
+        commission_percentage: config.commission_percentage ?? null,
       })
     } else {
       reset({
@@ -91,6 +97,8 @@ export default function PaymentMethodConfigModal({
         max_amount_usd: null,
         enabled: true,
         requires_authorization: false,
+        sort_order: null,
+        commission_percentage: null,
       })
     }
   }, [config, reset])
@@ -104,6 +112,11 @@ export default function PaymentMethodConfigModal({
       max_amount_usd: data.max_amount_usd === null || data.max_amount_usd === undefined ? null : data.max_amount_usd,
       enabled: data.enabled ?? true,
       requires_authorization: data.requires_authorization ?? false,
+      sort_order: data.sort_order === null || data.sort_order === undefined ? null : data.sort_order,
+      commission_percentage:
+        data.commission_percentage === null || data.commission_percentage === undefined
+          ? null
+          : data.commission_percentage,
     }
     onConfirm(requestData)
   }
@@ -263,6 +276,54 @@ export default function PaymentMethodConfigModal({
                   </div>
                 </div>
               </div>
+
+              {/* Orden y comisiones */}
+              <div className="space-y-4">
+                <h3 className="text-base font-semibold text-foreground">Orden y Comisiones</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="sort_order">Orden de Visualización</Label>
+                    <Input
+                      id="sort_order"
+                      type="number"
+                      min="0"
+                      step="1"
+                      {...register('sort_order', {
+                        valueAsNumber: true,
+                        setValueAs: (v) => (v === '' || v === null ? null : Number(v)),
+                      })}
+                      className="mt-2"
+                      placeholder="Sin orden"
+                      disabled={isLoading}
+                    />
+                    {errors.sort_order && (
+                      <p className="mt-1 text-sm text-destructive">{errors.sort_order.message}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="commission_percentage">Comisión (%)</Label>
+                    <Input
+                      id="commission_percentage"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      {...register('commission_percentage', {
+                        valueAsNumber: true,
+                        setValueAs: (v) => (v === '' || v === null ? null : Number(v)),
+                      })}
+                      className="mt-2"
+                      placeholder="0.00"
+                      disabled={isLoading}
+                    />
+                    {errors.commission_percentage && (
+                      <p className="mt-1 text-sm text-destructive">
+                        {errors.commission_percentage.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -302,4 +363,3 @@ export default function PaymentMethodConfigModal({
     </Dialog>
   )
 }
-

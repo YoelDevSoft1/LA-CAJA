@@ -158,6 +158,7 @@ export class TransfersService {
         itemDto.product_id,
         itemDto.variant_id || null,
         itemDto.quantity,
+        storeId,
       );
     }
 
@@ -285,6 +286,7 @@ export class TransfersService {
             item.product_id,
             item.variant_id,
             difference, // Devolver diferencia a stock disponible
+            storeId,
           );
         }
 
@@ -294,6 +296,7 @@ export class TransfersService {
           item.product_id,
           item.variant_id,
           receivedDto.quantity_received,
+          storeId,
         );
       }
 

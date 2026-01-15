@@ -15,6 +15,7 @@ import { InvoiceSeriesService } from './invoice-series.service';
 import { CreateInvoiceSeriesDto } from './dto/create-invoice-series.dto';
 import { UpdateInvoiceSeriesDto } from './dto/update-invoice-series.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 /**
  * Controlador para gestión de series de facturas
@@ -28,6 +29,7 @@ export class InvoiceSeriesController {
    * Crea una nueva serie de factura
    */
   @Post()
+  @Roles('owner')
   @HttpCode(HttpStatus.CREATED)
   async createSeries(@Body() dto: CreateInvoiceSeriesDto, @Request() req: any) {
     const storeId = req.user.store_id;
@@ -74,6 +76,7 @@ export class InvoiceSeriesController {
    * Actualiza una serie de factura
    */
   @Put(':id')
+  @Roles('owner')
   async updateSeries(
     @Param('id') id: string,
     @Body() dto: UpdateInvoiceSeriesDto,
@@ -87,6 +90,7 @@ export class InvoiceSeriesController {
    * Elimina una serie de factura
    */
   @Delete(':id')
+  @Roles('owner')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteSeries(@Param('id') id: string, @Request() req: any) {
     const storeId = req.user.store_id;
@@ -97,6 +101,7 @@ export class InvoiceSeriesController {
    * Reinicia el consecutivo de una serie
    */
   @Put(':id/reset')
+  @Roles('owner')
   async resetSeriesNumber(
     @Param('id') id: string,
     @Body() body: { new_number: number },

@@ -17,8 +17,62 @@ import { GetStockStatusDto } from './dto/get-stock-status.dto';
 
 @Injectable()
 export class InventoryService {
+  private readonly weightUnitToKg: Record<'kg' | 'g' | 'lb' | 'oz', number> = {
+    kg: 1,
+    g: 0.001,
+    lb: 0.45359237,
+    oz: 0.028349523125,
+  };
+
   private roundToTwoDecimals(value: number): number {
     return Math.round(value * 100) / 100;
+  }
+
+  private roundToDecimals(value: number, decimals: number): number {
+    const factor = 10 ** decimals;
+    return Math.round(value * factor) / factor;
+  }
+
+  private normalizeStartDate(date: Date): Date {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    return new Date(year, month, day, 0, 0, 0, 0);
+  }
+
+  private normalizeEndDate(date: Date): Date {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    return new Date(year, month, day, 23, 59, 59, 999);
+  }
+
+  private calculateWeightedAverage(
+    currentQty: number,
+    currentCost: number,
+    incomingQty: number,
+    incomingCost: number,
+  ): number {
+    if (incomingQty <= 0) return currentCost;
+    if (currentQty <= 0) return incomingCost;
+    const totalQty = currentQty + incomingQty;
+    if (totalQty <= 0) return incomingCost;
+    return (currentQty * currentCost + incomingQty * incomingCost) / totalQty;
+  }
+
+  private getPerWeightCostFromBase(
+    baseCost: number,
+    unit: 'kg' | 'g' | 'lb' | 'oz',
+  ): number {
+    return baseCost * (this.weightUnitToKg[unit] || 1);
+  }
+
+  private getBaseCostFromPerWeight(
+    perWeightCost: number,
+    unit: 'kg' | 'g' | 'lb' | 'oz',
+  ): number {
+    const factor = this.weightUnitToKg[unit] || 1;
+    return factor > 0 ? perWeightCost / factor : perWeightCost;
   }
 
   private buildWarehouseStockSubquery(
@@ -76,15 +130,76 @@ export class InventoryService {
       warehouseId = dto.warehouse_id;
     } else {
       // Usar bodega por defecto si no se especifica
-      const defaultWarehouse = await this.warehousesService.getDefault(storeId);
-      if (defaultWarehouse) {
-        warehouseId = defaultWarehouse.id;
-      }
+      const defaultWarehouse =
+        await this.warehousesService.getDefaultOrFirst(storeId);
+      warehouseId = defaultWarehouse.id;
     }
 
-    // Actualizar costos del producto con el costo recibido
-    product.cost_bs = this.roundToTwoDecimals(dto.unit_cost_bs);
-    product.cost_usd = this.roundToTwoDecimals(dto.unit_cost_usd);
+    const unitCostBs = this.roundToTwoDecimals(dto.unit_cost_bs);
+    const unitCostUsd = this.roundToTwoDecimals(dto.unit_cost_usd);
+    const currentStock = await this.getCurrentStock(storeId, dto.product_id);
+
+    // Actualizar costos del producto con costo promedio ponderado
+    if (product.is_weight_product) {
+      const weightUnit = (product.weight_unit || 'kg') as
+        | 'kg'
+        | 'g'
+        | 'lb'
+        | 'oz';
+      const currentCostPerWeightUsd =
+        product.cost_per_weight_usd ??
+        this.getPerWeightCostFromBase(Number(product.cost_usd || 0), weightUnit);
+      const currentCostPerWeightBs =
+        product.cost_per_weight_bs ??
+        this.getPerWeightCostFromBase(Number(product.cost_bs || 0), weightUnit);
+
+      const avgCostPerWeightUsd = this.calculateWeightedAverage(
+        currentStock,
+        Number(currentCostPerWeightUsd || 0),
+        dto.qty,
+        dto.unit_cost_usd,
+      );
+      const avgCostPerWeightBs = this.calculateWeightedAverage(
+        currentStock,
+        Number(currentCostPerWeightBs || 0),
+        dto.qty,
+        dto.unit_cost_bs,
+      );
+
+      const normalizedPerWeightUsd = this.roundToDecimals(
+        avgCostPerWeightUsd,
+        6,
+      );
+      const normalizedPerWeightBs = this.roundToDecimals(
+        avgCostPerWeightBs,
+        6,
+      );
+
+      product.cost_per_weight_usd = normalizedPerWeightUsd;
+      product.cost_per_weight_bs = normalizedPerWeightBs;
+      product.cost_usd = this.roundToTwoDecimals(
+        this.getBaseCostFromPerWeight(normalizedPerWeightUsd, weightUnit),
+      );
+      product.cost_bs = this.roundToTwoDecimals(
+        this.getBaseCostFromPerWeight(normalizedPerWeightBs, weightUnit),
+      );
+    } else {
+      const avgCostUsd = this.calculateWeightedAverage(
+        currentStock,
+        Number(product.cost_usd || 0),
+        dto.qty,
+        dto.unit_cost_usd,
+      );
+      const avgCostBs = this.calculateWeightedAverage(
+        currentStock,
+        Number(product.cost_bs || 0),
+        dto.qty,
+        dto.unit_cost_bs,
+      );
+
+      product.cost_usd = this.roundToTwoDecimals(avgCostUsd);
+      product.cost_bs = this.roundToTwoDecimals(avgCostBs);
+    }
     await this.productRepository.save(product);
 
     // Crear movimiento de inventario
@@ -94,8 +209,8 @@ export class InventoryService {
       product_id: dto.product_id,
       movement_type: 'received',
       qty_delta: dto.qty,
-      unit_cost_bs: this.roundToTwoDecimals(dto.unit_cost_bs),
-      unit_cost_usd: this.roundToTwoDecimals(dto.unit_cost_usd),
+      unit_cost_bs: unitCostBs,
+      unit_cost_usd: unitCostUsd,
       warehouse_id: warehouseId,
       note: dto.note || null,
       ref: dto.ref || null,
@@ -115,6 +230,7 @@ export class InventoryService {
         dto.product_id,
         null, // variant_id se puede obtener del ref si es necesario
         dto.qty,
+        storeId,
       );
     }
 
@@ -143,10 +259,9 @@ export class InventoryService {
       warehouseId = dto.warehouse_id;
     } else {
       // Usar bodega por defecto si no se especifica
-      const defaultWarehouse = await this.warehousesService.getDefault(storeId);
-      if (defaultWarehouse) {
-        warehouseId = defaultWarehouse.id;
-      }
+      const defaultWarehouse =
+        await this.warehousesService.getDefaultOrFirst(storeId);
+      warehouseId = defaultWarehouse.id;
     }
 
     // Verificar que no se ajuste a negativo en la bodega específica
@@ -201,6 +316,7 @@ export class InventoryService {
         dto.product_id,
         null,
         dto.qty_delta,
+        storeId,
       );
     }
 
@@ -358,6 +474,8 @@ export class InventoryService {
     limit: number = 50,
     offset: number = 0,
     includePending: boolean = true,
+    startDate?: Date,
+    endDate?: Date,
   ): Promise<{ movements: any[]; total: number }> {
     const query = this.movementRepository
       .createQueryBuilder('movement')
@@ -371,6 +489,16 @@ export class InventoryService {
 
     if (!includePending) {
       query.andWhere('movement.approved = true');
+    }
+
+    if (startDate) {
+      const start = this.normalizeStartDate(new Date(startDate));
+      query.andWhere('movement.happened_at >= :startDate', { startDate: start });
+    }
+
+    if (endDate) {
+      const end = this.normalizeEndDate(new Date(endDate));
+      query.andWhere('movement.happened_at <= :endDate', { endDate: end });
     }
 
     const total = await query.getCount();
@@ -454,10 +582,9 @@ export class InventoryService {
 
     // Determinar bodega por defecto
     let warehouseId: string | null = null;
-    const defaultWarehouse = await this.warehousesService.getDefault(storeId);
-    if (defaultWarehouse) {
-      warehouseId = defaultWarehouse.id;
-    }
+    const defaultWarehouse =
+      await this.warehousesService.getDefaultOrFirst(storeId);
+    warehouseId = defaultWarehouse.id;
 
     // Crear movimiento de ajuste para llevar a 0
     const movement = this.movementRepository.create({
@@ -487,6 +614,7 @@ export class InventoryService {
         productId,
         null,
         -currentStock,
+        storeId,
       );
     }
 
@@ -517,10 +645,9 @@ export class InventoryService {
 
     // Determinar bodega por defecto
     let warehouseId: string | null = null;
-    const defaultWarehouse = await this.warehousesService.getDefault(storeId);
-    if (defaultWarehouse) {
-      warehouseId = defaultWarehouse.id;
-    }
+    const defaultWarehouse =
+      await this.warehousesService.getDefaultOrFirst(storeId);
+    warehouseId = defaultWarehouse.id;
 
     const movements: InventoryMovement[] = [];
 
@@ -554,6 +681,7 @@ export class InventoryService {
           product.product_id,
           null,
           -product.current_stock,
+          storeId,
         );
       }
     }

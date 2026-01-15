@@ -14,6 +14,7 @@ import { WarehousesService } from './warehouses.service';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @Controller('warehouses')
 @UseGuards(JwtAuthGuard)
@@ -21,6 +22,7 @@ export class WarehousesController {
   constructor(private readonly warehousesService: WarehousesService) {}
 
   @Post()
+  @Roles('owner')
   async create(@Body() dto: CreateWarehouseDto, @Request() req: any) {
     const storeId = req.user.store_id;
     return this.warehousesService.create(storeId, dto);
@@ -59,6 +61,7 @@ export class WarehousesController {
   }
 
   @Put(':id')
+  @Roles('owner')
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateWarehouseDto,
@@ -69,6 +72,7 @@ export class WarehousesController {
   }
 
   @Delete(':id')
+  @Roles('owner')
   async remove(@Param('id') id: string, @Request() req: any) {
     const storeId = req.user.store_id;
     await this.warehousesService.remove(storeId, id);

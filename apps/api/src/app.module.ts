@@ -50,6 +50,7 @@ import { LicenseWatcherService } from './admin/license-watcher.service';
 // Esto reduce el tamaño del objeto serializado y mejora el rendimiento del bootstrap
 import { ALL_ENTITIES, Store, StoreMember, Profile } from './database/entities';
 import { LicenseGuard } from './auth/guards/license.guard';
+import { RolesGuard } from './auth/guards/roles.guard';
 import { DatabaseErrorInterceptor } from './common/interceptors/database-error.interceptor';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 
@@ -206,6 +207,10 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     {
       provide: APP_GUARD,
       useClass: LicenseGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
     // Interceptor global para manejar errores de base de datos
     {

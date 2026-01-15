@@ -16,6 +16,7 @@ import { CreateProductSerialDto } from './dto/create-product-serial.dto';
 import { AssignSerialsDto } from './dto/assign-serials.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SerialStatus } from '../database/entities/product-serial.entity';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 /**
  * Controlador para gestión de seriales de productos
@@ -29,6 +30,7 @@ export class ProductSerialsController {
    * Crea un nuevo serial de producto
    */
   @Post()
+  @Roles('owner')
   @HttpCode(HttpStatus.CREATED)
   async createSerial(@Body() dto: CreateProductSerialDto, @Request() req: any) {
     const storeId = req.user.store_id;
@@ -39,6 +41,7 @@ export class ProductSerialsController {
    * Crea múltiples seriales en lote
    */
   @Post('batch')
+  @Roles('owner')
   @HttpCode(HttpStatus.CREATED)
   async createSerialsBatch(
     @Body()
@@ -122,6 +125,7 @@ export class ProductSerialsController {
    * Marca un serial como devuelto
    */
   @Put(':id/return')
+  @Roles('owner')
   async returnSerial(@Param('id') id: string, @Request() req: any) {
     const storeId = req.user.store_id;
     return this.serialsService.returnSerial(storeId, id);
@@ -131,6 +135,7 @@ export class ProductSerialsController {
    * Marca un serial como dañado
    */
   @Put(':id/damaged')
+  @Roles('owner')
   async markSerialAsDamaged(
     @Param('id') id: string,
     @Body() body: { note?: string },

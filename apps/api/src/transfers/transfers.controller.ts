@@ -14,9 +14,11 @@ import { CreateTransferDto } from './dto/create-transfer.dto';
 import { ShipTransferDto } from './dto/ship-transfer.dto';
 import { ReceiveTransferDto } from './dto/receive-transfer.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @Controller('transfers')
 @UseGuards(JwtAuthGuard)
+@Roles('owner')
 export class TransfersController {
   constructor(private readonly transfersService: TransfersService) {}
 

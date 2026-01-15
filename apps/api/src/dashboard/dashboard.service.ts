@@ -97,6 +97,8 @@ export class DashboardService {
         id: string;
         name: string;
         quantity_sold: number;
+        is_weight_product: boolean;
+        weight_unit: 'kg' | 'g' | 'lb' | 'oz' | null;
       } | null;
       best_selling_category: string | null;
     };
@@ -413,6 +415,8 @@ export class DashboardService {
         .andWhere('sale.sold_at <= :end', { end: periodEnd })
         .select('product.id', 'product_id')
         .addSelect('product.name', 'product_name')
+        .addSelect('product.is_weight_product', 'is_weight_product')
+        .addSelect('product.weight_unit', 'weight_unit')
         .addSelect('SUM(item.qty)', 'total_quantity')
         .groupBy('product.id')
         .addGroupBy('product.name')
@@ -498,6 +502,8 @@ export class DashboardService {
               id: topProduct.product_id,
               name: topProduct.product_name,
               quantity_sold: parseFloat(topProduct.total_quantity) || 0,
+              is_weight_product: Boolean(topProduct.is_weight_product),
+              weight_unit: topProduct.weight_unit ?? null,
             }
           : null,
         best_selling_category: topCategory?.category || null,
@@ -521,6 +527,8 @@ export class DashboardService {
       quantity_sold: number;
       revenue_bs: number;
       revenue_usd: number;
+      is_weight_product: boolean;
+      weight_unit: 'kg' | 'g' | 'lb' | 'oz' | null;
     }>;
   }> {
     const endDate = new Date();
@@ -572,6 +580,8 @@ export class DashboardService {
       .andWhere('sale.sold_at <= :end', { end: endDate })
       .select('product.id', 'product_id')
       .addSelect('product.name', 'product_name')
+      .addSelect('product.is_weight_product', 'is_weight_product')
+      .addSelect('product.weight_unit', 'weight_unit')
       .addSelect('SUM(item.qty)', 'total_quantity')
       .addSelect(
         'SUM((item.unit_price_bs * item.qty) - COALESCE(item.discount_bs, 0))',
@@ -593,6 +603,8 @@ export class DashboardService {
       quantity_sold: parseFloat(p.total_quantity) || 0,
       revenue_bs: parseFloat(p.total_revenue_bs) || 0,
       revenue_usd: parseFloat(p.total_revenue_usd) || 0,
+      is_weight_product: Boolean(p.is_weight_product),
+      weight_unit: p.weight_unit ?? null,
     }));
 
     return {

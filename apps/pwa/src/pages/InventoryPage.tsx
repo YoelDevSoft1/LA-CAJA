@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useAuth } from '@/stores/auth.store'
-import { Search, Package, AlertTriangle, Plus, TrendingUp, TrendingDown, History, Trash2, AlertOctagon } from 'lucide-react'
+import { Search, Package, AlertTriangle, Plus, TrendingUp, TrendingDown, History, Trash2, AlertOctagon, Download } from 'lucide-react'
 import { inventoryService, StockStatus } from '@/services/inventory.service'
 import { warehousesService } from '@/services/warehouses.service'
 import StockReceivedModal from '@/components/inventory/StockReceivedModal'
@@ -51,6 +51,30 @@ const formatStockValue = (item: StockStatus, value: number) => {
   return `${formatKg(kgValue)} kg`
 }
 
+const escapeCsvValue = (value: string | number | null | undefined) => {
+  if (value === null || value === undefined) return ''
+  const stringValue = String(value)
+  if (/[",\n]/.test(stringValue)) {
+    return `"${stringValue.replace(/"/g, '""')}"`
+  }
+  return stringValue
+}
+
+const buildInventoryCsv = (items: StockStatus[]) => {
+  const headers = ['ID', 'Producto', 'Stock Actual', 'Umbral Minimo', 'Estado']
+  const rows = items.map((item) => [
+    item.product_id,
+    item.product_name,
+    formatStockValue(item, item.current_stock),
+    formatStockValue(item, item.low_stock_threshold),
+    item.is_low_stock ? 'Bajo' : 'Normal',
+  ])
+
+  return [headers, ...rows]
+    .map((row) => row.map(escapeCsvValue).join(','))
+    .join('\n')
+}
+
 export default function InventoryPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
@@ -63,6 +87,7 @@ export default function InventoryPage() {
   const [isMovementsModalOpen, setIsMovementsModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<StockStatus | null>(null)
   const [warehouseFilter, setWarehouseFilter] = useState('all')
+  const [isExporting, setIsExporting] = useState(false)
   // Estados para vaciar stock (solo owners)
   const [isResetProductModalOpen, setIsResetProductModalOpen] = useState(false)
   const [isResetAllModalOpen, setIsResetAllModalOpen] = useState(false)
@@ -77,7 +102,13 @@ export default function InventoryPage() {
   const offset = (currentPage - 1) * pageSize
 
   // Obtener estado del stock con paginación y búsqueda en servidor
-  const { data: stockStatusData, isLoading } = useQuery({
+  const {
+    data: stockStatusData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: [
       'inventory',
       'stock-status',
@@ -188,6 +219,38 @@ export default function InventoryPage() {
     setIsResetProductModalOpen(true)
   }
 
+  const handleExportInventory = async () => {
+    setIsExporting(true)
+    try {
+      const items = await inventoryService.getStockStatus({
+        search: searchQuery.trim() || undefined,
+        warehouse_id: warehouseFilter !== 'all' ? warehouseFilter : undefined,
+        low_stock_only: showLowStockOnly || undefined,
+      })
+
+      if (items.length === 0) {
+        toast.error('No hay datos para exportar')
+        return
+      }
+
+      const csv = buildInventoryCsv(items)
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `inventario-${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+      toast.success('Inventario exportado')
+    } catch (error) {
+      toast.error('Error al exportar inventario')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   // Calcular porcentaje de stock para Progress
   const getStockPercentage = (item: StockStatus) => {
     if (item.low_stock_threshold === 0) return 100
@@ -230,6 +293,15 @@ export default function InventoryPage() {
             >
               <History className="w-4 h-4 mr-2" />
               Ver Todos los Movimientos
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleExportInventory}
+              className="w-full sm:w-auto"
+              disabled={isExporting}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {isExporting ? 'Exportando...' : 'Exportar Excel'}
             </Button>
             {/* Solo owners pueden vaciar todo el inventario */}
             {isOwner && (
@@ -308,7 +380,24 @@ export default function InventoryPage() {
       {/* Lista de productos */}
       <Card className="border border-border">
         <CardContent className="p-0">
-        {isLoading ? (
+        {isError ? (
+            <div className="p-8 text-center">
+              <div className="flex flex-col items-center justify-center py-8">
+                <AlertTriangle className="w-12 h-12 mx-auto mb-3 text-destructive" />
+                <p className="text-muted-foreground">No se pudo cargar el inventario</p>
+                {error instanceof Error && (
+                  <p className="mt-1 text-xs text-muted-foreground">{error.message}</p>
+                )}
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => refetch()}
+                >
+                  Reintentar
+                </Button>
+              </div>
+          </div>
+        ) : isLoading ? (
             <div className="p-8 text-center">
               <div className="flex flex-col items-center gap-3">
                 <Skeleton className="h-12 w-12 rounded-full" />

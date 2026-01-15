@@ -178,7 +178,8 @@ export default function CloseCashModal({
                           <p className="text-xl font-bold text-foreground">{expectedBs.toFixed(2)} Bs</p>
                           <p className="text-xs text-muted-foreground mt-1">
                             Apertura: {Number(session.opening_amount_bs).toFixed(2)} Bs + Ventas:{' '}
-                            {Number(sessionSummary.cash_flow.sales_bs).toFixed(2)} Bs
+                            {Number(sessionSummary.cash_flow.sales_bs).toFixed(2)} Bs + Movimientos:{' '}
+                            {Number(sessionSummary.cash_flow.movements_bs).toFixed(2)} Bs
                           </p>
                         </div>
                         <div>
@@ -188,7 +189,8 @@ export default function CloseCashModal({
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             Apertura: ${Number(session.opening_amount_usd).toFixed(2)} + Ventas:{' '}
-                            ${Number(sessionSummary.cash_flow.sales_usd).toFixed(2)}
+                            ${Number(sessionSummary.cash_flow.sales_usd).toFixed(2)} + Movimientos:{' '}
+                            ${Number(sessionSummary.cash_flow.movements_usd).toFixed(2)}
                           </p>
                         </div>
                       </div>
@@ -421,6 +423,13 @@ export default function CloseCashModal({
                               {Number(sessionSummary.cash_flow.sales_usd).toFixed(2)} USD
                             </p>
                           </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Movimientos Netos</p>
+                            <p className="text-sm text-foreground">
+                              {Number(sessionSummary.cash_flow.movements_bs).toFixed(2)} Bs / $
+                              {Number(sessionSummary.cash_flow.movements_usd).toFixed(2)} USD
+                            </p>
+                          </div>
                           <div className="border-t border-border pt-4">
                             <p className="text-xs text-muted-foreground mb-1">Esperado</p>
                             <p className="text-lg font-bold text-foreground">
@@ -505,4 +514,3 @@ export default function CloseCashModal({
     </Dialog>
   )
 }
-

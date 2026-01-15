@@ -19,6 +19,8 @@ export { QuickProduct } from './quick-product.entity';
 // Sales entities
 export { Sale } from './sale.entity';
 export { SaleItem } from './sale-item.entity';
+export { SaleReturn } from './sale-return.entity';
+export { SaleReturnItem } from './sale-return-item.entity';
 export { InvoiceSeries } from './invoice-series.entity';
 
 // Cash & Sessions entities
@@ -131,6 +133,8 @@ import { PromotionUsage } from './promotion-usage.entity';
 import { InventoryMovement } from './inventory-movement.entity';
 import { Sale } from './sale.entity';
 import { SaleItem } from './sale-item.entity';
+import { SaleReturn } from './sale-return.entity';
+import { SaleReturnItem } from './sale-return-item.entity';
 import { CashSession } from './cash-session.entity';
 import { Shift } from './shift.entity';
 import { ShiftCut } from './shift-cut.entity';
@@ -217,6 +221,8 @@ export const ALL_ENTITIES = [
   InventoryMovement,
   Sale,
   SaleItem,
+  SaleReturn,
+  SaleReturnItem,
   CashSession,
   Shift,
   ShiftCut,

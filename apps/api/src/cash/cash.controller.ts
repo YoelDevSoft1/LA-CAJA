@@ -31,7 +31,8 @@ export class CashController {
   @Get('sessions/current')
   async getCurrentSession(@Request() req: any) {
     const storeId = req.user.store_id;
-    return this.cashService.getCurrentSession(storeId);
+    const userId = req.user.sub;
+    return this.cashService.getCurrentSession(storeId, userId);
   }
 
   @Post('sessions/:id/close')

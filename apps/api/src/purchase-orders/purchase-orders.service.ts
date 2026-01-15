@@ -89,7 +89,7 @@ export class PurchaseOrdersService {
       }
     } else {
       // Obtener bodega por defecto
-      warehouse = await this.warehousesService.getDefault(storeId);
+      warehouse = await this.warehousesService.getDefaultOrFirst(storeId);
     }
 
     // Validar productos
@@ -278,6 +278,7 @@ export class PurchaseOrdersService {
               item.product_id,
               item.variant_id,
               qtyReceived,
+              storeId,
             );
           }
 

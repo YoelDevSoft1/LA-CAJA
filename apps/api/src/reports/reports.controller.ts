@@ -14,9 +14,11 @@ import { Response } from 'express';
 import { ReportsService } from './reports.service';
 import { PdfService } from './pdf.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @Controller('reports')
 @UseGuards(JwtAuthGuard)
+@Roles('owner')
 export class ReportsController {
   constructor(
     private readonly reportsService: ReportsService,

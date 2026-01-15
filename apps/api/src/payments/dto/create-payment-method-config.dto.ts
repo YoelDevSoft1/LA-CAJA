@@ -5,6 +5,8 @@ import {
   IsOptional,
   IsBoolean,
   Min,
+  Max,
+  IsInt,
 } from 'class-validator';
 
 export type PaymentMethod =
@@ -49,4 +51,15 @@ export class CreatePaymentMethodConfigDto {
   @IsBoolean()
   @IsOptional()
   requires_authorization?: boolean;
+
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  sort_order?: number;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  @IsOptional()
+  commission_percentage?: number | null;
 }

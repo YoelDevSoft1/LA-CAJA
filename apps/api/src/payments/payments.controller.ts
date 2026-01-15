@@ -18,6 +18,7 @@ import { PaymentRulesService } from './payment-rules.service';
 import { CreatePaymentMethodConfigDto } from './dto/create-payment-method-config.dto';
 import { CreateCashMovementDto } from './dto/create-cash-movement.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 /**
  * Controlador para gestión de métodos de pago y movimientos de efectivo
@@ -39,6 +40,7 @@ export class PaymentsController {
    * Crea o actualiza configuración de método de pago
    */
   @Put('methods/:method')
+  @Roles('owner')
   async upsertPaymentMethodConfig(
     @Param('method') method: string,
     @Body() dto: CreatePaymentMethodConfigDto,
@@ -74,6 +76,7 @@ export class PaymentsController {
    * Elimina configuración de método de pago
    */
   @Delete('methods/:method')
+  @Roles('owner')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deletePaymentMethodConfig(
     @Param('method') method: string,

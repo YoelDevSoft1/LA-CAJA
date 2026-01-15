@@ -52,6 +52,12 @@ export class PaymentMethodConfig {
   @Column({ type: 'boolean', default: false })
   requires_authorization: boolean;
 
+  @Column({ type: 'integer', default: 0 })
+  sort_order: number;
+
+  @Column({ type: 'numeric', precision: 5, scale: 2, default: 0 })
+  commission_percentage: number;
+
   @Column({ type: 'timestamptz', default: () => 'NOW()' })
   created_at: Date;
 

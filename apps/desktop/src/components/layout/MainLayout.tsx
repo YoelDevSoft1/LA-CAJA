@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/stores/auth.store'
+import { isRouteAllowed, type Role } from '@/lib/permissions'
 import { LogOut, ShoppingCart, Package, Users, DollarSign, FileText, BarChart3, Menu, X } from 'lucide-react'
 
 export default function MainLayout() {
@@ -8,6 +9,7 @@ export default function MainLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const userRole = (user?.role || 'cashier') as Role
 
   const handleLogout = () => {
     logout()
@@ -24,6 +26,7 @@ export default function MainLayout() {
     { path: '/debts', label: 'FIAO', icon: Users },
     { path: '/reports', label: 'Reportes', icon: BarChart3 },
   ]
+  const filteredNavItems = navItems.filter((item) => isRouteAllowed(item.path, userRole))
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/')
 
@@ -98,7 +101,7 @@ export default function MainLayout() {
           `}
         >
           <nav className="p-3 sm:p-4 space-y-1 overflow-y-auto h-full">
-            {navItems.map((item) => {
+            {filteredNavItems.map((item) => {
               const Icon = item.icon
               const active = isActive(item.path)
               return (
@@ -132,4 +135,3 @@ export default function MainLayout() {
     </div>
   )
 }
-

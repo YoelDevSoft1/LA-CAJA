@@ -17,7 +17,9 @@ import {
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { VoidSaleDto } from './dto/void-sale.dto';
+import { ReturnSaleDto } from './dto/return-sale.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard)
@@ -29,7 +31,8 @@ export class SalesController {
   async create(@Body() dto: CreateSaleDto, @Request() req: any) {
     const storeId = req.user.store_id;
     const userId = req.user.sub; // ID del usuario que hace la venta
-    return this.salesService.create(storeId, dto, userId);
+    const userRole = req.user.role;
+    return this.salesService.create(storeId, dto, userId, userRole);
   }
 
   @Get()
@@ -107,6 +110,7 @@ export class SalesController {
   }
 
   @Post(':id/void')
+  @Roles('owner')
   @HttpCode(HttpStatus.OK)
   async voidSale(
     @Param('id') id: string,
@@ -119,5 +123,18 @@ export class SalesController {
     const storeId = req.user.store_id;
     const userId = req.user.sub;
     return this.salesService.voidSale(storeId, id, userId, dto.reason);
+  }
+
+  @Post(':id/return')
+  @Roles('owner')
+  @HttpCode(HttpStatus.OK)
+  async returnSaleItems(
+    @Param('id') id: string,
+    @Body() dto: ReturnSaleDto,
+    @Request() req: any,
+  ) {
+    const storeId = req.user.store_id;
+    const userId = req.user.sub;
+    return this.salesService.returnItems(storeId, id, dto, userId);
   }
 }

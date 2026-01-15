@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import OpenCashModal from '@/components/cash/OpenCashModal'
 import CloseCashModal from '@/components/cash/CloseCashModal'
 import CashSessionsList from '@/components/cash/CashSessionsList'
+import CashMovementsSummary from '@/components/payments/CashMovementsSummary'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -233,7 +234,8 @@ export default function CashPage() {
                     </p>
                         <p className="text-xs text-muted-foreground mt-1">
                       Apertura: {Number(sessionSummary.cash_flow.opening_bs).toFixed(2)} Bs + Ventas
-                      en efectivo: {Number(sessionSummary.cash_flow.sales_bs).toFixed(2)} Bs
+                      en efectivo: {Number(sessionSummary.cash_flow.sales_bs).toFixed(2)} Bs +
+                      Movimientos: {Number(sessionSummary.cash_flow.movements_bs).toFixed(2)} Bs
                     </p>
                   </div>
                   <div>
@@ -243,7 +245,8 @@ export default function CashPage() {
                     </p>
                         <p className="text-xs text-muted-foreground mt-1">
                       Apertura: ${Number(sessionSummary.cash_flow.opening_usd).toFixed(2)} + Ventas
-                      en efectivo: ${Number(sessionSummary.cash_flow.sales_usd).toFixed(2)}
+                      en efectivo: ${Number(sessionSummary.cash_flow.sales_usd).toFixed(2)} +
+                      Movimientos: ${Number(sessionSummary.cash_flow.movements_usd).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -285,6 +288,10 @@ export default function CashPage() {
             )}
         </CardContent>
       </Card>
+
+      {currentSession && (
+        <CashMovementsSummary cashSessionId={currentSession.id} />
+      )}
 
       {/* Historial de sesiones (solo si la caja está cerrada o hay historial) */}
       <CashSessionsList />

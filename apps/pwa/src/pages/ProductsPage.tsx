@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Plus, Edit, Trash2, Package, CheckCircle, DollarSign, Layers, Boxes, Hash, Upload } from 'lucide-react'
+import { Search, Plus, Edit, Trash2, Package, CheckCircle, DollarSign, Layers, Boxes, Hash, Upload, AlertTriangle } from 'lucide-react'
 import { productsService, Product, ProductSearchResponse } from '@/services/products.service'
 import { productsCacheService } from '@/services/products-cache.service'
 import { warehousesService } from '@/services/warehouses.service'
@@ -50,6 +50,8 @@ const formatStockValue = (product: Product, item?: StockStatus) => {
 export default function ProductsPage() {
   const { user } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(50) // 50 productos por página
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -68,7 +70,7 @@ export default function ProductsPage() {
   // Reset page cuando cambia búsqueda
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchQuery])
+  }, [searchQuery, categoryFilter, statusFilter])
 
   // Cargar datos desde cache al iniciar (para mostrar inmediatamente)
   const [initialData, setInitialData] = useState<ProductSearchResponse | undefined>(undefined);
@@ -87,11 +89,16 @@ export default function ProductsPage() {
     return acc
   }, {})
   
+  const isActiveFilter =
+    statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined
+
   // Cargar desde IndexedDB al montar el componente o cuando cambia la búsqueda
   useEffect(() => {
     if (user?.store_id) {
       productsCacheService.getProductsFromCache(user.store_id, {
         search: searchQuery || undefined,
+        category: categoryFilter || undefined,
+        is_active: isActiveFilter,
         limit: pageSize, // Solo cargar una página del cache
       }).then(cached => {
         if (cached.length > 0) {
@@ -104,15 +111,17 @@ export default function ProductsPage() {
         // Silenciar errores
       });
     }
-  }, [user?.store_id, searchQuery, pageSize]);
+  }, [user?.store_id, searchQuery, categoryFilter, isActiveFilter, pageSize]);
 
   // Búsqueda de productos (con cache offline persistente y paginación)
   const offset = (currentPage - 1) * pageSize
-  const { data: productsData, isLoading } = useQuery({
-    queryKey: ['products', 'list', searchQuery, currentPage, pageSize, user?.store_id],
+  const { data: productsData, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['products', 'list', searchQuery, categoryFilter, statusFilter, currentPage, pageSize, user?.store_id],
     queryFn: () =>
       productsService.search({
         q: searchQuery || undefined,
+        category: categoryFilter || undefined,
+        is_active: isActiveFilter,
         limit: pageSize,
         offset: offset,
       }, user?.store_id),
@@ -135,6 +144,7 @@ export default function ProductsPage() {
 
   const products = productsData?.products || []
   const total = productsData?.total || 0
+  const isOfflineEmpty = !isOnline && products.length === 0
 
   // Mutación para desactivar producto
   const deactivateMutation = useMutation({
@@ -266,32 +276,78 @@ export default function ProductsPage() {
             autoFocus
           />
         </div>
-        {warehouses.length > 0 && (
-          <div className="max-w-sm">
-            <Label className="text-xs text-muted-foreground">Stock por bodega</Label>
-            <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="w-full sm:max-w-xs">
+            <Label className="text-xs text-muted-foreground">Categoría</Label>
+            <Input
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+              className="mt-2"
+              placeholder="Todas"
+            />
+          </div>
+          <div className="w-full sm:max-w-xs">
+            <Label className="text-xs text-muted-foreground">Estado</Label>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) =>
+                setStatusFilter(value as 'all' | 'active' | 'inactive')
+              }
+            >
               <SelectTrigger className="mt-2">
-                <SelectValue placeholder="Todas las bodegas" />
+                <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas las bodegas</SelectItem>
-                {warehouses
-                  .filter((warehouse) => warehouse.is_active)
-                  .map((warehouse) => (
-                    <SelectItem key={warehouse.id} value={warehouse.id}>
-                      {warehouse.name} {warehouse.is_default ? '(Por defecto)' : ''}
-                    </SelectItem>
-                  ))}
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="active">Activos</SelectItem>
+                <SelectItem value="inactive">Inactivos</SelectItem>
               </SelectContent>
             </Select>
           </div>
-        )}
+          {warehouses.length > 0 && (
+            <div className="w-full sm:max-w-sm">
+              <Label className="text-xs text-muted-foreground">Stock por bodega</Label>
+              <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Todas las bodegas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las bodegas</SelectItem>
+                  {warehouses
+                    .filter((warehouse) => warehouse.is_active)
+                    .map((warehouse) => (
+                      <SelectItem key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name} {warehouse.is_default ? '(Por defecto)' : ''}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Lista de productos */}
       <Card className="border border-border">
         <CardContent className="p-0">
-        {isLoading ? (
+        {isError ? (
+            <div className="p-8 text-center">
+              <div className="flex flex-col items-center justify-center py-8">
+                <AlertTriangle className="w-12 h-12 mx-auto mb-3 text-destructive" />
+                <p className="text-muted-foreground">No se pudieron cargar los productos</p>
+                {error instanceof Error && (
+                  <p className="mt-1 text-xs text-muted-foreground">{error.message}</p>
+                )}
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => refetch()}
+                >
+                  Reintentar
+                </Button>
+              </div>
+          </div>
+        ) : isLoading ? (
             <div className="p-8 text-center">
               <div className="flex flex-col items-center justify-center py-8">
                 <Package className="w-12 h-12 mx-auto mb-3 text-muted-foreground animate-pulse" />
@@ -305,12 +361,18 @@ export default function ProductsPage() {
                   <Package className="w-8 h-8 text-muted-foreground" />
                 </div>
                 <p className="text-lg font-medium text-foreground mb-1">
-              {searchQuery ? 'No se encontraron productos' : 'No hay productos registrados'}
+              {isOfflineEmpty
+                ? 'Sin conexión'
+                : searchQuery
+                  ? 'No se encontraron productos'
+                  : 'No hay productos registrados'}
             </p>
                 <p className="text-sm text-muted-foreground">
-              {searchQuery
-                ? 'Intenta con otro término de búsqueda'
-                : 'Haz clic en "Nuevo Producto" para comenzar'}
+              {isOfflineEmpty
+                ? 'Conéctate para sincronizar o importa productos desde otro dispositivo'
+                : searchQuery
+                  ? 'Intenta con otro término de búsqueda'
+                  : 'Haz clic en "Nuevo Producto" para comenzar'}
             </p>
               </div>
           </div>

@@ -118,7 +118,7 @@ export default function SalesPage() {
   const prefetchedSales = queryClient.getQueryData<{ sales: Sale[]; total: number }>(['sales', 'list', effectiveStoreId, { limit: 50 }])
 
   // Obtener ventas
-  const { data: salesData, isLoading } = useQuery<{ sales: Sale[]; total: number }>({
+  const { data: salesData, isLoading, isError, error, refetch } = useQuery<{ sales: Sale[]; total: number }>({
     queryKey: ['sales', 'list', effectiveDateFrom, effectiveDateTo, effectiveStoreId, currentPage],
     queryFn: () =>
       salesService.list({
@@ -293,7 +293,24 @@ export default function SalesPage() {
       {/* Lista de ventas */}
       <Card className="border border-border">
         <CardContent className="p-0">
-        {isLoading ? (
+        {isError ? (
+            <div className="p-8 text-center">
+              <div className="flex flex-col items-center justify-center py-8">
+                <AlertCircle className="w-12 h-12 mx-auto mb-3 text-destructive" />
+                <p className="text-muted-foreground">No se pudieron cargar las ventas</p>
+                {error instanceof Error && (
+                  <p className="mt-1 text-xs text-muted-foreground">{error.message}</p>
+                )}
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => refetch()}
+                >
+                  Reintentar
+                </Button>
+              </div>
+            </div>
+        ) : isLoading ? (
             <div className="p-8 text-center">
               <div className="flex flex-col items-center gap-3">
                 <Skeleton className="h-12 w-12 rounded-full" />
@@ -353,10 +370,13 @@ export default function SalesPage() {
                     const debtStatus = sale.debt?.status || null
                     const isPending = isFIAO && (debtStatus === 'open' || debtStatus === 'partial')
                     const isPaid = isFIAO && debtStatus === 'paid'
+                    const isVoided = Boolean(sale.voided_at)
                     
                     // Clases de color para la fila según estado de deuda
                       let rowClassName = ''
-                    if (isPending) {
+                    if (isVoided) {
+                        rowClassName = 'bg-muted/40 text-muted-foreground'
+                    } else if (isPending) {
                         rowClassName = 'bg-orange-50 hover:bg-orange-100 border-l-4 border-orange-500'
                     } else if (isPaid) {
                         rowClassName = 'bg-green-50 hover:bg-green-100 border-l-4 border-green-500'
@@ -375,6 +395,14 @@ export default function SalesPage() {
                               <p className="text-xs text-muted-foreground">
                               {format(new Date(sale.sold_at), 'HH:mm')}
                             </p>
+                            {isVoided && (
+                              <Badge
+                                variant="outline"
+                                className="mt-1 border-destructive/40 text-destructive"
+                              >
+                                Anulada
+                              </Badge>
+                            )}
                           </div>
                           </TableCell>
                           <TableCell className="hidden sm:table-cell">

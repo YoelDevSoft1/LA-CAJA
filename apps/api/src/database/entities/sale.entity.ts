@@ -30,6 +30,9 @@ export class Sale {
   @Column({ type: 'timestamptz' })
   sold_at: Date;
 
+  @Column({ type: 'bigint', nullable: true })
+  sale_number: number | null;
+
   @Column({ type: 'numeric', precision: 18, scale: 6, default: 0 })
   exchange_rate: number;
 
@@ -56,6 +59,16 @@ export class Sale {
       transfer_bs: number;
       other_bs: number;
     };
+    split_payments?: Array<{
+      method: string;
+      amount_usd?: number;
+      amount_bs?: number;
+      reference?: string;
+      bank_code?: string;
+      phone?: string;
+      card_last_4?: string;
+      note?: string;
+    }>;
     cash_payment?: {
       received_usd: number; // Monto recibido en USD físico
       change_bs?: number; // Cambio dado en Bs

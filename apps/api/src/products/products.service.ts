@@ -64,6 +64,32 @@ export class ProductsService {
     );
   }
 
+  private normalizeBarcode(value?: string | null): string | null {
+    if (value === null || value === undefined) return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private async ensureBarcodeUnique(
+    repository: Repository<Product>,
+    storeId: string,
+    barcode: string | null,
+    excludeId?: string,
+  ): Promise<void> {
+    if (!barcode) return;
+
+    const existing = await repository.findOne({
+      where: { store_id: storeId, barcode },
+      select: ['id'],
+    });
+
+    if (existing && existing.id !== excludeId) {
+      throw new BadRequestException(
+        'Ya existe un producto con ese código de barras',
+      );
+    }
+  }
+
   private async applyWeightUnitConversion(
     manager: EntityManager,
     storeId: string,
@@ -123,6 +149,13 @@ export class ProductsService {
   }
 
   async create(storeId: string, dto: CreateProductDto): Promise<Product> {
+    const normalizedBarcode = this.normalizeBarcode(dto.barcode);
+    await this.ensureBarcodeUnique(
+      this.productRepository,
+      storeId,
+      normalizedBarcode,
+    );
+
     // Obtener tasa BCV actual
     const bcvRate = await this.exchangeService.getBCVRate();
     const exchangeRate = bcvRate?.rate || 36; // Fallback a 36 si no se puede obtener
@@ -167,7 +200,7 @@ export class ProductsService {
       name: dto.name,
       category: dto.category ?? null,
       sku: dto.sku ?? null,
-      barcode: dto.barcode ?? null,
+      barcode: normalizedBarcode,
       price_bs: price_bs,
       price_usd: price_usd,
       cost_bs: cost_bs,
@@ -280,7 +313,18 @@ export class ProductsService {
       if (dto.name !== undefined) product.name = dto.name;
       if (dto.category !== undefined) product.category = dto.category ?? null;
       if (dto.sku !== undefined) product.sku = dto.sku ?? null;
-      if (dto.barcode !== undefined) product.barcode = dto.barcode ?? null;
+      if (dto.barcode !== undefined) {
+        const normalizedBarcode = this.normalizeBarcode(dto.barcode);
+        if (normalizedBarcode !== product.barcode) {
+          await this.ensureBarcodeUnique(
+            productRepo,
+            storeId,
+            normalizedBarcode,
+            product.id,
+          );
+        }
+        product.barcode = normalizedBarcode;
+      }
       if (dto.low_stock_threshold !== undefined)
         product.low_stock_threshold = dto.low_stock_threshold;
       if (dto.is_active !== undefined) product.is_active = dto.is_active;

@@ -19,6 +19,7 @@ import { ChangePriceDto } from './dto/change-price.dto';
 import { BulkPriceChangeDto } from './dto/bulk-price-change.dto';
 import { SearchProductsDto } from './dto/search-products.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @Controller('products')
 @UseGuards(JwtAuthGuard)
@@ -26,6 +27,7 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Post()
+  @Roles('owner')
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateProductDto, @Request() req: any) {
     const storeId = req.user.store_id;
@@ -45,6 +47,7 @@ export class ProductsController {
   }
 
   @Patch(':id')
+  @Roles('owner')
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateProductDto,
@@ -55,6 +58,7 @@ export class ProductsController {
   }
 
   @Patch(':id/price')
+  @Roles('owner')
   async changePrice(
     @Param('id') id: string,
     @Body() dto: ChangePriceDto,
@@ -65,6 +69,7 @@ export class ProductsController {
   }
 
   @Put('prices/bulk')
+  @Roles('owner')
   @HttpCode(HttpStatus.OK)
   async bulkPriceChange(@Body() dto: BulkPriceChangeDto, @Request() req: any) {
     const storeId = req.user.store_id;
@@ -72,6 +77,7 @@ export class ProductsController {
   }
 
   @Post(':id/deactivate')
+  @Roles('owner')
   @HttpCode(HttpStatus.OK)
   async deactivate(@Param('id') id: string, @Request() req: any) {
     const storeId = req.user.store_id;
@@ -79,6 +85,7 @@ export class ProductsController {
   }
 
   @Post(':id/activate')
+  @Roles('owner')
   @HttpCode(HttpStatus.OK)
   async activate(@Param('id') id: string, @Request() req: any) {
     const storeId = req.user.store_id;
@@ -86,6 +93,7 @@ export class ProductsController {
   }
 
   @Post('import/csv')
+  @Roles('owner')
   @HttpCode(HttpStatus.OK)
   async importCSV(@Body() body: { csv: string }, @Request() req: any) {
     const storeId = req.user.store_id;

@@ -1,6 +1,15 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CreditCard, Settings, Trash2, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
+import {
+  CreditCard,
+  Settings,
+  Trash2,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react'
 import {
   paymentsService,
   PaymentMethod,
@@ -67,6 +76,27 @@ export default function PaymentMethodsList() {
     },
   })
 
+  const reorderMutation = useMutation({
+    mutationFn: async (
+      updates: Array<{ method: PaymentMethod; sort_order: number }>
+    ) => {
+      await Promise.all(
+        updates.map((update) =>
+          paymentsService.upsertPaymentMethodConfig(update.method, {
+            sort_order: update.sort_order,
+          })
+        )
+      )
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payments'] })
+      toast.success('Orden actualizado')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Error al actualizar el orden')
+    },
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (method: PaymentMethod) => paymentsService.deletePaymentMethodConfig(method),
     onSuccess: () => {
@@ -87,6 +117,45 @@ export default function PaymentMethodsList() {
 
   const getConfigForMethod = (method: PaymentMethod): PaymentMethodConfig | null => {
     return configs?.find((c) => c.method === method) || null
+  }
+
+  const orderedMethods = (() => {
+    const defaults = new Map<PaymentMethod, number>()
+    allMethods.forEach((method, index) => {
+      defaults.set(method, (index + 1) * 10)
+    })
+
+    return allMethods
+      .map((method) => {
+        const config = getConfigForMethod(method)
+        const fallbackOrder = defaults.get(method) || 0
+        const sortOrder =
+          config && typeof config.sort_order === 'number' && config.sort_order > 0
+            ? config.sort_order
+            : fallbackOrder
+        return { method, config, sortOrder, fallbackOrder }
+      })
+      .sort((a, b) => {
+        if (a.sortOrder === b.sortOrder) {
+          return a.fallbackOrder - b.fallbackOrder
+        }
+        return a.sortOrder - b.sortOrder
+      })
+  })()
+
+  const handleMove = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= orderedMethods.length) {
+      return
+    }
+
+    const current = orderedMethods[index]
+    const target = orderedMethods[targetIndex]
+
+    reorderMutation.mutate([
+      { method: current.method, sort_order: target.sortOrder },
+      { method: target.method, sort_order: current.sortOrder },
+    ])
   }
 
   if (isLoading) {
@@ -117,12 +186,14 @@ export default function PaymentMethodsList() {
                   <TableHead className="hidden sm:table-cell">Estado</TableHead>
                   <TableHead className="hidden md:table-cell">Tope Mínimo</TableHead>
                   <TableHead className="hidden lg:table-cell">Tope Máximo</TableHead>
+                  <TableHead className="hidden xl:table-cell">Comisión</TableHead>
+                  <TableHead className="hidden xl:table-cell">Orden</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {allMethods.map((method) => {
-                  const config = getConfigForMethod(method)
+                {orderedMethods.map((entry, index) => {
+                  const { method, config } = entry
                   const isConfigured = !!config
                   const isEnabled = config?.enabled ?? true
 
@@ -194,8 +265,43 @@ export default function PaymentMethodsList() {
                           <p className="text-sm text-muted-foreground">-</p>
                         )}
                       </TableCell>
+                      <TableCell className="hidden xl:table-cell">
+                        {config && config.commission_percentage !== null ? (
+                          <p className="text-sm">
+                            {Number(config.commission_percentage || 0).toFixed(2)}%
+                          </p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">0.00%</p>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell">
+                        <p className="text-sm text-muted-foreground">
+                          {config?.sort_order ?? '-'}
+                        </p>
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleMove(index, 'up')}
+                              disabled={index === 0 || reorderMutation.isPending}
+                            >
+                              <ArrowUp className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleMove(index, 'down')}
+                              disabled={
+                                index === orderedMethods.length - 1 ||
+                                reorderMutation.isPending
+                              }
+                            >
+                              <ArrowDown className="w-4 h-4" />
+                            </Button>
+                          </div>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -268,4 +374,3 @@ export default function PaymentMethodsList() {
     </>
   )
 }
-

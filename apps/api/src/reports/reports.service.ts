@@ -175,7 +175,14 @@ export class ReportsService {
       productIds.length > 0
         ? await this.productRepository.find({
             where: { id: In(productIds), store_id: storeId },
-            select: ['id', 'cost_bs', 'cost_usd'],
+            select: [
+              'id',
+              'cost_bs',
+              'cost_usd',
+              'cost_per_weight_bs',
+              'cost_per_weight_usd',
+              'is_weight_product',
+            ],
           })
         : [];
 
@@ -204,8 +211,15 @@ export class ReportsService {
         // Obtener producto del mapa
         const product = productMap.get(item.product_id);
         if (product) {
-          saleCostBs += Number(product.cost_bs || 0) * item.qty;
-          saleCostUsd += Number(product.cost_usd || 0) * item.qty;
+          const isWeight = Boolean(item.is_weight_product || product.is_weight_product);
+          const unitCostBs = isWeight
+            ? Number(product.cost_per_weight_bs ?? product.cost_bs ?? 0)
+            : Number(product.cost_bs ?? 0);
+          const unitCostUsd = isWeight
+            ? Number(product.cost_per_weight_usd ?? product.cost_usd ?? 0)
+            : Number(product.cost_usd ?? 0);
+          saleCostBs += unitCostBs * item.qty;
+          saleCostUsd += unitCostUsd * item.qty;
         }
       }
 
@@ -311,7 +325,16 @@ export class ReportsService {
       productIds.length > 0
         ? await this.productRepository.find({
             where: { id: In(productIds), store_id: storeId },
-            select: ['id', 'name', 'cost_bs', 'cost_usd'],
+            select: [
+              'id',
+              'name',
+              'cost_bs',
+              'cost_usd',
+              'cost_per_weight_bs',
+              'cost_per_weight_usd',
+              'is_weight_product',
+              'weight_unit',
+            ],
           })
         : [];
 
@@ -330,6 +353,8 @@ export class ReportsService {
         revenue_usd: number;
         cost_bs: number;
         cost_usd: number;
+        is_weight_product: boolean;
+        weight_unit: 'kg' | 'g' | 'lb' | 'oz' | null;
       }
     >();
 
@@ -345,6 +370,8 @@ export class ReportsService {
           revenue_usd: 0,
           cost_bs: 0,
           cost_usd: 0,
+          is_weight_product: Boolean(product?.is_weight_product),
+          weight_unit: product?.weight_unit ?? null,
         });
       }
 
@@ -356,8 +383,15 @@ export class ReportsService {
       productData.revenue_usd +=
         Number(item.unit_price_usd || 0) * item.qty -
         Number(item.discount_usd || 0);
-      productData.cost_bs += Number(product?.cost_bs || 0) * item.qty;
-      productData.cost_usd += Number(product?.cost_usd || 0) * item.qty;
+      const isWeight = Boolean(item.is_weight_product || product?.is_weight_product);
+      const unitCostBs = isWeight
+        ? Number(product?.cost_per_weight_bs ?? product?.cost_bs ?? 0)
+        : Number(product?.cost_bs ?? 0);
+      const unitCostUsd = isWeight
+        ? Number(product?.cost_per_weight_usd ?? product?.cost_usd ?? 0)
+        : Number(product?.cost_usd ?? 0);
+      productData.cost_bs += unitCostBs * item.qty;
+      productData.cost_usd += unitCostUsd * item.qty;
     }
 
     return Array.from(productMap.entries())

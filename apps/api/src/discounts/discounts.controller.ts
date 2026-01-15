@@ -21,6 +21,7 @@ import { DiscountRulesService } from './discount-rules.service';
 import { CreateDiscountConfigDto } from './dto/create-discount-config.dto';
 import { AuthorizeDiscountDto } from './dto/authorize-discount.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { Sale } from '../database/entities/sale.entity';
 
 /**
@@ -44,6 +45,7 @@ export class DiscountsController {
   /**
    * Crea o actualiza configuración de descuentos
    */
+  @Roles('owner')
   @Put('config')
   async upsertDiscountConfig(
     @Body() dto: CreateDiscountConfigDto,
@@ -56,6 +58,7 @@ export class DiscountsController {
   /**
    * Obtiene la configuración de descuentos
    */
+  @Roles('owner')
   @Get('config')
   async getDiscountConfig(@Request() req: any) {
     const storeId = req.user.store_id;
@@ -142,6 +145,7 @@ export class DiscountsController {
   /**
    * Obtiene todas las autorizaciones de la tienda
    */
+  @Roles('owner')
   @Get('authorizations')
   async getAuthorizations(
     @Query('limit') limit: string,
@@ -163,6 +167,7 @@ export class DiscountsController {
   /**
    * Obtiene resumen de descuentos autorizados
    */
+  @Roles('owner')
   @Get('summary')
   async getDiscountSummary(
     @Query('start_date') startDate: string,

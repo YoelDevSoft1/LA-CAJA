@@ -164,15 +164,22 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 403) {
-      const auth = useAuth.getState()
-      const currentUser = auth.user
-      if (currentUser) {
-        auth.setUser({
-          ...currentUser,
-          license_status: currentUser.license_status ?? 'suspended',
-        })
+      const data = error.response?.data as { code?: string; message?: string } | undefined
+      const message = typeof data?.message === 'string' ? data?.message.toLowerCase() : ''
+      const isLicenseBlocked =
+        data?.code === 'LICENSE_BLOCKED' || message.includes('licencia')
+
+      if (isLicenseBlocked) {
+        const auth = useAuth.getState()
+        const currentUser = auth.user
+        if (currentUser) {
+          auth.setUser({
+            ...currentUser,
+            license_status: currentUser.license_status ?? 'suspended',
+          })
+        }
+        window.location.href = '/license'
       }
-      window.location.href = '/license'
       return Promise.reject(error);
     }
     return Promise.reject(error);

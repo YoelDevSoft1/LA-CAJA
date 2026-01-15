@@ -12,6 +12,8 @@ export interface PaymentMethodConfig {
   max_amount_usd: number | null
   enabled: boolean
   requires_authorization: boolean
+  sort_order?: number | null
+  commission_percentage?: number | null
   created_at: string
   updated_at: string
 }
@@ -24,6 +26,8 @@ export interface CreatePaymentMethodConfigRequest {
   max_amount_usd?: number | null
   enabled?: boolean
   requires_authorization?: boolean
+  sort_order?: number | null
+  commission_percentage?: number | null
 }
 
 export interface CashMovement {
@@ -132,4 +136,3 @@ export const paymentsService = {
     return response.data
   },
 }
-

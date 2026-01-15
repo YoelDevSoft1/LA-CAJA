@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { ShiftsService } from './shifts.service';
 import { Shift, ShiftStatus } from '../database/entities/shift.entity';
 import { ShiftCut } from '../database/entities/shift-cut.entity';
@@ -49,7 +49,7 @@ describe('ShiftsService', () => {
           useValue: mockSaleRepository,
         },
         {
-          provide: 'DataSource',
+          provide: DataSource,
           useValue: {},
         },
       ],
@@ -229,4 +229,3 @@ describe('ShiftsService', () => {
     });
   });
 });
-

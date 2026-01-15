@@ -13,9 +13,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SupplierPriceListsService } from './supplier-price-lists.service';
 import { ImportSupplierPriceListDto } from './dto/import-supplier-price-list.dto';
 import { SearchSupplierPriceItemsDto } from './dto/search-supplier-price-items.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @Controller('supplier-price-lists')
 @UseGuards(JwtAuthGuard)
+@Roles('owner')
 export class SupplierPriceListsController {
   constructor(private readonly supplierPriceListsService: SupplierPriceListsService) {}
 

@@ -35,22 +35,32 @@ export class LicenseGuard implements CanActivate {
     const now = Date.now();
 
     if (!status) {
-      throw new ForbiddenException('Licencia no configurada');
+      throw new ForbiddenException({
+        code: 'LICENSE_BLOCKED',
+        message: 'Licencia no configurada',
+      });
     }
 
     if (status === 'suspended') {
-      throw new ForbiddenException('Licencia suspendida');
+      throw new ForbiddenException({
+        code: 'LICENSE_BLOCKED',
+        message: 'Licencia suspendida',
+      });
     }
 
     if (!expires) {
-      throw new ForbiddenException(
-        'Licencia no configurada o sin fecha de expiración',
-      );
+      throw new ForbiddenException({
+        code: 'LICENSE_BLOCKED',
+        message: 'Licencia no configurada o sin fecha de expiración',
+      });
     }
 
     const graceMs = grace * 24 * 60 * 60 * 1000;
     if (now > expires + graceMs) {
-      throw new ForbiddenException('Licencia expirada');
+      throw new ForbiddenException({
+        code: 'LICENSE_BLOCKED',
+        message: 'Licencia expirada',
+      });
     }
 
     return true;

@@ -4,6 +4,7 @@ import {
   PrimaryColumn,
   ManyToOne,
   JoinColumn,
+  CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Store } from './store.entity';
@@ -79,6 +80,9 @@ export class Product {
 
   @Column({ type: 'int', nullable: true })
   scale_department: number | null;
+
+  @CreateDateColumn({ type: 'timestamptz' })
+  created_at: Date;
 
   @UpdateDateColumn({ type: 'timestamptz' })
   updated_at: Date;

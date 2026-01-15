@@ -45,6 +45,8 @@ export interface KPIs {
       id: string
       name: string
       quantity_sold: number
+      is_weight_product: boolean
+      weight_unit: 'kg' | 'g' | 'lb' | 'oz' | null
     } | null
     best_selling_category: string | null
   }
@@ -63,6 +65,8 @@ export interface Trends {
     quantity_sold: number
     revenue_bs: number
     revenue_usd: number
+    is_weight_product: boolean
+    weight_unit: 'kg' | 'g' | 'lb' | 'oz' | null
   }>
 }
 
@@ -95,4 +99,3 @@ export const dashboardService = {
     return response.data
   },
 }
-

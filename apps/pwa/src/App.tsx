@@ -44,6 +44,7 @@ import AccountingPage from './pages/AccountingPage'
 import ConflictsPage from './pages/ConflictsPage'
 import { useOnline } from './hooks/use-online'
 import { useAuth } from './stores/auth.store'
+import { getDefaultRoute } from './lib/permissions'
 import { offlineIndicator } from './services/offline-indicator.service'
 import { syncService } from './services/sync.service'
 import { realtimeWebSocketService } from './services/realtime-websocket.service'
@@ -51,6 +52,7 @@ import { usePushNotifications } from './hooks/usePushNotifications'
 
 function App() {
   const { user, isAuthenticated, showLoader: authShowLoader, setShowLoader } = useAuth()
+  const defaultRoute = getDefaultRoute(user?.role || 'cashier')
   const { isOnline, wasOffline } = useOnline()
   const { isSupported, subscribe } = usePushNotifications()
   const [isLoaderComplete, setIsLoaderComplete] = useState(false)
@@ -212,14 +214,14 @@ function App() {
         <Route
           path="/"
           element={
-            isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <LandingPageEnhanced />
+            isAuthenticated ? <Navigate to={defaultRoute} replace /> : <LandingPageEnhanced />
           }
         />
         <Route path="/landing" element={<LandingPageEnhanced />} />
         <Route
           path="/login"
           element={
-            isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <LoginPage />
+            isAuthenticated ? <Navigate to={defaultRoute} replace /> : <LoginPage />
           }
         />
         <Route
@@ -242,40 +244,201 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/app/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
+          <Route index element={<Navigate to={defaultRoute} replace />} />
+          <Route
+            path="dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="pos" element={<POSPage />} />
-          <Route path="products" element={<ProductsPage />} />
-          <Route path="inventory" element={<InventoryPage />} />
+          <Route
+            path="products"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <ProductsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="inventory"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <InventoryPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="sales" element={<SalesPage />} />
           <Route path="cash" element={<CashPage />} />
           <Route path="shifts" element={<ShiftsPage />} />
-          <Route path="payments" element={<PaymentsPage />} />
-          <Route path="discounts" element={<DiscountsPage />} />
+          <Route
+            path="payments"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <PaymentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="discounts"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <DiscountsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="fast-checkout" element={<FastCheckoutPage />} />
-          <Route path="lots" element={<LotsPage />} />
-          <Route path="invoice-series" element={<InvoiceSeriesPage />} />
+          <Route
+            path="lots"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <LotsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="invoice-series"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <InvoiceSeriesPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="tables" element={<TablesPage />} />
-          <Route path="peripherals" element={<PeripheralsPage />} />
-          <Route path="price-lists" element={<PriceListsPage />} />
-          <Route path="promotions" element={<PromotionsPage />} />
-          <Route path="warehouses" element={<WarehousesPage />} />
-          <Route path="transfers" element={<TransfersPage />} />
-          <Route path="suppliers" element={<SuppliersPage />} />
-          <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
-          <Route path="fiscal-config" element={<FiscalConfigPage />} />
+          <Route
+            path="peripherals"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <PeripheralsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="price-lists"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <PriceListsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="promotions"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <PromotionsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="warehouses"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <WarehousesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="transfers"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <TransfersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="suppliers"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <SuppliersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="purchase-orders"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <PurchaseOrdersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="fiscal-config"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <FiscalConfigPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="fiscal-invoices" element={<FiscalInvoicesPage />} />
           <Route path="fiscal-invoices/:id" element={<FiscalInvoiceDetailPage />} />
-          <Route path="ml" element={<MLDashboardPage />} />
-          <Route path="ml/predictions" element={<DemandPredictionsPage />} />
-          <Route path="ml/evaluation" element={<DemandEvaluationPage />} />
-          <Route path="ml/anomalies" element={<AnomaliesPage />} />
-          <Route path="realtime-analytics" element={<RealtimeAnalyticsPage />} />
+          <Route
+            path="ml"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <MLDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="ml/predictions"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <DemandPredictionsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="ml/evaluation"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <DemandEvaluationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="ml/anomalies"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <AnomaliesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="realtime-analytics"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <RealtimeAnalyticsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="customers" element={<CustomersPage />} />
           <Route path="debts" element={<DebtsPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="accounting" element={<AccountingPage />} />
-          <Route path="conflicts" element={<ConflictsPage />} />
+          <Route
+            path="reports"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <ReportsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="accounting"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <AccountingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="conflicts"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <ConflictsPage />
+              </ProtectedRoute>
+            }
+          />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

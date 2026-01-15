@@ -13,6 +13,7 @@ import { PriceListsService } from './price-lists.service';
 import { CreatePriceListDto } from './dto/create-price-list.dto';
 import { CreatePriceListItemDto } from './dto/create-price-list-item.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 /**
  * Controlador para gestión de listas de precio
@@ -26,6 +27,7 @@ export class PriceListsController {
    * Crea una nueva lista de precio
    */
   @Post()
+  @Roles('owner')
   @HttpCode(HttpStatus.CREATED)
   async createPriceList(@Body() dto: CreatePriceListDto, @Request() req: any) {
     const storeId = req.user.store_id;
@@ -63,6 +65,7 @@ export class PriceListsController {
    * Agrega un item a una lista de precio
    */
   @Post(':id/items')
+  @Roles('owner')
   @HttpCode(HttpStatus.CREATED)
   async addPriceListItem(
     @Param('id') id: string,

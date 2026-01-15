@@ -21,7 +21,6 @@ export default function CashMovementsSummary({
         shift_id: shiftId || undefined,
         cash_session_id: cashSessionId || undefined,
       }),
-    enabled: !!shiftId || !!cashSessionId,
     staleTime: 1000 * 60 * 5, // 5 minutos
   })
 
@@ -142,4 +141,3 @@ export default function CashMovementsSummary({
     </Card>
   )
 }
-

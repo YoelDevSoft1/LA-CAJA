@@ -190,7 +190,8 @@ export default function CashSessionDetailModal({
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
                               Apertura: {Number(summary.cash_flow.opening_bs).toFixed(2)} Bs + Ventas:{' '}
-                              {Number(summary.cash_flow.sales_bs).toFixed(2)} Bs
+                              {Number(summary.cash_flow.sales_bs).toFixed(2)} Bs + Movimientos:{' '}
+                              {Number(summary.cash_flow.movements_bs).toFixed(2)} Bs
                             </p>
                           </div>
                           <div>
@@ -200,7 +201,8 @@ export default function CashSessionDetailModal({
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
                               Apertura: ${Number(summary.cash_flow.opening_usd).toFixed(2)} + Ventas:{' '}
-                              ${Number(summary.cash_flow.sales_usd).toFixed(2)}
+                              ${Number(summary.cash_flow.sales_usd).toFixed(2)} + Movimientos:{' '}
+                              ${Number(summary.cash_flow.movements_usd).toFixed(2)}
                             </p>
                           </div>
                         </div>
@@ -300,4 +302,3 @@ export default function CashSessionDetailModal({
     </Dialog>
   )
 }
-

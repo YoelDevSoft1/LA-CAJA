@@ -14,6 +14,7 @@ import {
 import { ProductVariantsService } from './product-variants.service';
 import { CreateProductVariantDto } from './dto/create-product-variant.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 /**
  * Controlador para gestión de variantes de productos
@@ -27,6 +28,7 @@ export class ProductVariantsController {
    * Crea una nueva variante de producto
    */
   @Post()
+  @Roles('owner')
   @HttpCode(HttpStatus.CREATED)
   async createVariant(
     @Body() dto: CreateProductVariantDto,
@@ -40,6 +42,7 @@ export class ProductVariantsController {
    * Actualiza una variante existente
    */
   @Put(':id')
+  @Roles('owner')
   async updateVariant(
     @Param('id') id: string,
     @Body() dto: Partial<CreateProductVariantDto>,
@@ -108,6 +111,7 @@ export class ProductVariantsController {
    * Elimina una variante (soft delete)
    */
   @Delete(':id')
+  @Roles('owner')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteVariant(@Param('id') id: string, @Request() req: any) {
     const storeId = req.user.store_id;

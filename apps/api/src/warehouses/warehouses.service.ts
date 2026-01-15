@@ -8,6 +8,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Warehouse } from '../database/entities/warehouse.entity';
 import { WarehouseStock } from '../database/entities/warehouse-stock.entity';
+import { Product } from '../database/entities/product.entity';
+import { NotificationsService } from '../notifications/notifications.service';
+import {
+  NotificationPriority,
+  NotificationSeverity,
+  NotificationType,
+} from '../notifications/dto/create-notification.dto';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { randomUUID } from 'crypto';
@@ -45,7 +52,10 @@ export class WarehousesService {
     private warehouseRepository: Repository<Warehouse>,
     @InjectRepository(WarehouseStock)
     private warehouseStockRepository: Repository<WarehouseStock>,
+    @InjectRepository(Product)
+    private productRepository: Repository<Product>,
     private dataSource: DataSource,
+    private notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -126,6 +136,29 @@ export class WarehousesService {
     return this.warehouseRepository.findOne({
       where: { store_id: storeId, is_default: true, is_active: true },
     });
+  }
+
+  async getDefaultOrFirst(storeId: string): Promise<Warehouse> {
+    const defaultWarehouse = await this.getDefault(storeId);
+    if (defaultWarehouse) {
+      return defaultWarehouse;
+    }
+
+    const fallback = await this.warehouseRepository.findOne({
+      where: { store_id: storeId, is_active: true },
+      order: { is_default: 'DESC', name: 'ASC' },
+    });
+
+    if (!fallback) {
+      throw new BadRequestException(
+        'No hay bodegas configuradas. Debes crear al menos una bodega activa.',
+      );
+    }
+
+    this.logger.warn(
+      `Tienda ${storeId} sin bodega por defecto. Usando ${fallback.id} como fallback temporal.`,
+    );
+    return fallback;
   }
 
   /**
@@ -347,6 +380,63 @@ export class WarehousesService {
     }
   }
 
+  private async maybeNotifyLowStock(
+    storeId: string | null,
+    productId: string,
+    previousStock: number,
+    newStock: number,
+  ): Promise<void> {
+    if (!storeId) {
+      return;
+    }
+
+    if (newStock >= previousStock) {
+      return;
+    }
+
+    const product = await this.productRepository.findOne({
+      where: { id: productId, store_id: storeId, is_active: true },
+      select: ['id', 'name', 'low_stock_threshold'],
+    });
+
+    if (!product) {
+      return;
+    }
+
+    const threshold = Number(product.low_stock_threshold || 0);
+    if (threshold <= 0) {
+      return;
+    }
+
+    if (previousStock > threshold && newStock <= threshold) {
+      try {
+        await this.notificationsService.createNotification(storeId, {
+          notification_type: NotificationType.WARNING,
+          category: 'inventory',
+          title: `Stock bajo: ${product.name}`,
+          message: `El stock de ${product.name} bajó a ${newStock} (umbral ${threshold}).`,
+          priority: NotificationPriority.HIGH,
+          severity: NotificationSeverity.MEDIUM,
+          entity_type: 'product',
+          entity_id: product.id,
+          action_url: '/inventory',
+          action_label: 'Ver inventario',
+          metadata: {
+            product_id: product.id,
+            previous_stock: previousStock,
+            current_stock: newStock,
+            threshold,
+          },
+        });
+      } catch (error) {
+        this.logger.error(
+          `No se pudo crear notificación de stock bajo para ${productId}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
+    }
+  }
+
   /**
    * Actualiza el stock de una bodega (usado internamente)
    */
@@ -355,8 +445,19 @@ export class WarehousesService {
     productId: string,
     variantId: string | null,
     qtyDelta: number,
+    storeId?: string,
   ): Promise<WarehouseStock> {
     const stock = await this.findStockRecord(warehouseId, productId, variantId);
+    const previousStock = stock ? Number(stock.stock) || 0 : 0;
+    const resolvedStoreId =
+      storeId ||
+      (
+        await this.warehouseRepository.findOne({
+          where: { id: warehouseId },
+          select: ['store_id'],
+        })
+      )?.store_id ||
+      null;
 
     if (stock) {
       const newStockValue = Math.max(0, stock.stock + qtyDelta);
@@ -369,6 +470,12 @@ export class WarehousesService {
         [newStockValue, warehouseId, productId, variantId],
       );
       stock.stock = newStockValue;
+      await this.maybeNotifyLowStock(
+        resolvedStoreId,
+        productId,
+        previousStock,
+        newStockValue,
+      );
       return stock;
     } else {
       const newStockValue = Math.max(0, qtyDelta);
@@ -384,7 +491,7 @@ export class WarehousesService {
            DO UPDATE SET stock = warehouse_stock.stock + $5, updated_at = NOW()`,
           [newId, warehouseId, productId, variantId, newStockValue],
         );
-        return {
+        const created = {
           id: newId,
           warehouse_id: warehouseId,
           product_id: productId,
@@ -393,6 +500,13 @@ export class WarehousesService {
           reserved: 0,
           updated_at: new Date(),
         } as WarehouseStock;
+        await this.maybeNotifyLowStock(
+          resolvedStoreId,
+          productId,
+          previousStock,
+          newStockValue,
+        );
+        return created;
       } catch (error: any) {
         // Si falla porque variant_id no puede ser NULL, la migración aún no se ejecutó
         if (error.message?.includes('null value in column "variant_id"')) {
@@ -412,7 +526,7 @@ export class WarehousesService {
              DO UPDATE SET stock = warehouse_stock.stock + $4, updated_at = NOW()`,
             [warehouseId, productId, variantId, newStockValue],
           );
-          return {
+          const created = {
             id: `${warehouseId}-${productId}-${variantId || 'null'}`,
             warehouse_id: warehouseId,
             product_id: productId,
@@ -421,6 +535,13 @@ export class WarehousesService {
             reserved: 0,
             updated_at: new Date(),
           } as WarehouseStock;
+          await this.maybeNotifyLowStock(
+            resolvedStoreId,
+            productId,
+            previousStock,
+            newStockValue,
+          );
+          return created;
         }
         throw error;
       }
@@ -435,6 +556,7 @@ export class WarehousesService {
     productId: string,
     variantId: string | null,
     quantity: number,
+    storeId?: string,
   ): Promise<void> {
     const stock = await this.findStockRecord(warehouseId, productId, variantId);
 
@@ -442,6 +564,7 @@ export class WarehousesService {
       throw new BadRequestException('Stock insuficiente para reservar');
     }
 
+    const previousStock = Number(stock.stock) || 0;
     await this.dataSource.query(
       `UPDATE warehouse_stock 
        SET stock = stock - $1, reserved = reserved + $1, updated_at = NOW() 
@@ -449,6 +572,22 @@ export class WarehousesService {
          AND product_id = $3 
          AND (($4::uuid IS NULL AND variant_id IS NULL) OR variant_id = $4::uuid)`,
       [quantity, warehouseId, productId, variantId],
+    );
+    const resolvedStoreId =
+      storeId ||
+      (
+        await this.warehouseRepository.findOne({
+          where: { id: warehouseId },
+          select: ['store_id'],
+        })
+      )?.store_id ||
+      null;
+    const newStockValue = Math.max(0, previousStock - quantity);
+    await this.maybeNotifyLowStock(
+      resolvedStoreId,
+      productId,
+      previousStock,
+      newStockValue,
     );
   }
 

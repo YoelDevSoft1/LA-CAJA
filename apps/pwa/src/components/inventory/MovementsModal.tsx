@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Package, TrendingUp, TrendingDown, ShoppingCart } from 'lucide-react'
 import { inventoryService, StockStatus } from '@/services/inventory.service'
 import { format } from 'date-fns'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -18,18 +21,21 @@ interface MovementsModalProps {
 const movementTypeLabels = {
   received: 'Recibido',
   adjust: 'Ajuste',
+  sold: 'Venta',
   sale: 'Venta',
 }
 
 const movementTypeIcons = {
   received: TrendingUp,
   adjust: TrendingDown,
+  sold: ShoppingCart,
   sale: ShoppingCart,
 }
 
 const movementTypeColors = {
   received: 'text-success bg-success/10',
   adjust: 'text-primary bg-primary/10',
+  sold: 'text-info bg-info/10',
   sale: 'text-info bg-info/10',
 }
 
@@ -38,10 +44,25 @@ export default function MovementsModal({
   onClose,
   product,
 }: MovementsModalProps) {
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+
   const { data: movementsData, isLoading } = useQuery({
-    queryKey: ['inventory', 'movements', product?.product_id || 'all'],
+    queryKey: [
+      'inventory',
+      'movements',
+      product?.product_id || 'all',
+      startDate,
+      endDate,
+    ],
     queryFn: () =>
-      inventoryService.getMovements(product?.product_id, 100, 0),
+      inventoryService.getMovements({
+        product_id: product?.product_id || undefined,
+        limit: 100,
+        offset: 0,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+      }),
     enabled: isOpen,
   })
 
@@ -57,6 +78,43 @@ export default function MovementsModal({
             {product ? product.product_name : 'Todos los productos'}
           </DialogDescription>
         </DialogHeader>
+
+        <div className="border-b border-border px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex-shrink-0">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label className="text-xs text-muted-foreground">Desde</Label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                className="mt-1 h-9"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Hasta</Label>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(event) => setEndDate(event.target.value)}
+                className="mt-1 h-9"
+              />
+            </div>
+          </div>
+          {(startDate || endDate) && (
+            <div className="mt-2 flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setStartDate('')
+                  setEndDate('')
+                }}
+              >
+                Limpiar filtros
+              </Button>
+            </div>
+          )}
+        </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 sm:px-4 md:px-6 py-4 sm:py-6">
           {isLoading ? (
@@ -191,4 +249,3 @@ export default function MovementsModal({
     </Dialog>
   )
 }
-

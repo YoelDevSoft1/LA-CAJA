@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
-export default defineConfig(() => ({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     // Habilitar PWA también en desarrollo para soporte offline
@@ -13,7 +13,7 @@ export default defineConfig(() => ({
       // y bloqueaba el build (workbox+terser issue).
       minify: false,
       devOptions: {
-        enabled: true, // Habilitar en desarrollo
+        enabled: mode === 'production', // Desactivar en desarrollo para evitar cache/HMR issues
         type: 'module', // Usar module type para desarrollo
         navigateFallback: 'index.html',
         // Deshabilitar en desarrollo porque Vite necesita el servidor
@@ -30,7 +30,7 @@ export default defineConfig(() => ({
         // NO agregar index.html manualmente - Workbox lo detecta automáticamente
         // Si lo agregamos manualmente, causa conflicto con la entrada automática
         // Usar modo development para evitar minificación con Terser (estaba colgando el build)
-        mode: 'development',
+        mode: mode === 'production' ? 'production' : 'development',
         // Estrategia para navegación: NetworkFirst con fallback a CacheFirst para offline
         runtimeCaching: [
           {

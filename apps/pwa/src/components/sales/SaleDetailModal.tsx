@@ -1,16 +1,31 @@
 import { useState, useEffect } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileText, Package, DollarSign, Calendar, User, CreditCard, UserCircle, Receipt, ReceiptText, ExternalLink } from 'lucide-react'
-import { Sale } from '@/services/sales.service'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { FileText, Package, DollarSign, Calendar, User, CreditCard, UserCircle, Receipt, ReceiptText, ExternalLink, Printer, Ban } from 'lucide-react'
+import { Sale, salesService } from '@/services/sales.service'
 import { fiscalInvoicesService, FiscalInvoice } from '@/services/fiscal-invoices.service'
+import { printService } from '@/services/print.service'
+import { useAuth } from '@/stores/auth.store'
+import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import CreateFiscalInvoiceFromSaleModal from '@/components/fiscal/CreateFiscalInvoiceFromSaleModal'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { useNavigate } from 'react-router-dom'
 
 interface SaleDetailModalProps {
@@ -51,8 +66,13 @@ export default function SaleDetailModal({
 }: SaleDetailModalProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [fiscalInvoice, setFiscalInvoice] = useState<FiscalInvoice | null>(null)
+  const [showVoidDialog, setShowVoidDialog] = useState(false)
+  const [voidReason, setVoidReason] = useState('')
+  const [voidedAt, setVoidedAt] = useState<string | null>(sale?.voided_at || null)
+  const [voidedReason, setVoidedReason] = useState<string | null>(sale?.void_reason || null)
 
   // Obtener factura fiscal si existe
   const { data: fiscalInvoiceData, refetch: refetchFiscalInvoice } = useQuery({
@@ -70,7 +90,25 @@ export default function SaleDetailModal({
     }
   }, [fiscalInvoiceData])
 
+  useEffect(() => {
+    setVoidedAt(sale?.voided_at || null)
+    setVoidedReason(sale?.void_reason || null)
+  }, [sale?.voided_at, sale?.void_reason])
+
   if (!sale) return null
+
+  const isOwner = user?.role === 'owner'
+  const isVoided = Boolean(voidedAt)
+  const hasIssuedFiscal = fiscalInvoice?.status === 'issued'
+  const hasDebtPayments =
+    sale.debt &&
+    ((sale.debt.total_paid_bs || 0) > 0 || (sale.debt.total_paid_usd || 0) > 0)
+  const voidBlockReason = hasIssuedFiscal
+    ? 'Esta venta tiene una factura fiscal emitida.'
+    : hasDebtPayments
+      ? 'Esta venta tiene pagos asociados.'
+      : null
+  const canVoid = isOwner && !isVoided && !voidBlockReason
 
   const totalItems = sale.items.reduce((sum, item) => sum + item.qty, 0)
 
@@ -81,6 +119,22 @@ export default function SaleDetailModal({
     refetchFiscalInvoice()
     setShowCreateModal(false)
   }
+
+  const voidSaleMutation = useMutation({
+    mutationFn: ({ saleId, reason }: { saleId: string; reason?: string }) =>
+      salesService.voidSale(saleId, reason),
+    onSuccess: (updatedSale) => {
+      toast.success('Venta anulada correctamente')
+      setVoidedAt(updatedSale.voided_at || new Date().toISOString())
+      setVoidedReason(updatedSale.void_reason || voidReason.trim() || null)
+      setVoidReason('')
+      setShowVoidDialog(false)
+      queryClient.invalidateQueries({ queryKey: ['sales'] })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'No se pudo anular la venta')
+    },
+  })
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -102,6 +156,28 @@ export default function SaleDetailModal({
 
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 sm:px-4 md:px-6 py-4 sm:py-6">
           <div className="space-y-4 sm:space-y-6">
+              {isVoided && (
+                <Card className="bg-destructive/10 border-destructive/30">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-full bg-destructive/20 p-2">
+                        <Ban className="w-4 h-4 text-destructive" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-destructive">Venta anulada</p>
+                        <p className="text-xs text-muted-foreground">
+                          Anulada el {voidedAt ? format(new Date(voidedAt), 'dd/MM/yyyy HH:mm') : '-'}
+                        </p>
+                        {voidedReason && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Motivo: {voidedReason}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
               {/* Sección: Información de la Venta */}
               <div>
                 <h3 className="text-sm sm:text-base font-semibold text-foreground mb-3 flex items-center">
@@ -412,6 +488,8 @@ export default function SaleDetailModal({
                           const subtotalUsd = unitPriceUsd * item.qty - discountUsd
                           const isWeightProduct = Boolean(item.is_weight_product)
                           const weightValue = Number(item.weight_value ?? item.qty ?? 0)
+                          const unitPriceDecimals =
+                            item.weight_unit === 'g' || item.weight_unit === 'oz' ? 4 : 2
 
                           return (
                             <TableRow key={item.id}>
@@ -437,7 +515,17 @@ export default function SaleDetailModal({
                               </TableCell>
                               <TableCell className="text-right">
                                 <span className="text-sm text-foreground">
-                                  ${unitPriceUsd.toFixed(2)} / {unitPriceBs.toFixed(2)} Bs
+                                  {isWeightProduct ? (
+                                    <>
+                                      ${unitPriceUsd.toFixed(unitPriceDecimals)} /{' '}
+                                      {unitPriceBs.toFixed(unitPriceDecimals)} Bs /{' '}
+                                      {item.weight_unit || 'kg'}
+                                    </>
+                                  ) : (
+                                    <>
+                                      ${unitPriceUsd.toFixed(2)} / {unitPriceBs.toFixed(2)} Bs
+                                    </>
+                                  )}
                                 </span>
                               </TableCell>
                               <TableCell className="text-right">
@@ -588,9 +676,44 @@ export default function SaleDetailModal({
 
         {/* Footer */}
         <div className="flex-shrink-0 border-t border-border px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-          <Button onClick={onClose} className="w-full">
-            Cerrar
-          </Button>
+          {isOwner && !isVoided && voidBlockReason && (
+            <p className="text-xs text-muted-foreground mb-2">{voidBlockReason}</p>
+          )}
+          <div className="flex gap-3">
+            {isOwner && !isVoided && (
+              <Button
+                variant="destructive"
+                onClick={() => setShowVoidDialog(true)}
+                disabled={!canVoid}
+                className="flex-1"
+              >
+                <Ban className="w-4 h-4 mr-2" />
+                Anular Venta
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                try {
+                  printService.printSale(sale, {
+                    storeName: 'SISTEMA POS',
+                    cashierName: sale.sold_by_user?.full_name || undefined,
+                  })
+                  toast.success('Ticket enviado a imprimir')
+                } catch (error) {
+                  toast.error('Error al imprimir ticket')
+                  console.error('[SaleDetail] Error printing:', error)
+                }
+              }}
+              className="flex-1"
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Reimprimir Ticket
+            </Button>
+            <Button onClick={onClose} className="flex-1">
+              Cerrar
+            </Button>
+          </div>
         </div>
       </DialogContent>
 
@@ -603,6 +726,38 @@ export default function SaleDetailModal({
           onSuccess={handleCreateSuccess}
         />
       )}
+
+      <AlertDialog open={showVoidDialog} onOpenChange={setShowVoidDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Anular Venta</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Seguro que deseas anular esta venta? Esta acción revertirá el stock y puede afectar reportes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="void-reason">Motivo (opcional)</Label>
+              <Textarea
+                id="void-reason"
+                value={voidReason}
+                onChange={(e) => setVoidReason(e.target.value)}
+                placeholder="Ej: Error en el cobro, devolución completa..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setVoidReason('')}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => voidSaleMutation.mutate({ saleId: sale.id, reason: voidReason.trim() || undefined })}
+              disabled={voidSaleMutation.isPending}
+            >
+              Confirmar Anulación
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }

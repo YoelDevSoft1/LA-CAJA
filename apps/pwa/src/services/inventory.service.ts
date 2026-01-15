@@ -32,7 +32,7 @@ export interface InventoryMovement {
   store_id: string
   product_id: string
   product_name?: string | null
-  movement_type: 'received' | 'adjust' | 'sale'
+  movement_type: 'received' | 'adjust' | 'sold' | 'sale'
   qty_delta: number
   unit_cost_bs: number | string
   unit_cost_usd: number | string
@@ -70,6 +70,15 @@ export interface ProductStock {
 export interface MovementsResponse {
   movements: InventoryMovement[]
   total: number
+}
+
+export interface MovementsParams {
+  product_id?: string
+  limit?: number
+  offset?: number
+  include_pending?: boolean
+  start_date?: string
+  end_date?: string
 }
 
 export const inventoryService = {
@@ -129,12 +138,31 @@ export const inventoryService = {
   /**
    * Obtener movimientos de inventario
    */
-  async getMovements(productId?: string, limit = 50, offset = 0): Promise<MovementsResponse> {
-    const params: any = { limit, offset }
-    if (productId) {
-      params.product_id = productId
+  async getMovements(params: MovementsParams = {}): Promise<MovementsResponse> {
+    const {
+      product_id,
+      limit = 50,
+      offset = 0,
+      include_pending,
+      start_date,
+      end_date,
+    } = params
+    const queryParams: Record<string, any> = { limit, offset }
+    if (product_id) {
+      queryParams.product_id = product_id
     }
-    const response = await api.get<MovementsResponse>('/inventory/movements', { params })
+    if (include_pending !== undefined) {
+      queryParams.include_pending = include_pending
+    }
+    if (start_date) {
+      queryParams.start_date = start_date
+    }
+    if (end_date) {
+      queryParams.end_date = end_date
+    }
+    const response = await api.get<MovementsResponse>('/inventory/movements', {
+      params: queryParams,
+    })
     return response.data
   },
 

@@ -125,8 +125,8 @@ function resolveOfflineItemPricing(
     const weightValue = item.weight_value || item.qty || 0
     const pricePerWeightBs = item.price_per_weight_bs ?? product.price_per_weight_bs ?? 0
     const pricePerWeightUsd = item.price_per_weight_usd ?? product.price_per_weight_usd ?? 0
-    const subtotalBs = weightValue * pricePerWeightBs - itemDiscountBs
-    const subtotalUsd = weightValue * pricePerWeightUsd - itemDiscountUsd
+    const subtotalBs = weightValue * pricePerWeightBs
+    const subtotalUsd = weightValue * pricePerWeightUsd
 
     return {
       qty: weightValue,
@@ -146,8 +146,8 @@ function resolveOfflineItemPricing(
 
   const unitPriceBs = product.price_bs
   const unitPriceUsd = product.price_usd
-  const subtotalBs = unitPriceBs * item.qty - itemDiscountBs
-  const subtotalUsd = unitPriceUsd * item.qty - itemDiscountUsd
+  const subtotalBs = unitPriceBs * item.qty
+  const subtotalUsd = unitPriceUsd * item.qty
 
   return {
     qty: item.qty,
@@ -171,6 +171,9 @@ export interface Sale {
   cash_session_id: string | null
   customer_id: string | null
   sold_by_user_id: string | null
+  voided_at?: string | null
+  voided_by_user_id?: string | null
+  void_reason?: string | null
   sold_by_user?: {
     id: string
     full_name: string | null
@@ -211,6 +214,15 @@ export interface Sale {
       pago_movil_bs?: number
       transfer_bs?: number
       other_bs?: number
+    }
+    split_payments?: SplitPaymentDto[]
+    cash_payment?: {
+      received_usd: number
+      change_bs?: number
+    }
+    cash_payment_bs?: {
+      received_bs: number
+      change_bs?: number
     }
   }
   note: string | null
@@ -878,6 +890,13 @@ export const salesService = {
 
   async getById(id: string): Promise<Sale> {
     const response = await api.get<Sale>(`/sales/${id}`)
+    return response.data
+  },
+
+  async voidSale(id: string, reason?: string): Promise<Sale> {
+    const response = await api.post<Sale>(`/sales/${id}/void`, {
+      reason: reason || undefined,
+    })
     return response.data
   },
 

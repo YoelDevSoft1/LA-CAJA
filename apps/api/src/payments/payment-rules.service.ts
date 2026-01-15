@@ -140,7 +140,7 @@ export class PaymentRulesService {
   async getConfigs(storeId: string): Promise<PaymentMethodConfig[]> {
     return this.configRepository.find({
       where: { store_id: storeId },
-      order: { method: 'ASC' },
+      order: { sort_order: 'ASC', method: 'ASC' },
     });
   }
 

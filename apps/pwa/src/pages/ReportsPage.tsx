@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/table'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { formatQuantity } from '@/lib/weight'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
@@ -570,7 +571,12 @@ export default function ReportsPage() {
                             <div className="min-w-0 flex-1">
                               <p className="font-medium text-foreground truncate">{product.product_name}</p>
                               <p className="text-xs text-muted-foreground">
-                              {product.quantity_sold} vendidos • ${product.revenue_usd.toFixed(2)}
+                              {formatQuantity(
+                                product.quantity_sold,
+                                product.is_weight_product,
+                                product.weight_unit,
+                              )}{' '}
+                              vendidos • ${product.revenue_usd.toFixed(2)}
                             </p>
                           </div>
                         </div>

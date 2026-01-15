@@ -26,6 +26,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { format } from 'date-fns'
+import { formatQuantity } from '@/lib/weight'
 
 const formatCurrency = (amount: number, currency: 'BS' | 'USD' = 'BS') => {
   if (currency === 'USD') {
@@ -473,8 +474,10 @@ export default function DashboardPage() {
                     <p className="text-sm text-muted-foreground mt-2">
                       Cantidad vendida:{' '}
                       <span className="font-semibold">
-                        {formatNumber(
+                        {formatQuantity(
                           kpis.performance.top_selling_product.quantity_sold,
+                          kpis.performance.top_selling_product.is_weight_product,
+                          kpis.performance.top_selling_product.weight_unit,
                         )}
                       </span>
                     </p>
@@ -589,7 +592,11 @@ export default function DashboardPage() {
                             {product.product_name}
                           </TableCell>
                           <TableCell className="text-right">
-                            {formatNumber(product.quantity_sold)}
+                            {formatQuantity(
+                              product.quantity_sold,
+                              product.is_weight_product,
+                              product.weight_unit,
+                            )}
                           </TableCell>
                           <TableCell className="text-right font-semibold">
                             {formatCurrency(product.revenue_bs, 'BS')}

@@ -568,6 +568,7 @@ export class OrdersService {
     orderId: string,
     dto: CreateSaleDto,
     userId?: string,
+    userRole?: string,
   ): Promise<{ order: Order; sale: any }> {
     const order = await this.getOrderById(storeId, orderId);
 
@@ -600,7 +601,12 @@ export class OrdersService {
         customer_id: order.customer_id || dto.customer_id,
       };
 
-      const sale = await this.salesService.create(storeId, saleDto, userId);
+      const sale = await this.salesService.create(
+        storeId,
+        saleDto,
+        userId,
+        userRole,
+      );
 
       // Cerrar orden
       order.status = 'closed';

@@ -9,11 +9,13 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  BadRequestException,
 } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { StockReceivedDto } from './dto/stock-received.dto';
 import { StockAdjustedDto } from './dto/stock-adjusted.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { ApproveStockDto } from './dto/approve-stock.dto';
 import { GetStockStatusDto } from './dto/get-stock-status.dto';
 
@@ -22,7 +24,24 @@ import { GetStockStatusDto } from './dto/get-stock-status.dto';
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
+  private parseDateParam(value?: string): Date | undefined {
+    if (!value) return undefined;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [year, month, day] = value.split('-').map(Number);
+      return new Date(year, month - 1, day, 12, 0, 0, 0);
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException(`Fecha inválida: ${value}`);
+    }
+
+    return date;
+  }
+
   @Post('stock/received')
+  @Roles('owner')
   @HttpCode(HttpStatus.CREATED)
   async stockReceived(@Body() dto: StockReceivedDto, @Request() req: any) {
     const storeId = req.user.store_id;
@@ -35,6 +54,7 @@ export class InventoryController {
   }
 
   @Post('stock/adjust')
+  @Roles('owner')
   @HttpCode(HttpStatus.CREATED)
   async stockAdjusted(@Body() dto: StockAdjustedDto, @Request() req: any) {
     const storeId = req.user.store_id;
@@ -42,6 +62,7 @@ export class InventoryController {
   }
 
   @Post('stock/approve')
+  @Roles('owner')
   @HttpCode(HttpStatus.OK)
   async approveStock(@Body() dto: ApproveStockDto, @Request() req: any) {
     const storeId = req.user.store_id;
@@ -85,14 +106,20 @@ export class InventoryController {
     @Query('offset') offset: string,
     @Query('include_pending') includePending: string,
     @Request() req: any,
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
   ) {
     const storeId = req.user.store_id;
+    const start = this.parseDateParam(startDate);
+    const end = this.parseDateParam(endDate);
     return this.inventoryService.getMovements(
       storeId,
       productId,
       limit ? parseInt(limit, 10) : 50,
       offset ? parseInt(offset, 10) : 0,
       includePending ? includePending === 'true' : true,
+      start,
+      end,
     );
   }
 
@@ -114,6 +141,7 @@ export class InventoryController {
    * Solo owners pueden ejecutar esta acción
    */
   @Post('stock/reset/:productId')
+  @Roles('owner')
   @HttpCode(HttpStatus.OK)
   async resetProductStock(
     @Param('productId') productId: string,
@@ -142,6 +170,7 @@ export class InventoryController {
    * Solo owners pueden ejecutar esta acción - PELIGROSO
    */
   @Post('stock/reset-all')
+  @Roles('owner')
   @HttpCode(HttpStatus.OK)
   async resetAllStock(
     @Body() body: { note?: string; confirm?: boolean },

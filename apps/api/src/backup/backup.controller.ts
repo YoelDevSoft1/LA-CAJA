@@ -11,9 +11,11 @@ import {
 } from '@nestjs/common';
 import { BackupService } from './backup.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @Controller('backup')
 @UseGuards(JwtAuthGuard)
+@Roles('owner')
 export class BackupController {
   constructor(private readonly backupService: BackupService) {}
 

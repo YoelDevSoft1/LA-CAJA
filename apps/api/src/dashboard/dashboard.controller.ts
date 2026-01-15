@@ -10,9 +10,11 @@ import {
 } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard)
+@Roles('owner')
 export class DashboardController {
   private readonly logger = new Logger(DashboardController.name);
 

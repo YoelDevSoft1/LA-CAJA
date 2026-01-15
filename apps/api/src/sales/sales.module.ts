@@ -4,6 +4,8 @@ import { SalesController } from './sales.controller';
 import { SalesService } from './sales.service';
 import { Sale } from '../database/entities/sale.entity';
 import { SaleItem } from '../database/entities/sale-item.entity';
+import { SaleReturn } from '../database/entities/sale-return.entity';
+import { SaleReturnItem } from '../database/entities/sale-return-item.entity';
 import { Product } from '../database/entities/product.entity';
 import { InventoryMovement } from '../database/entities/inventory-movement.entity';
 import { Customer } from '../database/entities/customer.entity';
@@ -31,6 +33,8 @@ import { forwardRef } from '@nestjs/common';
     TypeOrmModule.forFeature([
       Sale,
       SaleItem,
+      SaleReturn,
+      SaleReturnItem,
       Product,
       InventoryMovement,
       Customer,

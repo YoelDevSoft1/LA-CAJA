@@ -18,6 +18,20 @@ export class PaymentMethodConfigsService {
     private configRepository: Repository<PaymentMethodConfig>,
   ) {}
 
+  private getDefaultSortOrder(method: PaymentMethod): number {
+    const orderMap: Record<PaymentMethod, number> = {
+      CASH_USD: 10,
+      CASH_BS: 20,
+      PAGO_MOVIL: 30,
+      TRANSFER: 40,
+      OTHER: 50,
+      SPLIT: 90,
+      FIAO: 90,
+    };
+
+    return orderMap[method] ?? 0;
+  }
+
   /**
    * Crea o actualiza una configuración de método de pago
    */
@@ -32,13 +46,30 @@ export class PaymentMethodConfigsService {
 
     if (existing) {
       // Actualizar
-      existing.min_amount_bs = dto.min_amount_bs ?? null;
-      existing.min_amount_usd = dto.min_amount_usd ?? null;
-      existing.max_amount_bs = dto.max_amount_bs ?? null;
-      existing.max_amount_usd = dto.max_amount_usd ?? null;
-      existing.enabled = dto.enabled ?? existing.enabled;
-      existing.requires_authorization =
-        dto.requires_authorization ?? existing.requires_authorization;
+      if (dto.min_amount_bs !== undefined) {
+        existing.min_amount_bs = dto.min_amount_bs;
+      }
+      if (dto.min_amount_usd !== undefined) {
+        existing.min_amount_usd = dto.min_amount_usd;
+      }
+      if (dto.max_amount_bs !== undefined) {
+        existing.max_amount_bs = dto.max_amount_bs;
+      }
+      if (dto.max_amount_usd !== undefined) {
+        existing.max_amount_usd = dto.max_amount_usd;
+      }
+      if (dto.enabled !== undefined) {
+        existing.enabled = dto.enabled;
+      }
+      if (dto.requires_authorization !== undefined) {
+        existing.requires_authorization = dto.requires_authorization;
+      }
+      if (dto.sort_order !== undefined && dto.sort_order !== null) {
+        existing.sort_order = dto.sort_order;
+      }
+      if (dto.commission_percentage !== undefined) {
+        existing.commission_percentage = dto.commission_percentage ?? 0;
+      }
       existing.updated_at = new Date();
 
       return this.configRepository.save(existing);
@@ -54,6 +85,9 @@ export class PaymentMethodConfigsService {
         max_amount_usd: dto.max_amount_usd ?? null,
         enabled: dto.enabled ?? true,
         requires_authorization: dto.requires_authorization ?? false,
+        sort_order:
+          dto.sort_order ?? this.getDefaultSortOrder(dto.method as PaymentMethod),
+        commission_percentage: dto.commission_percentage ?? 0,
       });
 
       return this.configRepository.save(config);
@@ -66,7 +100,7 @@ export class PaymentMethodConfigsService {
   async getConfigs(storeId: string): Promise<PaymentMethodConfig[]> {
     return this.configRepository.find({
       where: { store_id: storeId },
-      order: { method: 'ASC' },
+      order: { sort_order: 'ASC', method: 'ASC' },
     });
   }
 

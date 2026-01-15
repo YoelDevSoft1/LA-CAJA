@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { ChartOfAccountsService } from './chart-of-accounts.service';
 import { AccountingService } from './accounting.service';
 import { AccountingExportService } from './accounting-export.service';
@@ -33,6 +34,7 @@ import { randomUUID } from 'crypto';
 
 @Controller('accounting')
 @UseGuards(JwtAuthGuard)
+@Roles('owner')
 export class AccountingController {
   constructor(
     private readonly chartOfAccountsService: ChartOfAccountsService,

@@ -1,9 +1,28 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { Search, Plus, Minus, ShoppingCart, Trash2, Scale } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  Search,
+  Plus,
+  Minus,
+  ShoppingCart,
+  Trash2,
+  Scale,
+  Barcode,
+  Apple,
+  Beef,
+  Coffee,
+  Package,
+  Shirt,
+  Home,
+  Cpu,
+  Pill,
+  ShoppingBag,
+} from 'lucide-react'
 import { productsService, ProductSearchResponse } from '@/services/products.service'
+import { useBarcodeScanner } from '@/hooks/use-barcode-scanner'
 import { productsCacheService } from '@/services/products-cache.service'
 import { salesService } from '@/services/sales.service'
+import { exchangeService } from '@/services/exchange.service'
 import { cashService } from '@/services/cash.service'
 import { useCart, CartItem } from '@/stores/cart.store'
 import { useAuth } from '@/stores/auth.store'
@@ -13,6 +32,7 @@ import { fastCheckoutService, QuickProduct } from '@/services/fast-checkout.serv
 import { productVariantsService, ProductVariant } from '@/services/product-variants.service'
 import { productSerialsService } from '@/services/product-serials.service'
 import { warehousesService } from '@/services/warehouses.service'
+import { inventoryService } from '@/services/inventory.service'
 import toast from 'react-hot-toast'
 import CheckoutModal from '@/components/pos/CheckoutModal'
 import QuickProductsGrid from '@/components/fast-checkout/QuickProductsGrid'
@@ -26,14 +46,31 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 
 export default function POSPage() {
   const { user } = useAuth()
+  const MAX_QTY_PER_PRODUCT = 999
+  const queryClient = useQueryClient()
+  const RECENT_SEARCHES_KEY = 'pos-recent-searches'
+  const MAX_RECENT_SEARCHES = 8
   const [searchQuery, setSearchQuery] = useState('')
   const [showCheckout, setShowCheckout] = useState(false)
   const [shouldPrint, setShouldPrint] = useState(false)
   const [showVariantSelector, setShowVariantSelector] = useState(false)
+  const [isClearDialogOpen, setIsClearDialogOpen] = useState(false)
+  const [cartPulse, setCartPulse] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<{
     id: string
     name: string
@@ -43,8 +80,137 @@ export default function POSPage() {
   // Estado para productos por peso
   const [showWeightModal, setShowWeightModal] = useState(false)
   const [selectedWeightProduct, setSelectedWeightProduct] = useState<WeightProduct | null>(null)
+  // Estado para indicador visual del scanner
+  const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null)
+  const [scannerStatus, setScannerStatus] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle')
+  const [discountInputs, setDiscountInputs] = useState<Record<string, string>>({})
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1)
+  const [scannerSoundEnabled, setScannerSoundEnabled] = useState(true)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const [invalidCartProductIds, setInvalidCartProductIds] = useState<string[]>([])
+  const listViewportRef = useRef<HTMLDivElement | null>(null)
+  const [listScrollTop, setListScrollTop] = useState(0)
+  const [listViewportHeight, setListViewportHeight] = useState(0)
   const { items, addItem, updateItem, removeItem, clear, getTotal } = useCart()
   const lastCartSnapshot = useRef<CartItem[]>([])
+  const cartPulseTimeout = useRef<NodeJS.Timeout | null>(null)
+  const lastTotalQty = useRef(0)
+  const totalQty = useMemo(() => items.reduce((sum, item) => sum + item.qty, 0), [items])
+  const handleClearCart = useCallback(() => {
+    clear()
+    setIsClearDialogOpen(false)
+  }, [clear])
+
+  const triggerCartPulse = useCallback(() => {
+    if (cartPulseTimeout.current) {
+      clearTimeout(cartPulseTimeout.current)
+    }
+    setCartPulse(true)
+    cartPulseTimeout.current = setTimeout(() => {
+      setCartPulse(false)
+    }, 350)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (cartPulseTimeout.current) {
+        clearTimeout(cartPulseTimeout.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (totalQty !== lastTotalQty.current) {
+      if (totalQty > 0) {
+        triggerCartPulse()
+      }
+      lastTotalQty.current = totalQty
+    }
+  }, [totalQty, triggerCartPulse])
+
+  useEffect(() => {
+    if (items.length === 0) {
+      setInvalidCartProductIds([])
+      return
+    }
+    setInvalidCartProductIds((prev) =>
+      prev.filter((productId) => items.some((item) => item.product_id === productId))
+    )
+  }, [items])
+
+  useEffect(() => {
+    if (!listViewportRef.current) return
+    const updateHeight = () => {
+      setListViewportHeight(listViewportRef.current?.clientHeight || 0)
+    }
+    updateHeight()
+
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(listViewportRef.current)
+    return () => observer.disconnect()
+  }, [])
+
+  const playScanTone = useCallback((variant: 'success' | 'error') => {
+    try {
+      const AudioContextClass =
+        window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!AudioContextClass) return
+
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContextClass()
+      }
+      const context = audioContextRef.current
+      if (context.state === 'suspended') {
+        void context.resume()
+      }
+
+      const oscillator = context.createOscillator()
+      const gainNode = context.createGain()
+      oscillator.type = 'sine'
+      oscillator.frequency.value = variant === 'success' ? 880 : 220
+      gainNode.gain.value = 0.05
+
+      oscillator.connect(gainNode)
+      gainNode.connect(context.destination)
+      oscillator.start()
+      oscillator.stop(context.currentTime + (variant === 'success' ? 0.12 : 0.2))
+    } catch (error) {
+      // Silenciar errores de audio (opcional)
+    }
+  }, [])
+
+  const getCategoryIcon = useCallback((category?: string | null) => {
+    if (!category) return Package
+    const normalized = category.toLowerCase()
+
+    if (normalized.includes('bebida') || normalized.includes('drink') || normalized.includes('refresco')) {
+      return Coffee
+    }
+    if (normalized.includes('fruta') || normalized.includes('verdura') || normalized.includes('vegetal')) {
+      return Apple
+    }
+    if (normalized.includes('carne') || normalized.includes('pollo') || normalized.includes('proteina')) {
+      return Beef
+    }
+    if (normalized.includes('ropa') || normalized.includes('vestir') || normalized.includes('moda')) {
+      return Shirt
+    }
+    if (normalized.includes('hogar') || normalized.includes('casa')) {
+      return Home
+    }
+    if (normalized.includes('electron') || normalized.includes('tecno') || normalized.includes('gadget')) {
+      return Cpu
+    }
+    if (normalized.includes('farmacia') || normalized.includes('salud') || normalized.includes('medic')) {
+      return Pill
+    }
+    if (normalized.includes('accesorio') || normalized.includes('general')) {
+      return ShoppingBag
+    }
+
+    return Package
+  }, [])
 
   // Obtener sesión actual de caja
   const { data: currentCashSession } = useQuery({
@@ -58,6 +224,14 @@ export default function POSPage() {
     queryKey: ['fast-checkout', 'config'],
     queryFn: () => fastCheckoutService.getFastCheckoutConfig(),
     staleTime: 1000 * 60 * 5, // 5 minutos
+  })
+
+  // Obtener tasa BCV para convertir descuentos
+  const { data: bcvRateData } = useQuery({
+    queryKey: ['exchange', 'bcv'],
+    queryFn: () => exchangeService.getBCVRate(),
+    staleTime: 1000 * 60 * 60 * 2,
+    gcTime: Infinity,
   })
 
   // Obtener bodega por defecto
@@ -237,23 +411,177 @@ export default function POSPage() {
   }, [user?.store_id, searchQuery]);
 
   // Búsqueda de productos (con cache offline persistente)
-  const { data: productsData, isLoading } = useQuery({
+  const { data: productsData, isLoading, isError: isProductsError } = useQuery({
     queryKey: ['products', 'search', searchQuery, user?.store_id],
     queryFn: () =>
-      productsService.search({
-        q: searchQuery || undefined,
-        is_active: true,
-        limit: 50,
-      }, user?.store_id),
+      Promise.race([
+        productsService.search(
+          {
+            q: searchQuery || undefined,
+            is_active: true,
+            limit: 50,
+          },
+          user?.store_id
+        ),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), 8000)
+        ),
+      ]),
     enabled: (searchQuery.length >= 2 || searchQuery.length === 0) && !!user?.store_id && isOnline,
     staleTime: 1000 * 60 * 5, // 5 minutos
     gcTime: Infinity, // Nunca eliminar del cache
-    retry: false, // No reintentar si falla
+    retry: (failureCount, error: any) => {
+      if (error?.message === 'timeout') {
+        return failureCount < 1
+      }
+      return false
+    },
+    retryDelay: 1200,
     initialData: !isOnline ? initialData : undefined,
     placeholderData: !isOnline ? initialData : undefined,
   })
 
   const products = productsData?.products || []
+  const PRODUCT_ROW_HEIGHT = 104
+  const PRODUCT_OVERSCAN = 6
+  const listTotalHeight = products.length * PRODUCT_ROW_HEIGHT
+  const startIndex = Math.max(
+    0,
+    Math.floor(listScrollTop / PRODUCT_ROW_HEIGHT) - PRODUCT_OVERSCAN
+  )
+  const endIndex = Math.min(
+    products.length,
+    Math.ceil((listScrollTop + listViewportHeight) / PRODUCT_ROW_HEIGHT) + PRODUCT_OVERSCAN
+  )
+  const visibleProducts = useMemo(
+    () => products.slice(startIndex, endIndex),
+    [products, startIndex, endIndex]
+  )
+  const suggestedProducts = useMemo(() => {
+    const trimmedQuery = searchQuery.trim()
+    if (trimmedQuery.length < 2) return []
+    const normalized = trimmedQuery.toLowerCase()
+    return products
+      .filter((product) => {
+        const nameMatch = product.name?.toLowerCase().includes(normalized)
+        const barcodeMatch = product.barcode?.includes(trimmedQuery)
+        return nameMatch || barcodeMatch
+      })
+      .slice(0, 6)
+  }, [products, searchQuery])
+  const complementaryProducts = useMemo(() => {
+    if (items.length === 0 || products.length === 0) return []
+    const lastItem = items[items.length - 1]
+    const lastProduct = products.find((product) => product.id === lastItem.product_id)
+    const cartIds = new Set(items.map((item) => item.product_id))
+    const category = lastProduct?.category?.toLowerCase()
+
+    const candidates = products.filter((product) => !cartIds.has(product.id))
+    if (!category) {
+      return candidates.slice(0, 6)
+    }
+
+    const sameCategory = candidates.filter(
+      (product) => product.category?.toLowerCase() === category
+    )
+    return (sameCategory.length > 0 ? sameCategory : candidates).slice(0, 6)
+  }, [items, products])
+  const { data: lowStockStatuses } = useQuery({
+    queryKey: ['inventory', 'low-stock', 'pos', searchQuery, selectedWarehouseId],
+    queryFn: () =>
+      inventoryService.getStockStatus({
+        search: searchQuery || undefined,
+        low_stock_only: true,
+        warehouse_id: selectedWarehouseId || undefined,
+        limit: 50,
+      }),
+    enabled: isOnline && products.length > 0,
+    staleTime: 1000 * 60, // 1 minuto
+    gcTime: 1000 * 60 * 5,
+    retry: 1,
+  })
+  const lowStockIds = useMemo(() => {
+    return new Set((lowStockStatuses || []).map((item) => item.product_id))
+  }, [lowStockStatuses])
+  const { data: recentSales, isLoading: isRecentSalesLoading } = useQuery({
+    queryKey: ['sales', 'recent-products', user?.store_id],
+    queryFn: () =>
+      salesService.list({
+        store_id: user?.store_id,
+        limit: 6,
+        offset: 0,
+      }),
+    enabled: isOnline && !!user?.store_id,
+    staleTime: 1000 * 60, // 1 minuto
+    gcTime: 1000 * 60 * 5,
+  })
+  const recentProducts = useMemo(() => {
+    const sales = recentSales?.sales || []
+    const latestByProduct = new Map<
+      string,
+      { product_id: string; name: string; sold_at: string; is_weight_product?: boolean; weight_unit?: string | null }
+    >()
+
+    sales.forEach((sale) => {
+      sale.items?.forEach((item) => {
+        if (!item.product_id) return
+        const existing = latestByProduct.get(item.product_id)
+        const name = item.product?.name || 'Producto'
+        if (!existing || new Date(sale.sold_at) > new Date(existing.sold_at)) {
+          latestByProduct.set(item.product_id, {
+            product_id: item.product_id,
+            name,
+            sold_at: sale.sold_at,
+            is_weight_product: item.is_weight_product,
+            weight_unit: item.weight_unit || null,
+          })
+        }
+      })
+    })
+
+    return Array.from(latestByProduct.values())
+      .sort((a, b) => new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime())
+      .slice(0, 6)
+  }, [recentSales])
+
+  useEffect(() => {
+    if (!isOnline || !user?.store_id) return
+
+    const prefetchFrequentProducts = async () => {
+      try {
+        let quickProducts = queryClient.getQueryData<QuickProduct[]>([
+          'fast-checkout',
+          'quick-products',
+        ])
+
+        if (!quickProducts && fastCheckoutConfig?.enabled) {
+          quickProducts = await queryClient.fetchQuery({
+            queryKey: ['fast-checkout', 'quick-products'],
+            queryFn: () => fastCheckoutService.getQuickProducts(),
+            staleTime: 1000 * 60 * 5,
+          })
+        }
+
+        const quickIds = (quickProducts || [])
+          .map((product) => product.product_id)
+          .filter(Boolean)
+
+        const recentIds = (recentSales?.sales || [])
+          .flatMap((sale) => sale.items?.map((item) => item.product_id) || [])
+          .filter(Boolean)
+
+        const frequentIds = Array.from(new Set([...quickIds, ...recentIds])).slice(0, 20)
+
+        await Promise.allSettled(
+          frequentIds.map((productId) => productsService.getById(productId, user?.store_id))
+        )
+      } catch (error) {
+        // Silenciar errores de precarga (opcional)
+      }
+    }
+
+    void prefetchFrequentProducts()
+  }, [fastCheckoutConfig?.enabled, isOnline, queryClient, recentSales, user?.store_id])
 
   const handleAddToCart = async (product: any, variant: ProductVariant | null = null) => {
     // Determinar precios (usar precio de variante si existe, sino precio del producto)
@@ -275,6 +603,49 @@ export default function POSPage() {
         (item.variant_id ?? null) === (variant?.id ?? null)
     )
 
+    // Calcular cantidad actual en carrito para este producto
+    const currentQtyInCart = existingItem ? existingItem.qty : 0
+    const newQty = currentQtyInCart + 1
+
+    if (!product.is_weight_product && newQty > MAX_QTY_PER_PRODUCT) {
+      toast.error(`Cantidad máxima por producto: ${MAX_QTY_PER_PRODUCT}`)
+      return
+    }
+
+    // Validar stock disponible (solo si está online, offline permitir agregar)
+    if (isOnline && !product.is_weight_product) {
+      try {
+        const stockInfo = await inventoryService.getProductStock(product.id)
+        const availableStock = stockInfo.current_stock
+
+        if (newQty > availableStock) {
+          if (availableStock <= 0) {
+            toast.error(`${product.name} no tiene stock disponible`, {
+              icon: '📦',
+              duration: 3000,
+            })
+          } else {
+            toast.error(
+              `Stock insuficiente. Disponible: ${availableStock}, En carrito: ${currentQtyInCart}`,
+              { icon: '⚠️', duration: 4000 }
+            )
+          }
+          return
+        }
+
+        // Advertir si el stock quedará bajo después de esta venta
+        if (availableStock - newQty <= (product.low_stock_threshold || 5) && availableStock - newQty > 0) {
+          toast(`Stock bajo: quedarán ${availableStock - newQty} unidades`, {
+            icon: '📉',
+            duration: 2000,
+          })
+        }
+      } catch (error) {
+        // Si falla la verificación de stock, permitir agregar (mejor UX)
+        console.warn('[POS] No se pudo verificar stock:', error)
+      }
+    }
+
     if (existingItem) {
       updateItem(existingItem.id, { qty: existingItem.qty + 1 })
     } else {
@@ -288,6 +659,7 @@ export default function POSPage() {
         variant_name: variant ? `${variant.variant_type}: ${variant.variant_value}` : null,
       })
     }
+    triggerCartPulse()
     toast.success(`${productName} agregado al carrito`)
   }
 
@@ -322,6 +694,74 @@ export default function POSPage() {
       handleAddToCart(product, null)
     }
   }
+
+  // Handler para escaneo de código de barras
+  const handleBarcodeScan = useCallback(async (barcode: string) => {
+    setLastScannedBarcode(barcode)
+    setScannerStatus('scanning')
+
+    try {
+      // Buscar producto por código de barras exacto
+      const result = await productsService.search({
+        q: barcode,
+        is_active: true,
+        limit: 10,
+      }, user?.store_id)
+
+      // Buscar coincidencia exacta por barcode
+      const product = result.products.find(
+        (p) => p.barcode?.toLowerCase() === barcode.toLowerCase()
+      )
+
+      if (!product) {
+        setScannerStatus('error')
+        toast.error(`Producto no encontrado: ${barcode}`, {
+          icon: '🔍',
+          duration: 3000,
+        })
+        if (scannerSoundEnabled) {
+          playScanTone('error')
+        }
+        setTimeout(() => {
+          setScannerStatus('idle')
+          setLastScannedBarcode(null)
+        }, 2000)
+        return
+      }
+
+      // Producto encontrado - agregar al carrito
+      setScannerStatus('success')
+      if (scannerSoundEnabled) {
+        playScanTone('success')
+      }
+
+      // Usar handleProductClick para manejar variantes, productos por peso, etc.
+      await handleProductClick(product)
+
+      // Limpiar estado después de agregar
+      setTimeout(() => {
+        setScannerStatus('idle')
+        setLastScannedBarcode(null)
+      }, 1500)
+    } catch (error) {
+      console.error('[POS] Error al buscar producto por código de barras:', error)
+      setScannerStatus('error')
+      toast.error('Error al buscar producto')
+      setTimeout(() => {
+        setScannerStatus('idle')
+        setLastScannedBarcode(null)
+      }, 2000)
+    }
+  }, [user?.store_id, handleProductClick, scannerSoundEnabled, playScanTone])
+
+  // Integrar scanner de código de barras
+  useBarcodeScanner({
+    onScan: handleBarcodeScan,
+    enabled: true, // Siempre habilitado en POS
+    minLength: 4,
+    maxLength: 50,
+    maxIntervalMs: 50,
+  })
 
   // Handler para confirmar peso de producto
   const handleWeightConfirm = (weightValue: number) => {
@@ -365,16 +805,96 @@ export default function POSPage() {
     setSelectedProductForVariant(null)
   }
 
-  const handleUpdateQty = (itemId: string, newQty: number) => {
+  const handleUpdateQty = async (itemId: string, newQty: number) => {
     if (newQty <= 0) {
       removeItem(itemId)
-    } else {
-      updateItem(itemId, { qty: newQty })
+      return
     }
+
+    const item = items.find((i) => i.id === itemId)
+    if (!item) return
+
+    if (!item.is_weight_product && newQty > MAX_QTY_PER_PRODUCT) {
+      toast.error(`Cantidad máxima por producto: ${MAX_QTY_PER_PRODUCT}`)
+      return
+    }
+
+    // Solo validar si se está aumentando la cantidad y no es producto por peso
+    if (newQty > item.qty && !item.is_weight_product && isOnline) {
+      try {
+        const stockInfo = await inventoryService.getProductStock(item.product_id)
+        const availableStock = stockInfo.current_stock
+
+        if (newQty > availableStock) {
+          toast.error(
+            `Stock insuficiente. Disponible: ${availableStock}`,
+            { icon: '⚠️', duration: 3000 }
+          )
+          return
+        }
+      } catch (error) {
+        // Si falla la verificación, permitir el cambio
+        console.warn('[POS] No se pudo verificar stock:', error)
+      }
+    }
+
+    updateItem(itemId, { qty: newQty })
   }
 
   const total = getTotal()
   const hasOpenCash = !!currentCashSession?.id
+  const allowDiscounts = !fastCheckoutConfig?.enabled || fastCheckoutConfig?.allow_discounts
+  const exchangeRate = bcvRateData?.rate && bcvRateData.rate > 0 ? bcvRateData.rate : 36
+  const hasDiscounts = items.some(
+    (item) => (item.discount_usd || 0) > 0 || (item.discount_bs || 0) > 0
+  )
+  const totalDiscountUsd = items.reduce((sum, item) => sum + Number(item.discount_usd || 0), 0)
+  const totalDiscountBs = items.reduce((sum, item) => sum + Number(item.discount_bs || 0), 0)
+
+  const resolveItemRate = (item: CartItem) => {
+    const unitUsd = Number(item.unit_price_usd || 0)
+    const unitBs = Number(item.unit_price_bs || 0)
+    if (unitUsd > 0 && unitBs > 0) {
+      return unitBs / unitUsd
+    }
+    return exchangeRate > 0 ? exchangeRate : 1
+  }
+
+  const handleDiscountChange = (item: CartItem, value: string) => {
+    setDiscountInputs((prev) => ({ ...prev, [item.id]: value }))
+
+    if (value.trim() === '') {
+      updateItem(item.id, { discount_usd: 0, discount_bs: 0 })
+      return
+    }
+
+    const parsed = Number(value)
+    if (Number.isNaN(parsed) || parsed < 0) {
+      return
+    }
+
+    const roundedUsd = Math.round(parsed * 100) / 100
+    const rate = resolveItemRate(item)
+    const roundedBs = Math.round(roundedUsd * rate * 100) / 100
+    updateItem(item.id, { discount_usd: roundedUsd, discount_bs: roundedBs })
+  }
+
+  const handleDiscountBlur = (item: CartItem) => {
+    const value = Number(item.discount_usd || 0)
+    setDiscountInputs((prev) => ({
+      ...prev,
+      [item.id]: value > 0 ? value.toFixed(2) : '',
+    }))
+  }
+
+  const handleClearDiscounts = () => {
+    setDiscountInputs({})
+    items.forEach((item) => {
+      if ((item.discount_usd || 0) > 0 || (item.discount_bs || 0) > 0) {
+        updateItem(item.id, { discount_usd: 0, discount_bs: 0 })
+      }
+    })
+  }
 
   // Crear venta
   const createSaleMutation = useMutation({
@@ -460,7 +980,7 @@ export default function POSPage() {
     },
   })
 
-  const handleCheckout = (checkoutData: {
+  const handleCheckout = async (checkoutData: {
     payment_method: 'CASH_BS' | 'CASH_USD' | 'PAGO_MOVIL' | 'TRANSFER' | 'OTHER' | 'FIAO' | 'SPLIT'
     currency: 'BS' | 'USD' | 'MIXED'
     exchange_rate: number
@@ -493,6 +1013,31 @@ export default function POSPage() {
     promotion_id?: string | null // ID de la promoción
     warehouse_id?: string | null // ID de la bodega de donde se vende
   }) => {
+    if (items.length === 0) return
+    setInvalidCartProductIds([])
+    try {
+      const uniqueProductIds = Array.from(new Set(items.map((item) => item.product_id)))
+      const results = await Promise.allSettled(
+        uniqueProductIds.map((productId) => productsService.getById(productId, user?.store_id))
+      )
+      const invalidIds = results
+        .map((result, index) => {
+          if (result.status === 'rejected') {
+            return uniqueProductIds[index]
+          }
+          return result.value.is_active ? null : uniqueProductIds[index]
+        })
+        .filter((value): value is string => Boolean(value))
+
+      if (invalidIds.length > 0) {
+        setInvalidCartProductIds(invalidIds)
+        toast.error('Hay productos inactivos o eliminados en el carrito')
+        return
+      }
+    } catch (error) {
+      toast.error('No se pudo validar el carrito. Intenta de nuevo.')
+      return
+    }
     const saleItems = items.map((item) => ({
       product_id: item.product_id,
       qty: item.qty,
@@ -545,12 +1090,167 @@ export default function POSPage() {
     })
   }
 
+  const handleRecentProductClick = async (productId: string) => {
+    const localProduct = products.find((product) => product.id === productId)
+    if (localProduct) {
+      await handleProductClick(localProduct)
+      return
+    }
+
+    try {
+      const fetched = await productsService.getById(productId, user?.store_id)
+      await handleProductClick(fetched)
+    } catch (error) {
+      toast.error('No se pudo cargar el producto seleccionado')
+    }
+  }
+
+  const handleSuggestionSelect = async (
+    product: ProductSearchResponse['products'][number]
+  ) => {
+    await handleProductClick(product)
+    setSearchQuery('')
+    setShowSuggestions(false)
+    setActiveSuggestionIndex(-1)
+  }
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || suggestedProducts.length === 0) return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveSuggestionIndex((prev) => (prev + 1) % suggestedProducts.length)
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveSuggestionIndex((prev) =>
+        prev <= 0 ? suggestedProducts.length - 1 : prev - 1
+      )
+    }
+    if (e.key === 'Enter' && activeSuggestionIndex >= 0) {
+      e.preventDefault()
+      handleSuggestionSelect(suggestedProducts[activeSuggestionIndex])
+    }
+    if (e.key === 'Escape') {
+      setShowSuggestions(false)
+      setActiveSuggestionIndex(-1)
+    }
+  }
+
+  const [recentSearches, setRecentSearches] = useState<string[]>([])
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(RECENT_SEARCHES_KEY)
+      const parsed = stored ? (JSON.parse(stored) as string[]) : []
+      setRecentSearches(Array.isArray(parsed) ? parsed : [])
+    } catch (error) {
+      setRecentSearches([])
+    }
+  }, [])
+
+  const saveRecentSearch = (value: string) => {
+    const trimmed = value.trim()
+    if (trimmed.length < 2) return
+    try {
+      const next = [trimmed, ...recentSearches.filter((item) => item !== trimmed)].slice(0, MAX_RECENT_SEARCHES)
+      localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next))
+      setRecentSearches(next)
+    } catch (error) {
+      // Silenciar errores de storage
+    }
+  }
+
+  useEffect(() => {
+    const handleShortcuts = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return
+      }
+
+      if (e.key === '/') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+        return
+      }
+
+      if (e.key === 'F2') {
+        e.preventDefault()
+        if (items.length > 0 && hasOpenCash) {
+          setShowCheckout(true)
+        } else if (items.length === 0) {
+          toast('Agrega productos al carrito para cobrar', { icon: '🧾' })
+        } else if (!hasOpenCash) {
+          toast.error('No hay caja abierta')
+        }
+        return
+      }
+
+      if (e.altKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault()
+        if (items.length > 0) {
+          setIsClearDialogOpen(true)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleShortcuts)
+    return () => window.removeEventListener('keydown', handleShortcuts)
+  }, [hasOpenCash, items.length])
+
   return (
     <div className="h-full max-w-7xl mx-auto">
       {/* Header - Mobile/Desktop */}
       <div className="mb-4 sm:mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Punto de Venta</h1>
-        <p className="text-sm sm:text-base text-muted-foreground mt-1">Busca y agrega productos al carrito</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Punto de Venta</h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">Busca y agrega productos al carrito</p>
+          </div>
+          {/* Indicador de estado del scanner */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground">
+              <span>Sonido</span>
+              <Switch
+                checked={scannerSoundEnabled}
+                onCheckedChange={setScannerSoundEnabled}
+              />
+            </div>
+            <div className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-300",
+              scannerStatus === 'idle' && "bg-muted/50 text-muted-foreground",
+              scannerStatus === 'scanning' && "bg-primary/20 text-primary animate-pulse",
+              scannerStatus === 'success' && "bg-green-500/20 text-green-600",
+              scannerStatus === 'error' && "bg-destructive/20 text-destructive"
+            )}>
+              <Barcode className={cn(
+                "w-4 h-4",
+                scannerStatus === 'scanning' && "animate-pulse"
+              )} />
+              <span className="hidden sm:inline">
+                {scannerStatus === 'idle' && 'Scanner listo'}
+                {scannerStatus === 'scanning' && 'Buscando...'}
+                {scannerStatus === 'success' && 'Agregado'}
+                {scannerStatus === 'error' && 'No encontrado'}
+              </span>
+            </div>
+          </div>
+        </div>
+        {/* Mostrar código escaneado cuando está activo */}
+        {lastScannedBarcode && scannerStatus !== 'idle' && (
+          <div className={cn(
+            "mt-2 px-3 py-2 rounded-md text-sm font-mono flex items-center gap-2 transition-all duration-300",
+            scannerStatus === 'scanning' && "bg-primary/10 text-primary border border-primary/30",
+            scannerStatus === 'success' && "bg-green-500/10 text-green-600 border border-green-500/30",
+            scannerStatus === 'error' && "bg-destructive/10 text-destructive border border-destructive/30"
+          )}>
+            <Barcode className="w-4 h-4 flex-shrink-0" />
+            <span className="truncate">{lastScannedBarcode}</span>
+          </div>
+        )}
       </div>
 
       {/* Layout: Mobile (stacked) / Tablet-Desktop (side by side) */}
@@ -564,15 +1264,205 @@ export default function POSPage() {
               type="text"
               placeholder="Buscar productos..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setShowSuggestions(true)
+                setActiveSuggestionIndex(-1)
+              }}
               className="pl-9 sm:pl-10 h-11 sm:h-12 text-base sm:text-lg"
               autoFocus
+              ref={searchInputRef}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => {
+                setTimeout(() => setShowSuggestions(false), 120)
+                saveRecentSearch(searchQuery)
+              }}
+              onKeyDown={handleSearchKeyDown}
+              role="combobox"
+              aria-expanded={showSuggestions}
+              aria-controls="pos-search-suggestions"
             />
+            {showSuggestions && (suggestedProducts.length > 0 || recentSearches.length > 0) && (
+              <div
+                id="pos-search-suggestions"
+                role="listbox"
+                className="absolute z-20 mt-2 w-full rounded-lg border border-border bg-background shadow-lg"
+              >
+                {recentSearches.length > 0 && (
+                  <div className="px-3 py-2 text-[11px] text-muted-foreground border-b border-border/60">
+                    Busquedas recientes
+                  </div>
+                )}
+                {recentSearches.map((term) => (
+                  <button
+                    key={`recent-${term}`}
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setSearchQuery(term)
+                      setShowSuggestions(false)
+                      saveRecentSearch(term)
+                    }}
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-accent/50"
+                  >
+                    <span className="truncate">{term}</span>
+                    <span className="text-[11px] text-muted-foreground">Buscar</span>
+                  </button>
+                ))}
+                {suggestedProducts.map((product, index) => {
+                  const isActive = index === activeSuggestionIndex
+                  return (
+                    <button
+                      key={product.id}
+                      type="button"
+                      role="option"
+                      aria-selected={isActive}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => handleSuggestionSelect(product)}
+                      className={cn(
+                        'flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm',
+                        'hover:bg-accent/50',
+                        isActive && 'bg-accent/60'
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          {product.is_weight_product && (
+                            <Scale className="h-3.5 w-3.5 text-primary" />
+                          )}
+                          <span className="font-medium truncate">{product.name}</span>
+                          {product.category && (
+                            <span className="text-xs text-muted-foreground truncate">
+                              {product.category}
+                            </span>
+                          )}
+                        </div>
+                        {product.barcode && (
+                          <div className="text-[11px] text-muted-foreground/70 font-mono truncate">
+                            {product.barcode}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-right text-xs text-muted-foreground tabular-nums">
+                        {product.is_weight_product && product.price_per_weight_usd ? (
+                          <>
+                            ${Number(product.price_per_weight_usd).toFixed(
+                              getWeightPriceDecimals(product.weight_unit)
+                            )}/{product.weight_unit}
+                          </>
+                        ) : (
+                          <>${Number(product.price_usd).toFixed(2)}</>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Atajos:</span>
+            <Badge variant="outline" className="text-[10px] sm:text-xs">
+              / Buscar
+            </Badge>
+            <Badge variant="outline" className="text-[10px] sm:text-xs">
+              F2 Cobrar
+            </Badge>
+            <Badge variant="outline" className="text-[10px] sm:text-xs">
+              Alt + L Limpiar
+            </Badge>
+            {fastCheckoutEnabled && (
+              <Badge variant="secondary" className="text-[10px] sm:text-xs">
+                Teclas rapidas en productos
+              </Badge>
+            )}
           </div>
 
           {/* Productos rápidos (solo si está habilitado) */}
           {fastCheckoutConfig?.enabled && (
             <QuickProductsGrid onProductClick={handleQuickProductClick} />
+          )}
+
+          {/* Historial de productos vendidos recientemente */}
+          {recentProducts.length > 0 && (
+            <Card className="border border-border">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-foreground">Ultimos vendidos</h3>
+                  <span className="text-xs text-muted-foreground">
+                    Toca para agregar
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {recentProducts.map((item) => (
+                    <Button
+                      key={item.product_id}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRecentProductClick(item.product_id)}
+                      className="h-8 gap-1.5"
+                    >
+                      {item.is_weight_product && (
+                        <Scale className="w-3.5 h-3.5 text-primary" />
+                      )}
+                      <span className="max-w-[160px] truncate">{item.name}</span>
+                      {item.is_weight_product && item.weight_unit && (
+                        <span className="text-[10px] text-muted-foreground">
+                          /{item.weight_unit}
+                        </span>
+                      )}
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {isRecentSalesLoading && recentProducts.length === 0 && (
+            <Card className="border border-border">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-pulse" />
+                  Cargando ultimos vendidos...
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Sugerencias complementarias */}
+          {complementaryProducts.length > 0 && (
+            <Card className="border border-border">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Sugerencias para complementar
+                  </h3>
+                  <span className="text-xs text-muted-foreground">
+                    Basado en el ultimo agregado
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {complementaryProducts.map((product) => (
+                    <Button
+                      key={product.id}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleProductClick(product)}
+                      className="h-8 gap-1.5"
+                    >
+                      {product.is_weight_product && (
+                        <Scale className="w-3.5 h-3.5 text-primary" />
+                      )}
+                      <span className="max-w-[160px] truncate">{product.name}</span>
+                      {product.category && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {product.category}
+                        </span>
+                      )}
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Lista de productos */}
@@ -594,6 +1484,20 @@ export default function POSPage() {
                     </div>
                   ))}
                 </div>
+              ) : isProductsError ? (
+                <div className="p-6 sm:p-8 text-center">
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+                      <Search className="w-8 h-8 text-destructive" />
+                    </div>
+                    <p className="text-sm sm:text-base font-medium text-foreground mb-1">
+                      Error al buscar productos
+                    </p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      Intenta nuevamente o ajusta el filtro de busqueda
+                    </p>
+                  </div>
+                </div>
               ) : products.length === 0 ? (
                 <div className="p-6 sm:p-8 text-center">
                   <div className="flex flex-col items-center justify-center py-8">
@@ -610,74 +1514,103 @@ export default function POSPage() {
                 </div>
               ) : (
                 <div className="h-[calc(100vh-250px)] sm:h-[calc(100vh-300px)] lg:h-[calc(100vh-350px)]">
-                  <ScrollArea className="h-full">
-                    <div>
-                    {products.map((product, index) => (
-                  <div
-                    key={product.id}
-                    className={cn(
-                      "p-3 sm:p-4 hover:bg-accent/50 active:bg-accent/80 transition-colors cursor-pointer touch-manipulation group relative",
-                      index > 0 && "border-t border-border"
-                    )}
-                    style={{ WebkitTapHighlightColor: 'transparent' }}
-                    onClick={() => handleProductClick(product)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        handleProductClick(product)
-                      }
+                  <ScrollArea
+                    className="h-full"
+                    viewportRef={listViewportRef}
+                    viewportProps={{
+                      onScroll: (event) => setListScrollTop(event.currentTarget.scrollTop),
                     }}
                   >
-                    <div className="absolute left-0 top-0 bottom-0 w-0 bg-primary opacity-0 group-hover:opacity-100 group-hover:w-0.5 transition-all duration-200" />
-                    <div className="flex items-start justify-between gap-3 min-w-0">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-sm sm:text-base text-foreground break-words leading-snug group-hover:text-primary transition-colors flex items-center gap-1.5">
-                          {product.is_weight_product && (
-                            <Scale className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                          )}
-                          {product.name}
-                        </h3>
-                        {product.category && (
-                          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">
-                            {product.category}
-                          </p>
-                        )}
-                        {product.barcode && (
-                          <p className="text-xs text-muted-foreground/70 mt-0.5 truncate font-mono">
-                            {product.barcode}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        {product.is_weight_product && product.price_per_weight_usd ? (
-                          <>
-                            <p className="font-bold text-base sm:text-lg text-foreground">
-                              ${Number(product.price_per_weight_usd).toFixed(
-                                getWeightPriceDecimals(product.weight_unit)
-                              )}/{product.weight_unit}
-                            </p>
-                            <p className="text-xs sm:text-sm text-muted-foreground">
-                              Bs. {Number(product.price_per_weight_bs).toFixed(
-                                getWeightPriceDecimals(product.weight_unit)
-                              )}/{product.weight_unit}
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <p className="font-bold text-base sm:text-lg text-foreground">
-                              ${Number(product.price_usd).toFixed(2)}
-                            </p>
-                            <p className="text-xs sm:text-sm text-muted-foreground">
-                              Bs. {Number(product.price_bs).toFixed(2)}
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    <div style={{ height: listTotalHeight, position: 'relative' }}>
+                      {visibleProducts.map((product, visibleIndex) => {
+                        const absoluteIndex = startIndex + visibleIndex
+                        const isLowStock = lowStockIds.has(product.id)
+
+                        const CategoryIcon = getCategoryIcon(product.category)
+
+                        return (
+                          <div
+                            key={product.id}
+                            className={cn(
+                              "p-3 sm:p-4 hover:bg-accent/50 active:bg-accent/80 transition-colors cursor-pointer touch-manipulation group absolute left-0 right-0",
+                              absoluteIndex > 0 && "border-t border-border",
+                              isLowStock && "border-l-2 border-warning/60 bg-warning/5"
+                            )}
+                            style={{
+                              WebkitTapHighlightColor: 'transparent',
+                              top: absoluteIndex * PRODUCT_ROW_HEIGHT,
+                              height: PRODUCT_ROW_HEIGHT,
+                            }}
+                            onClick={() => handleProductClick(product)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                handleProductClick(product)
+                              }
+                            }}
+                          >
+                            <div className="absolute left-0 top-0 bottom-0 w-0 bg-primary opacity-0 group-hover:opacity-100 group-hover:w-0.5 transition-all duration-200" />
+                            <div className="flex items-start justify-between gap-3 min-w-0">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-sm sm:text-base text-foreground break-words leading-snug group-hover:text-primary transition-colors flex items-center gap-1.5">
+                                  {product.is_weight_product && (
+                                    <Scale className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                                  )}
+                                  {product.category && (
+                                    <CategoryIcon className="w-3.5 h-3.5 text-muted-foreground/70 flex-shrink-0" />
+                                  )}
+                                  {product.name}
+                                  {isLowStock && (
+                                    <Badge className="ml-2 bg-warning/15 text-warning border border-warning/30">
+                                      Stock bajo
+                                    </Badge>
+                                  )}
+                                </h3>
+                                {product.category && (
+                                  <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">
+                                    {product.category}
+                                  </p>
+                                )}
+                                {product.barcode && (
+                                  <p className="text-xs text-muted-foreground/70 mt-0.5 truncate font-mono">
+                                    {product.barcode}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                {product.is_weight_product && product.price_per_weight_usd ? (
+                                  <>
+                                    <Badge variant="secondary" className="mb-1 text-[10px] sm:text-xs">
+                                      Precio por {product.weight_unit || 'kg'}
+                                    </Badge>
+                                    <p className="font-bold text-base sm:text-lg text-foreground">
+                                      ${Number(product.price_per_weight_usd).toFixed(
+                                        getWeightPriceDecimals(product.weight_unit)
+                                      )}/{product.weight_unit}
+                                    </p>
+                                    <p className="text-xs sm:text-sm text-muted-foreground">
+                                      Bs. {Number(product.price_per_weight_bs).toFixed(
+                                        getWeightPriceDecimals(product.weight_unit)
+                                      )}/{product.weight_unit}
+                                    </p>
+                                  </>
+                                ) : (
+                                  <>
+                                    <p className="font-bold text-base sm:text-lg text-foreground">
+                                      ${Number(product.price_usd).toFixed(2)}
+                                    </p>
+                                    <p className="text-xs sm:text-sm text-muted-foreground">
+                                      Bs. {Number(product.price_bs).toFixed(2)}
+                                    </p>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </ScrollArea>
                 </div>
@@ -691,11 +1624,19 @@ export default function POSPage() {
           <Card className="lg:sticky lg:top-20 border border-border flex flex-col h-[calc(100vh-140px)] lg:h-[calc(100vh-12rem)] overflow-hidden min-h-0">
             <div className="p-3 sm:p-4 border-b border-border flex items-center justify-between flex-shrink-0">
               <h2 className="text-base sm:text-lg font-semibold text-foreground flex items-center gap-2">
-                <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
+                <ShoppingCart
+                  className={cn(
+                    'w-4 h-4 sm:w-5 sm:h-5 transition-transform',
+                    cartPulse && 'animate-scale-in text-primary'
+                  )}
+                />
                 Carrito
-                {items.length > 0 && (
-                  <Badge variant="secondary" className="ml-1">
-                    {items.length}
+                {totalQty > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className={cn('ml-1 transition-transform', cartPulse && 'animate-scale-in')}
+                  >
+                    {totalQty}
                   </Badge>
                 )}
               </h2>
@@ -703,13 +1644,29 @@ export default function POSPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={clear}
+                  onClick={() => setIsClearDialogOpen(true)}
                   className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8"
                 >
                   Limpiar
                 </Button>
               )}
             </div>
+            <AlertDialog open={isClearDialogOpen} onOpenChange={setIsClearDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Limpiar carrito</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta accion eliminara todos los productos del carrito. Esta seguro?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearCart}>
+                    Si, limpiar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             {items.length === 0 ? (
               <div className="flex-1 p-6 sm:p-8 text-center">
@@ -730,8 +1687,42 @@ export default function POSPage() {
                 <div className="flex-1 min-h-0">
                   <ScrollArea className="h-full">
                     <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
-                  {items.map((item) => (
-                    <div key={item.id} className="bg-muted/50 rounded-lg p-2.5 sm:p-3 border border-border hover:border-primary/50 transition-all shadow-sm">
+                      {!allowDiscounts && (
+                        <div className="rounded-md border border-amber-500/70 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                          Descuentos deshabilitados en modo caja rápida.
+                          {hasDiscounts && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="ml-2 h-7 px-2 text-xs"
+                              onClick={handleClearDiscounts}
+                            >
+                              Eliminar descuentos
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                  {items.map((item) => {
+                    const lineSubtotalUsd = item.qty * Number(item.unit_price_usd || 0)
+                    const lineSubtotalBs = item.qty * Number(item.unit_price_bs || 0)
+                    const lineDiscountUsd = Number(item.discount_usd || 0)
+                    const lineDiscountBs = Number(item.discount_bs || 0)
+                    const lineTotalUsd = lineSubtotalUsd - lineDiscountUsd
+                    const lineTotalBs = lineSubtotalBs - lineDiscountBs
+                    const discountInputValue =
+                      discountInputs[item.id] ??
+                      (lineDiscountUsd > 0 ? lineDiscountUsd.toFixed(2) : '')
+                    const isInvalid = invalidCartProductIds.includes(item.product_id)
+
+                    return (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "bg-muted/50 rounded-lg p-2.5 sm:p-3 border hover:border-primary/50 transition-all shadow-sm",
+                        isInvalid ? "border-destructive/60 bg-destructive/5" : "border-border"
+                      )}
+                    >
                       <div className="flex items-start justify-between mb-2 gap-2 min-w-0">
                         <div className="flex-1 min-w-0">
                           <p
@@ -742,6 +1733,11 @@ export default function POSPage() {
                               <Scale className="w-3 h-3 text-primary flex-shrink-0" />
                             )}
                             {item.product_name}
+                            {isInvalid && (
+                              <Badge className="ml-1 bg-destructive/10 text-destructive border border-destructive/30">
+                                Inactivo
+                              </Badge>
+                            )}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {item.is_weight_product ? (
@@ -773,9 +1769,9 @@ export default function POSPage() {
                       <div className="flex items-center justify-between gap-2">
                         {/* Solo mostrar controles de cantidad para productos normales */}
                         {item.is_weight_product ? (
-                          <div className="text-xs text-muted-foreground">
-                            Producto por peso
-                          </div>
+                          <Badge variant="outline" className="text-[10px] sm:text-xs">
+                            Por {item.weight_unit || 'kg'}
+                          </Badge>
                         ) : (
                           <div className="flex items-center gap-2">
                             <Button
@@ -809,15 +1805,43 @@ export default function POSPage() {
                         )}
                         <div className="text-right tabular-nums">
                           <p className="font-semibold text-sm sm:text-base text-foreground">
-                            ${(item.qty * Number(item.unit_price_usd || 0)).toFixed(2)}
+                            ${lineTotalUsd.toFixed(2)}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Bs. {(item.qty * Number(item.unit_price_bs || 0)).toFixed(2)}
+                            Bs. {lineTotalBs.toFixed(2)}
                           </p>
+                          {lineDiscountUsd > 0 && (
+                            <p className="text-[11px] text-muted-foreground line-through">
+                              ${lineSubtotalUsd.toFixed(2)} / Bs. {lineSubtotalBs.toFixed(2)}
+                            </p>
+                          )}
                         </div>
                       </div>
+                      {allowDiscounts && (
+                        <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                          <span className="text-muted-foreground">Descuento</span>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              inputMode="decimal"
+                              step="0.01"
+                              min={0}
+                              value={discountInputValue}
+                              onChange={(event) => handleDiscountChange(item, event.target.value)}
+                              onBlur={() => handleDiscountBlur(item)}
+                              placeholder="0.00"
+                              className="h-7 w-20 text-xs text-right"
+                            />
+                            <span className="text-muted-foreground">USD</span>
+                            <span className="text-muted-foreground">
+                              Bs. {lineDiscountBs.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  )
+                  })}
                     </div>
                   </ScrollArea>
                 </div>
@@ -826,6 +1850,11 @@ export default function POSPage() {
                   {!hasOpenCash && (
                     <div className="rounded-md border border-amber-500/70 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                       Debes abrir caja para procesar ventas.
+                    </div>
+                  )}
+                  {invalidCartProductIds.length > 0 && (
+                    <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                      El carrito tiene productos inactivos o eliminados.
                     </div>
                   )}
                   <div className="space-y-3">
@@ -844,6 +1873,14 @@ export default function POSPage() {
                         ${total.usd.toFixed(2)}
                       </span>
                     </div>
+                    {totalDiscountUsd > 0 && (
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-xs text-muted-foreground">Descuento:</span>
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          -${totalDiscountUsd.toFixed(2)} / Bs. {totalDiscountBs.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-baseline">
                       <span className="text-xs text-muted-foreground">Total Bs:</span>
                       <span className="text-sm text-muted-foreground tabular-nums">
@@ -853,7 +1890,7 @@ export default function POSPage() {
                   </div>
                   <Button
                     onClick={() => setShowCheckout(true)}
-                    disabled={items.length === 0 || !hasOpenCash}
+                    disabled={items.length === 0 || !hasOpenCash || invalidCartProductIds.length > 0}
                     className="w-full h-11 sm:h-12 text-sm sm:text-base font-semibold shadow-sm"
                     size="lg"
                   >
