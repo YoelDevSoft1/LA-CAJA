@@ -6,8 +6,9 @@ import toast from 'react-hot-toast'
 import ProductFormModal from '@/components/products/ProductFormModal'
 import ChangePriceModal from '@/components/products/ChangePriceModal'
 import BulkPriceChangeModal from '@/components/products/BulkPriceChangeModal'
-import ImportCSVModal from '@/components/products/ImportCSVModal'
-import CleanDuplicatesModal from '@/components/products/CleanDuplicatesModal'
+// TODO: Implementar estos componentes para desktop
+// import ImportCSVModal from '@/components/products/ImportCSVModal'
+// import CleanDuplicatesModal from '@/components/products/CleanDuplicatesModal'
 
 export default function ProductsPage() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -390,7 +391,8 @@ export default function ProductsPage() {
       />
 
       {/* Modal de importar CSV */}
-      <ImportCSVModal
+      {/* TODO: Implementar ImportCSVModal para desktop */}
+      {/* <ImportCSVModal
         isOpen={isImportCSVOpen}
         onClose={() => setIsImportCSVOpen(false)}
         onSuccess={() => {
@@ -399,13 +401,14 @@ export default function ProductsPage() {
       />
 
       {/* Modal de limpiar duplicados */}
-      <CleanDuplicatesModal
+      {/* TODO: Implementar CleanDuplicatesModal para desktop */}
+      {/* <CleanDuplicatesModal
         isOpen={isCleanDuplicatesOpen}
         onClose={() => setIsCleanDuplicatesOpen(false)}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['products'] })
         }}
-      />
+      /> */}
     </div>
   )
 }
