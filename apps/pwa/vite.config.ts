@@ -3,8 +3,21 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
+const buildId = process.env.PWA_BUILD_ID || new Date().toISOString();
+
 export default defineConfig(({ mode }) => ({
   plugins: [
+    {
+      name: 'emit-version',
+      apply: 'build',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'version.json',
+          source: JSON.stringify({ buildId }),
+        });
+      },
+    },
     react(),
     // Habilitar PWA también en desarrollo para soporte offline
     VitePWA({
@@ -96,14 +109,25 @@ export default defineConfig(({ mode }) => ({
             },
           },
           {
-            urlPattern: /\.(?:js|css|woff2?|png|jpg|jpeg|svg|gif|ico)$/i,
-            handler: 'CacheFirst',
+            // CRÍTICO: Assets estáticos (JS, CSS, imágenes) que NO están en /assets/
+            // Los archivos en /assets/ están en el precache de Workbox y se manejan automáticamente
+            // Solo cachear archivos fuera de /assets/ (como favicon, etc.)
+            urlPattern: ({ url }) => {
+              // Excluir /assets/ porque están en el precache de Workbox
+              return /\.(?:js|css|woff2?|png|jpg|jpeg|svg|gif|ico)$/i.test(url.pathname) &&
+                     !url.pathname.startsWith('/assets/');
+            },
+            handler: 'NetworkFirst',
             options: {
               cacheName: 'static-resources',
               expiration: {
-                maxEntries: 200,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 año
+                maxEntries: 50, // Menos entradas porque excluimos /assets/
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 días
               },
+              cacheableResponse: {
+                statuses: [200],
+              },
+              networkTimeoutSeconds: 3,
             },
           },
           {
@@ -200,6 +224,9 @@ export default defineConfig(({ mode }) => ({
       '@la-caja/domain': path.resolve(__dirname, '../../packages/domain/src/index.ts'),
       '@la-caja/sync': path.resolve(__dirname, '../../packages/sync/src/index.ts'),
     },
+  },
+  define: {
+    __PWA_BUILD_ID__: JSON.stringify(buildId),
   },
   server: {
     port: 5173,

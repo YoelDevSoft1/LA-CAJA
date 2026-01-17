@@ -6,9 +6,85 @@ import './styles/mobile-optimizations.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import ErrorBoundary from './components/errors/ErrorBoundary'
+import { registerSW } from 'virtual:pwa-register'
 
-// VitePWA registra automáticamente el Service Worker
-// No registrar manualmente para evitar conflictos y loops infinitos
+const BUILD_ID = __PWA_BUILD_ID__
+let buildCheckInFlight = false
+
+const clearServiceWorkerCaches = async () => {
+  if ('serviceWorker' in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations()
+    await Promise.all(registrations.map((registration) => registration.unregister()))
+  }
+
+  if ('caches' in window) {
+    const keys = await caches.keys()
+    await Promise.all(keys.map((key) => caches.delete(key)))
+  }
+}
+
+const fetchServerBuildId = async (): Promise<string | null> => {
+  try {
+    const response = await fetch('/version.json', { cache: 'no-store' })
+    if (!response.ok) return null
+    const data = await response.json().catch(() => null)
+    return typeof data?.buildId === 'string' ? data.buildId : null
+  } catch {
+    return null
+  }
+}
+
+const hardRefreshIfBuildMismatch = async () => {
+  if (!navigator.onLine || buildCheckInFlight) return
+  buildCheckInFlight = true
+
+  try {
+    const serverBuildId = await fetchServerBuildId()
+    if (!serverBuildId || serverBuildId === BUILD_ID) return
+
+    console.warn('[PWA] Build mismatch detected. Purging caches and reloading.', {
+      localBuildId: BUILD_ID,
+      serverBuildId,
+    })
+    await clearServiceWorkerCaches()
+    window.location.reload()
+  } finally {
+    buildCheckInFlight = false
+  }
+}
+
+const setupPwaUpdates = () => {
+  if (!('serviceWorker' in navigator)) return
+
+  let updateSW: (reloadPage?: boolean) => void = () => undefined
+
+  updateSW = registerSW({
+    immediate: true,
+    onNeedRefresh() {
+      console.warn('[PWA] Service Worker update detected. Reloading...')
+      updateSW(true)
+    },
+    onOfflineReady() {
+      console.log('[PWA] App lista para usar offline')
+    },
+    onRegisteredSW() {
+      void hardRefreshIfBuildMismatch()
+    },
+    onRegisterError(error) {
+      console.warn('[PWA] Error registrando Service Worker:', error)
+    },
+  })
+
+  void hardRefreshIfBuildMismatch()
+  window.addEventListener('online', () => void hardRefreshIfBuildMismatch())
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      void hardRefreshIfBuildMismatch()
+    }
+  })
+}
+
+setupPwaUpdates()
 
 const queryClient = new QueryClient({
   defaultOptions: {
