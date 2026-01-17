@@ -246,7 +246,11 @@ export default defineConfig(({ mode }) => ({
           // para evitar "Cannot read properties of undefined (reading 'forwardRef')"
           
           // Primero verificar React core (debe ir primero para estar disponible)
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+          if (
+            id.includes('node_modules/react') ||
+            id.includes('node_modules/react-dom') ||
+            id.includes('node_modules/scheduler')
+          ) {
             return 'react-vendor';
           }
           
