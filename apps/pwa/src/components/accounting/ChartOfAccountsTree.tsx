@@ -85,60 +85,66 @@ export default function ChartOfAccountsTree({ onSelectAccount }: ChartOfAccounts
       <div key={account.id} className="w-full">
         <div
           className={cn(
-            'flex items-center gap-2 p-2 rounded-md hover:bg-accent cursor-pointer transition-colors',
+            'flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2 p-2 sm:p-2 rounded-md hover:bg-accent cursor-pointer transition-colors',
             isSelected && 'bg-accent'
           )}
           style={{ paddingLeft: `${level * 1.5 + 0.5}rem` }}
           onClick={() => handleAccountClick(account)}
         >
-          {hasChildren ? (
-            <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-          ) : (
-            <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 opacity-0" />
-          )}
-
-          <div className="flex-1 min-w-0 flex items-center gap-2">
-            <span className="font-mono text-sm font-semibold">{account.account_code}</span>
-            <span className="flex-1 truncate">{account.account_name}</span>
-            <Badge className={cn('text-xs', accountTypeColors[account.account_type])}>
-              {accountTypeLabels[account.account_type]}
-            </Badge>
-            {!account.is_active && (
-              <Badge variant="secondary" className="text-xs">
-                Inactiva
-              </Badge>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {hasChildren ? (
+              <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 opacity-0" />
             )}
+
+            <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+                <span className="font-mono text-xs sm:text-sm font-semibold flex-shrink-0">{account.account_code}</span>
+                <span className="flex-1 truncate text-sm sm:text-base">{account.account_name}</span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+                <Badge className={cn('text-[10px] sm:text-xs whitespace-nowrap', accountTypeColors[account.account_type])}>
+                  {accountTypeLabels[account.account_type]}
+                </Badge>
+                {!account.is_active && (
+                  <Badge variant="secondary" className="text-[10px] sm:text-xs whitespace-nowrap">
+                    Inactiva
+                  </Badge>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1 flex-shrink-0 sm:ml-auto" onClick={(e) => e.stopPropagation()}>
             {account.level < 4 && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="h-7 w-7 sm:h-7 sm:w-7"
                 onClick={(e) => handleAddChild(account, e)}
                 title="Agregar cuenta hija"
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </Button>
             )}
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-7 w-7 sm:h-7 sm:w-7"
               onClick={(e) => handleEdit(account, e)}
               title="Editar cuenta"
             >
-              <Edit className="h-4 w-4" />
+              <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-destructive hover:text-destructive"
+              className="h-7 w-7 sm:h-7 sm:w-7 text-destructive hover:text-destructive"
               onClick={(e) => handleDelete(account, e)}
               title="Eliminar cuenta"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </Button>
           </div>
         </div>
@@ -192,16 +198,16 @@ export default function ChartOfAccountsTree({ onSelectAccount }: ChartOfAccounts
     <>
       <div className="space-y-4">
         {Object.entries(groupedByType).map(([type, accounts]) => (
-          <div key={type} className="border rounded-lg p-4">
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <Badge className={accountTypeColors[type as AccountType]}>
+          <div key={type} className="border rounded-lg p-3 sm:p-4">
+            <h3 className="font-semibold mb-3 flex flex-col sm:flex-row sm:items-center gap-2">
+              <Badge className={cn(accountTypeColors[type as AccountType], "text-xs sm:text-sm")}>
                 {accountTypeLabels[type as AccountType]}
               </Badge>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-xs sm:text-sm text-muted-foreground">
                 {accounts.length} cuenta{accounts.length !== 1 ? 's' : ''}
               </span>
             </h3>
-            <div className="space-y-1">
+            <div className="space-y-1 overflow-x-hidden">
               {accounts.map((account) => renderAccount(account))}
             </div>
           </div>

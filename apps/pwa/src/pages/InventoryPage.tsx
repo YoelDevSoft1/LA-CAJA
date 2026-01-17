@@ -374,20 +374,21 @@ export default function InventoryPage() {
         )}
 
         {/* Filtro de stock bajo */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center space-x-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
               <Switch
                 id="low-stock-filter"
                 checked={showLowStockOnly}
-              onCheckedChange={setShowLowStockOnly}
-            />
-            <Label
-              htmlFor="low-stock-filter"
-              className="text-sm sm:text-base cursor-pointer flex items-center"
-            >
-              <AlertTriangle className="w-4 h-4 mr-1 text-orange-500" />
-              Solo mostrar productos con stock bajo
-            </Label>
+                onCheckedChange={setShowLowStockOnly}
+                className="flex-shrink-0"
+              />
+              <Label
+                htmlFor="low-stock-filter"
+                className="text-xs sm:text-sm cursor-pointer flex items-center gap-1.5 min-w-0"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500 flex-shrink-0" />
+                <span className="truncate">Solo mostrar productos con stock bajo</span>
+              </Label>
             </div>
             {/* Botón para crear orden desde productos con stock bajo */}
             {lowStockCount > 0 && (
@@ -407,7 +408,7 @@ export default function InventoryPage() {
 
                   setIsPurchaseOrderModalOpen(true)
                 }}
-                className="border-primary text-primary hover:bg-primary/10 min-h-[44px]"
+                className="border-primary text-primary hover:bg-primary/10 min-h-[44px] w-full sm:w-auto flex-shrink-0"
               >
                 <ShoppingCart className="w-4 h-4 mr-2" />
                 Crear Orden ({lowStockCount})
@@ -464,7 +465,7 @@ export default function InventoryPage() {
           </div>
         ) : (
             <div className="overflow-x-auto">
-              <Table className="table-fixed">
+              <Table className="w-full sm:table-fixed">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[50%] sm:w-[45%]">Producto</TableHead>

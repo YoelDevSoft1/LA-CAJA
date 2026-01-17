@@ -361,33 +361,33 @@ export default function ReportsPage() {
       <Card className="mb-4 sm:mb-6 border border-border">
         <CardContent className="p-3 sm:p-4 space-y-4">
           <div>
-            <Label className="text-sm font-semibold mb-3 block">Rango de Fechas</Label>
+            <Label className="text-sm font-semibold mb-2 sm:mb-3 block">Rango de Fechas</Label>
             <RadioGroup
               value={dateRange}
               onValueChange={(value) => setDateRange(value as DateRange)}
-              className="flex flex-wrap gap-2"
+              className="flex flex-wrap gap-1.5 sm:gap-2"
             >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="today" id="today" />
-                <Label htmlFor="today" className="cursor-pointer font-normal">
+              <div className="flex items-center space-x-1.5 sm:space-x-2">
+                <RadioGroupItem value="today" id="today" className="h-4 w-4 sm:h-5 sm:w-5" />
+                <Label htmlFor="today" className="cursor-pointer font-normal text-xs sm:text-sm">
             Hoy
                 </Label>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="week" id="week" />
-                <Label htmlFor="week" className="cursor-pointer font-normal">
+              <div className="flex items-center space-x-1.5 sm:space-x-2">
+                <RadioGroupItem value="week" id="week" className="h-4 w-4 sm:h-5 sm:w-5" />
+                <Label htmlFor="week" className="cursor-pointer font-normal text-xs sm:text-sm">
             Esta Semana
                 </Label>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="month" id="month" />
-                <Label htmlFor="month" className="cursor-pointer font-normal">
+              <div className="flex items-center space-x-1.5 sm:space-x-2">
+                <RadioGroupItem value="month" id="month" className="h-4 w-4 sm:h-5 sm:w-5" />
+                <Label htmlFor="month" className="cursor-pointer font-normal text-xs sm:text-sm">
             Este Mes
                 </Label>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="custom" id="custom" />
-                <Label htmlFor="custom" className="cursor-pointer font-normal">
+              <div className="flex items-center space-x-1.5 sm:space-x-2">
+                <RadioGroupItem value="custom" id="custom" className="h-4 w-4 sm:h-5 sm:w-5" />
+                <Label htmlFor="custom" className="cursor-pointer font-normal text-xs sm:text-sm">
             Personalizado
                 </Label>
               </div>

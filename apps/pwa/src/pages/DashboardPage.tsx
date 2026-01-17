@@ -307,74 +307,77 @@ export default function DashboardPage() {
     <>
     <div className="container mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-6 print:hidden">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
-                <BarChart3 className="w-7 h-7 sm:w-8 sm:h-8 text-primary" />
-                Dashboard Ejecutivo
-              </h1>
-              <p className="text-sm sm:text-base text-muted-foreground mt-1">
-                Resumen de KPIs y métricas del negocio
-              </p>
-            </div>
-            {isFetching && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="space-y-4">
+        {/* Título y descripción */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground flex items-center gap-2">
+              <BarChart3 className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 text-primary flex-shrink-0" />
+              <span className="truncate">Dashboard Ejecutivo</span>
+            </h1>
+            <p className="text-xs sm:text-sm lg:text-base text-muted-foreground mt-1">
+              Resumen de KPIs y métricas del negocio
+            </p>
+          </div>
+          {/* Estado de actualización */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-shrink-0">
+            {isFetching ? (
+              <>
                 <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                Actualizando datos...
-              </div>
-            )}
-            {!isFetching && kpisUpdatedAt && (
-              <div className="text-xs text-muted-foreground">
-                Actualizado: {new Date(kpisUpdatedAt).toLocaleTimeString()}
-              </div>
-            )}
+                <span>Actualizando datos...</span>
+              </>
+            ) : kpisUpdatedAt ? (
+              <span>Actualizado: {new Date(kpisUpdatedAt).toLocaleTimeString()}</span>
+            ) : null}
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 items-end">
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="startDate" className="text-xs">
-              Fecha Inicio
-            </Label>
-            <Input
-              id="startDate"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full sm:w-[150px]"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="endDate" className="text-xs">
-              Fecha Fin
-            </Label>
-            <Input
-              id="endDate"
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full sm:w-[150px]"
-            />
+
+        {/* Filtros de fecha y botones */}
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+          <div className="grid grid-cols-2 gap-2 flex-1 sm:flex-initial">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="startDate" className="text-xs">
+                Fecha Inicio
+              </Label>
+              <Input
+                id="startDate"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full text-xs sm:text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="endDate" className="text-xs">
+                Fecha Fin
+              </Label>
+              <Input
+                id="endDate"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full text-xs sm:text-sm"
+              />
+            </div>
           </div>
           {/* Botones de exportar */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-shrink-0">
             <Button
               variant="outline"
-              size="default"
+              size="sm"
               onClick={handleExportExcel}
               disabled={isLoading || !kpis || !trends}
-              className="gap-2 print:hidden"
+              className="gap-1.5 print:hidden"
             >
               <FileSpreadsheet className="w-4 h-4" />
               <span className="hidden sm:inline">Excel</span>
             </Button>
             <Button
               variant="outline"
-              size="default"
+              size="sm"
               onClick={handlePrint}
               disabled={isLoading || !kpis || !trends}
-              className="gap-2 print:hidden"
+              className="gap-1.5 print:hidden"
             >
               <Printer className="w-4 h-4" />
               <span className="hidden sm:inline">PDF</span>

@@ -411,109 +411,114 @@ export default function CustomersPage() {
             <div className="md:hidden divide-y divide-border">
               {customers.map((customer) => (
                 <div key={customer.id} className="p-4 hover:bg-accent/50 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center">
-                      <Avatar className="w-12 h-12 mr-3">
-                        <AvatarFallback className="bg-primary/10 text-primary text-lg font-bold">
-                          {customer.name.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-semibold text-foreground text-lg">{customer.name}</p>
-                        <div className="mt-1 space-y-0.5">
-                          {customer.document_id && (
-                            <p className="text-sm text-muted-foreground flex items-center">
-                              <CreditCard className="w-3.5 h-3.5 mr-1.5 text-muted-foreground/70" />
-                              {customer.document_id}
-                            </p>
-                          )}
-                          {customer.phone && (
-                            <p className="text-sm text-muted-foreground flex items-center">
-                              <Phone className="w-3.5 h-3.5 mr-1.5 text-muted-foreground/70" />
-                              {customer.phone}
-                            </p>
-                          )}
-                          {customer.email && (
-                            <p className="text-sm text-muted-foreground flex items-center">
-                              <Mail className="w-3.5 h-3.5 mr-1.5 text-muted-foreground/70" />
-                              <span className="truncate max-w-[180px]">{customer.email}</span>
-                            </p>
-                          )}
-                          {customer.credit_limit !== null && customer.credit_limit > 0 && (
-                            <p className="text-sm text-green-600 flex items-center font-medium">
-                              <DollarSign className="w-3.5 h-3.5 mr-1" />
-                              Crédito: ${Number(customer.credit_limit).toFixed(2)}
-                            </p>
-                          )}
-                          {customer.note && (
-                            <p className="text-sm text-muted-foreground flex items-center">
-                              <FileText className="w-3.5 h-3.5 mr-1.5 text-muted-foreground/70" />
-                              <span className="truncate max-w-[200px]">{customer.note}</span>
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      {customer.phone && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleCall(customer.phone!)}
-                            className="h-11 w-11 min-h-[44px] min-w-[44px] text-green-600 hover:text-green-700 hover:bg-green-50"
-                            title="Llamar"
-                            aria-label="Llamar"
-                          >
-                            <Phone className="w-5 h-5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleWhatsApp(customer.phone!, customer.name)}
-                            className="h-11 w-11 min-h-[44px] min-w-[44px] text-green-600 hover:text-green-700 hover:bg-green-50"
-                            title="WhatsApp"
-                            aria-label="WhatsApp"
-                          >
-                            <MessageCircle className="w-5 h-5" />
-                          </Button>
-                        </>
+                  {/* Header: Avatar + Name + Credit Limit */}
+                  <div className="flex items-start gap-3 mb-3">
+                    <Avatar className="w-14 h-14 flex-shrink-0">
+                      <AvatarFallback className="bg-primary/10 text-primary text-base font-bold">
+                        {customer.name.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-foreground text-base mb-1 truncate">{customer.name}</p>
+                      {customer.credit_limit !== null && customer.credit_limit > 0 && (
+                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                          <DollarSign className="w-3 h-3 mr-1" />
+                          Crédito: ${Number(customer.credit_limit).toFixed(2)}
+                        </Badge>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Contact Info Grid */}
+                  <div className="grid grid-cols-1 gap-2 mb-3">
+                    {customer.document_id && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <CreditCard className="w-4 h-4 flex-shrink-0 text-muted-foreground/70" />
+                        <span className="truncate">{customer.document_id}</span>
+                      </div>
+                    )}
+                    {customer.phone && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Phone className="w-4 h-4 flex-shrink-0 text-muted-foreground/70" />
+                        <span className="truncate">{customer.phone}</span>
+                      </div>
+                    )}
+                    {customer.email && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Mail className="w-4 h-4 flex-shrink-0 text-muted-foreground/70" />
+                        <span className="truncate">{customer.email}</span>
+                      </div>
+                    )}
+                    {customer.note && (
+                      <div className="flex items-start gap-2 text-sm text-muted-foreground pt-1">
+                        <FileText className="w-4 h-4 flex-shrink-0 text-muted-foreground/70 mt-0.5" />
+                        <span className="line-clamp-2">{customer.note}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="pt-3 border-t border-border/50 space-y-2">
+                    {customer.phone && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleCall(customer.phone!)}
+                          className="h-10 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                        >
+                          <Phone className="w-4 h-4 mr-2" />
+                          Llamar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleWhatsApp(customer.phone!, customer.name)}
+                          className="h-10 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                        >
+                          <MessageCircle className="w-4 h-4 mr-2" />
+                          WhatsApp
+                        </Button>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-2">
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleViewHistory(customer)}
-                        className="h-11 w-11 min-h-[44px] min-w-[44px]"
-                        title="Historial"
+                        className="h-10"
                       >
-                        <History className="w-5 h-5" />
+                        <History className="w-4 h-4 mr-2" />
+                        Historial
                       </Button>
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleViewStatement(customer)}
-                        className="h-11 w-11 min-h-[44px] min-w-[44px]"
-                        title="Estado de cuenta"
+                        className="h-10"
                       >
-                        <Printer className="w-5 h-5" />
+                        <Printer className="w-4 h-4 mr-2" />
+                        Estado
                       </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleEdit(customer)}
-                        className="h-11 w-11 min-h-[44px] min-w-[44px]"
-                        title="Editar"
+                        className="h-10 flex-1"
                       >
-                        <Edit className="w-5 h-5" />
+                        <Edit className="w-4 h-4 mr-2" />
+                        Editar
                       </Button>
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleDeleteRequest(customer)}
-                        className="h-11 w-11 min-h-[44px] min-w-[44px] text-destructive hover:text-destructive hover:bg-destructive/10"
-                        title="Eliminar"
+                        className="h-10 flex-1 text-destructive border-destructive/20 hover:bg-destructive/10"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Eliminar
                       </Button>
                     </div>
                   </div>

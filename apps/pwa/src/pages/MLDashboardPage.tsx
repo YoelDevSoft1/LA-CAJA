@@ -70,7 +70,7 @@ export default function MLDashboardPage() {
               </div>
               <Package className="w-8 h-8 text-blue-600" />
             </div>
-            <Link to="/ml/recommendations">
+            <Link to="/app/ml">
               <Button variant="ghost" size="sm" className="mt-2 w-full">
                 Ver todas <ArrowRight className="w-4 h-4 ml-2" />
               </Button>

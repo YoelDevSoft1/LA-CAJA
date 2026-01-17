@@ -93,38 +93,42 @@ export default function AccountingPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="h-full max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Contabilidad</h1>
-          <p className="text-muted-foreground">Gestiona el plan de cuentas, asientos contables y exportaciones</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Contabilidad</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">Gestiona el plan de cuentas, asientos contables y exportaciones</p>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="accounts">
-            <BookOpen className="w-4 h-4 mr-2" />
-            Plan de Cuentas
+        <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="accounts" className="text-xs sm:text-sm gap-1.5 sm:gap-2">
+            <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+            <span className="hidden sm:inline">Plan de Cuentas</span>
+            <span className="sm:hidden">Cuentas</span>
           </TabsTrigger>
-          <TabsTrigger value="entries">
-            <FileText className="w-4 h-4 mr-2" />
-            Asientos Contables
+          <TabsTrigger value="entries" className="text-xs sm:text-sm gap-1.5 sm:gap-2">
+            <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+            <span className="hidden sm:inline">Asientos Contables</span>
+            <span className="sm:hidden">Asientos</span>
           </TabsTrigger>
-          <TabsTrigger value="mappings">
-            <Settings className="w-4 h-4 mr-2" />
-            Mapeo de Cuentas
+          <TabsTrigger value="mappings" className="text-xs sm:text-sm gap-1.5 sm:gap-2">
+            <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+            <span className="hidden sm:inline">Mapeo de Cuentas</span>
+            <span className="sm:hidden">Mapeo</span>
           </TabsTrigger>
-          <TabsTrigger value="exports">
-            <Download className="w-4 h-4 mr-2" />
-            Exportaciones
+          <TabsTrigger value="exports" className="text-xs sm:text-sm gap-1.5 sm:gap-2">
+            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+            <span className="hidden sm:inline">Exportaciones</span>
+            <span className="sm:hidden">Exportar</span>
           </TabsTrigger>
-          <TabsTrigger value="balance">
-            <TrendingUp className="w-4 h-4 mr-2" />
+          <TabsTrigger value="balance" className="text-xs sm:text-sm gap-1.5 sm:gap-2">
+            <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
             Balance
           </TabsTrigger>
-          <TabsTrigger value="reports">
-            <BarChart3 className="w-4 h-4 mr-2" />
+          <TabsTrigger value="reports" className="text-xs sm:text-sm gap-1.5 sm:gap-2">
+            <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
             Reportes
           </TabsTrigger>
         </TabsList>
@@ -132,17 +136,19 @@ export default function AccountingPage() {
         <TabsContent value="accounts" className="space-y-4">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Plan de Cuentas</CardTitle>
-                <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <CardTitle className="text-lg sm:text-xl">Plan de Cuentas</CardTitle>
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                   <Button
                     variant="outline"
                     onClick={handleInitialize}
                     disabled={initializeMutation.isPending}
+                    className="w-full sm:w-auto text-xs sm:text-sm"
                   >
-                    Inicializar Plan Básico
+                    <span className="hidden sm:inline">Inicializar Plan Básico</span>
+                    <span className="sm:hidden">Inicializar</span>
                   </Button>
-                  <Button onClick={() => setIsAccountFormOpen(true)}>
+                  <Button onClick={() => setIsAccountFormOpen(true)} className="w-full sm:w-auto">
                     Nueva Cuenta
                   </Button>
                 </div>
@@ -157,11 +163,12 @@ export default function AccountingPage() {
         <TabsContent value="entries" className="space-y-4">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Asientos Contables</CardTitle>
-                <Button onClick={() => setIsEntryFormOpen(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nuevo Asiento
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <CardTitle className="text-lg sm:text-xl">Asientos Contables</CardTitle>
+                <Button onClick={() => setIsEntryFormOpen(true)} className="w-full sm:w-auto">
+                  <Plus className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Nuevo Asiento</span>
+                  <span className="sm:hidden">Nuevo</span>
                 </Button>
               </div>
             </CardHeader>
@@ -189,11 +196,12 @@ export default function AccountingPage() {
         <TabsContent value="exports" className="space-y-4">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Exportaciones</CardTitle>
-                <Button onClick={() => setIsExportFormOpen(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nueva Exportación
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <CardTitle className="text-lg sm:text-xl">Exportaciones</CardTitle>
+                <Button onClick={() => setIsExportFormOpen(true)} className="w-full sm:w-auto">
+                  <Plus className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Nueva Exportación</span>
+                  <span className="sm:hidden">Nueva</span>
                 </Button>
               </div>
             </CardHeader>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useRecommendations } from '@/hooks/useRecommendations'
 import { ProductRecommendation } from '@/types/ml.types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ShoppingCart, Package } from 'lucide-react'
+import { ShoppingCart, Package, ArrowRight } from 'lucide-react'
 import { getRecommendationScoreColor } from '@/utils/ml-formatters'
 
 interface ProductRecommendationsProps {
@@ -57,19 +58,28 @@ export default function ProductRecommendations({
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            Recomendaciones de Productos
+            Recomendaciones
           </CardTitle>
-          <Select value={recommendationType} onValueChange={setRecommendationType}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="collaborative">Colaborativo</SelectItem>
-              <SelectItem value="content_based">Basado en Contenido</SelectItem>
-              <SelectItem value="hybrid">Híbrido</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Select value={recommendationType} onValueChange={setRecommendationType}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="collaborative">Colaborativo</SelectItem>
+                <SelectItem value="content_based">Basado en Contenido</SelectItem>
+                <SelectItem value="hybrid">Híbrido</SelectItem>
+              </SelectContent>
+            </Select>
+            {limit && filteredRecommendations.length >= limit && (
+              <Link to="/app/ml">
+                <Button variant="ghost" size="sm">
+                  Ver todas <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -84,15 +94,26 @@ export default function ProductRecommendations({
             <p className="text-muted-foreground">No hay recomendaciones disponibles</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredRecommendations.map((recommendation) => (
-              <ProductRecommendationCard
-                key={recommendation.product_id}
-                recommendation={recommendation}
-                onProductClick={onProductClick}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredRecommendations.map((recommendation) => (
+                <ProductRecommendationCard
+                  key={recommendation.product_id}
+                  recommendation={recommendation}
+                  onProductClick={onProductClick}
+                />
+              ))}
+            </div>
+            {limit && filteredRecommendations.length >= limit && (
+              <div className="mt-4 pt-4 border-t">
+                <Link to="/app/ml">
+                  <Button variant="outline" className="w-full">
+                    Ver todas las recomendaciones <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

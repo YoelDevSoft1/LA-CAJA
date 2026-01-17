@@ -183,7 +183,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | PRD-MB-01 | Vista de cards en lugar de tabla para móvil | ✅ | Alta |
 | PRD-MB-02 | Formulario de producto optimizado para touch | ✅ | Media |
 | PRD-MB-03 | Escanear código de barras con cámara | 🔮 | Media |
-| PRD-MB-04 | Pull-to-refresh | ⬜ | Baja |
+| PRD-MB-04 | Pull-to-refresh | ✅ | Baja |
 
 ---
 
@@ -344,7 +344,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 |----|--------|--------|-----------|
 | CSH-MB-01 | Vista simplificada de caja para móvil | ⬜ | Media |
 | CSH-MB-02 | Input numérico optimizado para conteo | ✅ | Media |
-| CSH-MB-03 | Notificación de turno por cerrar | ⬜ | Baja |
+| CSH-MB-03 | Notificación de turno por cerrar | ✅ | Baja |
 
 ---
 
@@ -428,7 +428,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | SUP-UX-01 | Crear orden desde productos con stock bajo | ✅ | Alta |
 | SUP-UX-02 | Recepción parcial de orden | ✅ | Alta |
 | SUP-UX-03 | Importar lista de precios del proveedor | ✅ | Media |
-| SUP-UX-04 | Historial de compras por proveedor | ⬜ | Media |
+| SUP-UX-04 | Historial de compras por proveedor | ✅ | Media |
 | SUP-UX-05 | Duplicar orden anterior | ⬜ | Media |
 | SUP-UX-06 | Enviar orden por email/WhatsApp | 🔮 | Baja |
 
@@ -443,8 +443,8 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### Performance
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| SUP-PF-01 | Paginación de órdenes | ⬜ | Media |
-| SUP-PF-02 | Autocomplete de productos en orden | ⬜ | Media |
+| SUP-PF-01 | Paginación de órdenes | ⬜ | Media | ⚠️ Pendiente - No implementada |
+| SUP-PF-02 | Autocomplete de productos en orden | ✅ | Media |
 
 ### Mobile
 | ID | Mejora | Estado | Prioridad |
@@ -473,10 +473,10 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### UX Flow
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| DSC-UX-01 | Autorización de descuento por supervisor | ⬜ | Alta |
+| DSC-UX-01 | Autorización de descuento por supervisor | ✅ | Alta |
 | DSC-UX-02 | Límites de descuento por rol | ✅ | Alta |
 | DSC-UX-03 | Promociones automáticas (2x1, etc) | ✅ | Media |
-| DSC-UX-04 | Historial de descuentos aplicados | ⬜ | Media |
+| DSC-UX-04 | Historial de descuentos aplicados | ✅ | Media |
 | DSC-UX-05 | Cupones de descuento | 🔮 | Baja |
 
 ### Robustez
@@ -618,7 +618,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### UI Visual
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| FSC-UI-01 | Preview de factura fiscal | ⬜ | Media |
+| FSC-UI-01 | Preview de factura fiscal | ✅ | Media |
 | FSC-UI-02 | Estado de sincronización con SENIAT | ⬜ | Alta |
 | FSC-UI-03 | Indicador de secuencia de facturas | ⬜ | Media |
 | FSC-UI-04 | Formato de factura para imprimir | ✅ | Alta |
@@ -628,7 +628,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 |----|--------|--------|-----------|
 | FSC-UX-01 | Generar factura desde venta | ✅ | Alta |
 | FSC-UX-02 | Anular factura con nota de crédito | ⬜ | Alta |
-| FSC-UX-03 | Configuración de datos fiscales del negocio | ⬜ | Alta |
+| FSC-UX-03 | Configuración de datos fiscales del negocio | ✅ | Alta |
 | FSC-UX-04 | Libro de ventas exportable | ⬜ | Alta |
 | FSC-UX-05 | Validación de RIF de cliente | ✅ | Alta |
 
@@ -698,7 +698,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### UX Flow
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| RT-UX-01 | Configuración de umbrales de alerta | ⬜ | Alta |
+| RT-UX-01 | Configuración de umbrales de alerta | ✅ | Alta |
 | RT-UX-02 | Notificaciones push de alertas | ⬜ | Alta |
 | RT-UX-03 | Histórico de alertas | ⬜ | Media |
 | RT-UX-04 | Silenciar alertas temporalmente | ⬜ | Media |
@@ -742,7 +742,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
 | TBL-RB-01 | Prevenir cerrar mesa con items pendientes | ✅ | Alta |
-| TBL-RB-02 | Confirmación antes de cancelar orden | ⬜ | Alta |
+| TBL-RB-02 | Confirmación antes de cancelar orden | ✅ | Alta |
 | TBL-RB-03 | Registro de quién atendió la mesa | ⬜ | Media |
 
 ---
@@ -801,7 +801,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 |----|--------|--------|-----------|
 | GLB-UX-01 | Breadcrumbs de navegación | ⬜ | Media |
 | GLB-UX-02 | Búsqueda global (Cmd+K) | 🔮 | Baja |
-| GLB-UX-03 | Notificaciones con acciones | ⬜ | Media |
+| GLB-UX-03 | Notificaciones con acciones | ✅ | Media |
 | GLB-UX-04 | Shortcuts de teclado documentados | ✅ | Media |
 | GLB-UX-05 | Onboarding para nuevos usuarios | 🔮 | Baja |
 
@@ -1021,6 +1021,18 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | 2026-01-17 | Mesas | TBL-UX-01: Agregar items a mesa abierta - Implementado con OrderModal y OrderItemModal (addItemMutation, botón "Agregar Item") | Codex |
 | 2026-01-17 | Bodegas | WHS-UI-02: Verificación - Indicador de stock por bodega ya implementado (WarehousesPage con modal de stock, InventoryPage con filtro por bodega) | Codex |
 | 2026-01-17 | Inventario | INV-UX-05: Verificación - Alertas configurables de stock bajo ya implementado (ThresholdsManager con tipo stock_low, ProductFormModal con campo low_stock_threshold por producto) | Codex |
+| 2026-01-17 | Descuentos | DSC-UX-01: Verificación - Autorización de descuento por supervisor ya implementado (DiscountAuthorizationModal, integrado en CheckoutModal) | Codex |
+| 2026-01-17 | Descuentos | DSC-UX-04: Verificación - Historial de descuentos aplicados ya implementado (DiscountAuthorizationsList con tabs en DiscountsPage) | Codex |
+| 2026-01-17 | Fiscal | FSC-UI-01: Verificación - Preview de factura fiscal ya implementado (FiscalInvoicePrintView, usado en FiscalInvoiceDetailPage) | Codex |
+| 2026-01-17 | Proveedores | SUP-PF-01: Verificación - Paginación de órdenes NO implementada (PurchaseOrdersPage carga todas las órdenes sin paginación) | Codex |
+| 2026-01-17 | Productos | PRD-MB-04: Pull-to-refresh - Implementado con hook usePullToRefresh y componente PullToRefreshIndicator en ProductsPage | Codex |
+| 2026-01-17 | Caja | CSH-MB-03: Notificación de turno por cerrar - Implementado en MainLayout.tsx con notificación cuando sesión lleva >8h abierta | Codex |
+| 2026-01-17 | Mesas | TBL-RB-02: Confirmación antes de cancelar orden - Implementado con AlertDialog en OrderModal.tsx (diálogo de confirmación antes de cancelar) | Codex |
+| 2026-01-17 | Global | GLB-UX-03: Verificación - Notificaciones con acciones ya implementado (NotificationsPanel con action_url y action_label, botón "Ver más" que navega a la URL de acción) | Codex |
+| 2026-01-17 | Realtime | RT-UX-01: Verificación - Configuración de umbrales de alerta ya implementado (ThresholdsManager en RealtimeAnalyticsPage, tab umbrales) | Codex |
+| 2026-01-17 | Fiscal | FSC-UX-03: Verificación - Configuración de datos fiscales del negocio ya implementado (FiscalConfigPage con formulario completo) | Codex |
+| 2026-01-17 | Proveedores | SUP-UX-04: Verificación - Historial de compras por proveedor ya implementado (SuppliersPage pestaña Órdenes, getPurchaseOrders) | Codex |
+| 2026-01-17 | Proveedores | SUP-PF-02: Verificación - Autocomplete de productos en orden ya implementado (PurchaseOrderFormModal búsqueda con dropdown de sugerencias) | Codex |
 
 ---
 
@@ -1034,23 +1046,23 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | Productos | 31 | 20 | 65% |
 | Inventario | 22 | 13 | 59% |
 | Ventas | 22 | 20 | 91% |
-| Caja/Turnos | 22 | 14 | 64% |
+| Caja/Turnos | 22 | 15 | 68% |
 | Clientes/Deudas | 24 | 20 | 83% |
-| Proveedores | 18 | 9 | 50% |
-| Descuentos | 13 | 4 | 31% |
+| Proveedores | 18 | 11 | 61% |
+| Descuentos | 13 | 6 | 46% |
 | Lotes/Seriales | 14 | 8 | 57% |
 | Bodegas | 13 | 7 | 54% |
 | Dashboard | 17 | 12 | 71% |
-| Fiscal | 13 | 3 | 23% |
+| Fiscal | 13 | 5 | 38% |
 | ML | 11 | 0 | 0% |
-| Realtime | 11 | 3 | 27% |
-| Mesas | 12 | 4 | 33% |
+| Realtime | 11 | 4 | 36% |
+| Mesas | 12 | 5 | 42% |
 | Periféricos | 10 | 0 | 0% |
-| Global | 16 | 9 | 56% |
+| Global | 16 | 10 | 63% |
 | Performance | 10 | 9 | 90% |
 | A11y | 10 | 6 | 60% |
 | Mobile | 10 | 10 | 100% |
-| **TOTAL** | **334** | **181** | **54%** |
+| **TOTAL** | **334** | **190** | **57%** |
 
 ---
 

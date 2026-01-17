@@ -27,6 +27,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { exportToCSV } from '@/utils/export-excel'
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh'
 import { PullToRefreshIndicator } from '@/components/ui/pull-to-refresh-indicator'
+import { useMobileDetection } from '@/hooks/use-mobile-detection'
 
 type WeightUnit = 'kg' | 'g' | 'lb' | 'oz'
 
@@ -71,9 +72,19 @@ export default function ProductsPage() {
   const [lotsProduct, setLotsProduct] = useState<Product | null>(null)
   const [serialsProduct, setSerialsProduct] = useState<Product | null>(null)
   const [warehouseFilter, setWarehouseFilter] = useState<string>('all')
+  const isMobile = useMobileDetection()
   // Vista: 'cards' para móvil, 'table' para desktop
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('table')
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>(() => 
+    window.innerWidth < 640 ? 'cards' : 'table'
+  )
   const queryClient = useQueryClient()
+
+  // Actualizar viewMode cuando cambia el tamaño de pantalla
+  useEffect(() => {
+    if (isMobile) {
+      setViewMode('cards')
+    }
+  }, [isMobile])
 
   // Reset page cuando cambia búsqueda
   useEffect(() => {
@@ -407,8 +418,8 @@ export default function ProductsPage() {
           )}
         </div>
 
-        {/* Toggle de vista */}
-        <div className="flex items-center justify-end">
+        {/* Toggle de vista - Solo en desktop */}
+        <div className="hidden sm:flex items-center justify-end">
           <Tabs
             value={viewMode}
             onValueChange={(v) => setViewMode(v as 'cards' | 'table')}
@@ -429,7 +440,7 @@ export default function ProductsPage() {
       </div>
 
       {/* Lista de productos */}
-      <Card className="border border-border">
+      <Card className="border border-border overflow-hidden">
         <CardContent className="p-0">
         {isError ? (
             <div className="p-8 text-center">
@@ -477,7 +488,7 @@ export default function ProductsPage() {
             </p>
               </div>
           </div>
-        ) : viewMode === 'cards' ? (
+        ) : viewMode === 'cards' || isMobile ? (
           /* Vista de Cards para móvil */
           <div className="p-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -503,7 +514,7 @@ export default function ProductsPage() {
         ) : (
           /* Vista de Tabla para desktop */
             <div className="overflow-x-auto">
-            <table className="w-full table-fixed">
+            <table className="w-full sm:table-fixed">
                 <thead className="bg-muted/50">
                 <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider w-[45%] sm:w-[40%]">

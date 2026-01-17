@@ -55,7 +55,6 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNotifications } from '@/stores/notifications.store'
-import { ScrollArea as ShadScrollArea } from '@/components/ui/scroll-area'
 import { useOnline } from '@/hooks/use-online'
 import { inventoryService } from '@/services/inventory.service'
 import { cashService } from '@/services/cash.service'
@@ -602,7 +601,7 @@ export default function MainLayout() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-16 items-center gap-4 px-6">
+        <div className="flex h-16 items-center gap-2 sm:gap-4 px-3 sm:px-6">
           {/* Logo (Desktop) */}
           <div className="hidden lg:flex items-center gap-3">
             <img
@@ -619,7 +618,7 @@ export default function MainLayout() {
           {/* Mobile Menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="lg:hidden">
+              <Button variant="ghost" size="icon" className="lg:hidden flex-shrink-0">
                 <Menu className="w-5 h-5" />
               </Button>
             </SheetTrigger>
@@ -629,11 +628,17 @@ export default function MainLayout() {
           </Sheet>
 
           {/* Page Title (Mobile) */}
-          <div className="flex-1 lg:hidden">
-            <h1 className="text-lg font-semibold">
-              {filteredNavSections
-                .flatMap((section) => section.items)
-                .find((item) => isActive(item.path))?.label || 'LA CAJA'}
+          <div className="flex-1 lg:hidden min-w-0">
+            <h1 className="text-base sm:text-lg font-semibold truncate">
+              {(() => {
+                const activeItem = filteredNavSections
+                  .flatMap((section) => section.items)
+                  .find((item) => isActive(item.path))
+                if (activeItem?.label === 'Punto de Venta') {
+                  return 'POS'
+                }
+                return activeItem?.label || 'LA CAJA'
+              })()}
             </h1>
           </div>
 
@@ -641,7 +646,7 @@ export default function MainLayout() {
           <div className="hidden lg:flex flex-1" />
 
           {/* Right Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             {/* Exchange Rate Indicator */}
             <ExchangeRateIndicator className="hidden sm:flex" />
             <ExchangeRateIndicator compact className="sm:hidden" />
@@ -658,8 +663,8 @@ export default function MainLayout() {
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 p-0">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <DropdownMenuContent align="end" className="w-80 p-0 flex flex-col max-h-[500px]">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
                   <div>
                     <p className="text-sm font-semibold">Notificaciones</p>
                     <p className="text-xs text-muted-foreground">
@@ -677,7 +682,7 @@ export default function MainLayout() {
                     Sin notificaciones
                   </div>
                 ) : (
-                  <ShadScrollArea className="max-h-96">
+                  <div className="overflow-y-auto overflow-x-hidden max-h-[400px]">
                     <div className="divide-y divide-border">
                       {notifications.map((n) => {
                         const Icon =
@@ -704,31 +709,26 @@ export default function MainLayout() {
                             onClick={() => markAsRead(n.id)}
                           >
                             <div className="flex gap-3 items-start">
-                              <Icon className={cn('w-4 h-4 mt-0.5', color)} />
-                              <div className="flex-1 space-y-0.5">
+                              <Icon className={cn('w-4 h-4 mt-0.5 flex-shrink-0', color)} />
+                              <div className="flex-1 space-y-0.5 min-w-0">
                                 <p className="text-sm font-medium text-foreground">{n.title}</p>
                                 {n.description && (
-                                  <p className="text-xs text-muted-foreground">{n.description}</p>
+                                  <p className="text-xs text-muted-foreground line-clamp-2">{n.description}</p>
                                 )}
                                 <p className="text-[10px] text-muted-foreground">
                                   {new Date(n.created_at).toLocaleString()}
                                 </p>
                               </div>
-                              {!n.read && <span className="w-2 h-2 rounded-full bg-primary mt-1" />}
+                              {!n.read && <span className="w-2 h-2 rounded-full bg-primary mt-1 flex-shrink-0" />}
                             </div>
                           </button>
                         )
                       })}
                     </div>
-                  </ShadScrollArea>
+                  </div>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-
-            {/* Settings */}
-            <Button variant="ghost" size="icon">
-              <Settings className="w-5 h-5" />
-            </Button>
 
             <Separator orientation="vertical" className="h-6" />
 
