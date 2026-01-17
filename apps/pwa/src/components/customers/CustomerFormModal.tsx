@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -10,7 +10,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { RIFInput } from '@/components/ui/rif-input'
 import { CreditCard, DollarSign, Mail, Phone, User, FileText, StickyNote } from 'lucide-react'
+import { looksLikeRIF, validateRIF } from '@/utils/rif-validator'
 
 const customerSchema = z.object({
   name: z.string().min(1, 'El nombre es requerido'),
@@ -43,6 +45,8 @@ export default function CustomerFormModal({
     handleSubmit,
     formState: { errors },
     reset,
+    watch,
+    setValue,
   } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
@@ -171,20 +175,24 @@ export default function CustomerFormModal({
                 )}
               </div>
 
-              {/* Cédula */}
+              {/* Cédula / RIF */}
               <div className="space-y-2">
                 <Label htmlFor="document_id" className="text-sm font-semibold flex items-center gap-2">
                   <FileText className="h-4 w-4 text-muted-foreground" />
                   Cédula / RIF
                 </Label>
-                <Input
+                <RIFInput
                   id="document_id"
-                  type="text"
-                  {...register('document_id')}
+                  value={watch('document_id') || ''}
+                  onChange={(value, isValid) => {
+                    setValue('document_id', value)
+                  }}
                   placeholder="V-12345678 o J-12345678-9"
+                  showValidation={true}
+                  autoFormat={true}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Formato: V-12345678, E-12345678 o J-12345678-9
+                  Se valida automáticamente el formato de RIF venezolano
                 </p>
               </div>
 

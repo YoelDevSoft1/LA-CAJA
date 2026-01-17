@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Edit, Warehouse as WarehouseIcon, CheckCircle, XCircle, Package } from 'lucide-react'
+import { Plus, Edit, Warehouse as WarehouseIcon, CheckCircle, XCircle, Package, AlertTriangle } from 'lucide-react'
 import {
   warehousesService,
   Warehouse,
   CreateWarehouseDto,
   UpdateWarehouseDto,
 } from '@/services/warehouses.service'
+import { inventoryService } from '@/services/inventory.service'
 import { useAuth } from '@/stores/auth.store'
 import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -32,6 +44,10 @@ export default function WarehousesPage() {
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null)
   const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null)
   const [showStock, setShowStock] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [warehouseToDelete, setWarehouseToDelete] = useState<Warehouse | null>(null)
+  const [stockCount, setStockCount] = useState<number>(0)
+  const [isCheckingStock, setIsCheckingStock] = useState(false)
 
   // Obtener bodegas
   const { data: warehouses = [], isLoading } = useQuery({
@@ -111,14 +127,37 @@ export default function WarehousesPage() {
     setEditingWarehouse(null)
   }
 
-  const handleDelete = (warehouse: Warehouse) => {
-    if (
-      window.confirm(
-        `¿Estás seguro de eliminar la bodega "${warehouse.name}"? Esta acción no se puede deshacer.`
-      )
-    ) {
-      deleteMutation.mutate(warehouse.id)
+  const handleDelete = async (warehouse: Warehouse) => {
+    setWarehouseToDelete(warehouse)
+    setIsCheckingStock(true)
+    
+    try {
+      // Verificar stock en la bodega antes de eliminar
+      const stockStatus = await inventoryService.getStockStatus({ warehouse_id: warehouse.id })
+      const totalStock = stockStatus.reduce((sum, item) => sum + Number(item.current_stock || 0), 0)
+      setStockCount(totalStock)
+    } catch {
+      // Si falla la verificación, asumir que puede tener stock
+      setStockCount(-1)
     }
+    
+    setIsCheckingStock(false)
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = () => {
+    if (warehouseToDelete) {
+      deleteMutation.mutate(warehouseToDelete.id)
+      setShowDeleteConfirm(false)
+      setWarehouseToDelete(null)
+      setStockCount(0)
+    }
+  }
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false)
+    setWarehouseToDelete(null)
+    setStockCount(0)
   }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -418,6 +457,65 @@ export default function WarehousesPage() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog de confirmación de eliminación */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              {stockCount > 0 ? (
+                <>
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  ¡Advertencia! Bodega con stock
+                </>
+              ) : (
+                <>Eliminar Bodega</>
+              )}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              {isCheckingStock ? (
+                <p>Verificando stock en la bodega...</p>
+              ) : stockCount > 0 ? (
+                <>
+                  <Alert variant="destructive" className="mt-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      Esta bodega tiene <strong>{stockCount.toLocaleString()}</strong> unidades de productos.
+                      Eliminarla causará pérdida de información de inventario.
+                    </AlertDescription>
+                  </Alert>
+                  <p className="text-sm">
+                    Se recomienda transferir el stock a otra bodega antes de eliminar.
+                  </p>
+                </>
+              ) : stockCount === 0 ? (
+                <p>
+                  ¿Estás seguro de eliminar la bodega <strong>"{warehouseToDelete?.name}"</strong>?
+                  Esta acción no se puede deshacer.
+                </p>
+              ) : (
+                <p>
+                  No se pudo verificar el stock. ¿Deseas continuar de todas formas?
+                </p>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelDelete}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className={stockCount > 0 ? 'bg-red-600 hover:bg-red-700' : ''}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending
+                ? 'Eliminando...'
+                : stockCount > 0
+                ? 'Eliminar de todas formas'
+                : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

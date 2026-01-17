@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -6,12 +7,19 @@ import {
   XCircle,
   Printer,
   FileText,
+  Eye,
 } from 'lucide-react'
 import { fiscalInvoicesService } from '@/services/fiscal-invoices.service'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import toast from 'react-hot-toast'
 import {
   Table,
@@ -21,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import FiscalInvoicePrintView from '@/components/fiscal/FiscalInvoicePrintView'
 
 const statusLabels: Record<string, string> = {
   draft: 'Borrador',
@@ -40,6 +49,8 @@ export default function FiscalInvoiceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [showPrintPreview, setShowPrintPreview] = useState(false)
+  const printRef = useRef<HTMLDivElement>(null)
 
   const { data: invoice, isLoading } = useQuery({
     queryKey: ['fiscal-invoices', id],
@@ -87,6 +98,10 @@ export default function FiscalInvoiceDetailPage() {
   }
 
   const handlePrint = () => {
+    setShowPrintPreview(true)
+  }
+
+  const handleActualPrint = () => {
     window.print()
   }
 
@@ -366,6 +381,27 @@ export default function FiscalInvoiceDetailPage() {
         </CardContent>
       </Card>
       </div>
+
+      {/* Dialog de vista previa e impresión */}
+      <Dialog open={showPrintPreview} onOpenChange={setShowPrintPreview}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto print:max-w-none print:max-h-none print:overflow-visible">
+          <DialogHeader className="print:hidden">
+            <DialogTitle className="flex items-center justify-between">
+              <span>Vista Previa de Impresión</span>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowPrintPreview(false)}>
+                  Cerrar
+                </Button>
+                <Button onClick={handleActualPrint}>
+                  <Printer className="w-4 h-4 mr-2" />
+                  Imprimir
+                </Button>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+          <FiscalInvoicePrintView ref={printRef} invoice={invoice} />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

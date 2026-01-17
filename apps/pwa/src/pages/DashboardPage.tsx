@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/stores/auth.store'
@@ -13,6 +13,7 @@ import {
   ArrowUpRight,
   Printer,
   FileSpreadsheet,
+  AlertCircle,
 } from 'lucide-react'
 import { exportDashboardToExcel } from '@/utils/export-excel'
 import toast from 'react-hot-toast'
@@ -143,6 +144,7 @@ export default function DashboardPage() {
     isLoading: kpisLoading,
     isFetching: kpisFetching,
     dataUpdatedAt: kpisUpdatedAt,
+    error: kpisError,
   } = useQuery({
     queryKey: ['dashboard', 'kpis', startDate, endDate],
     queryFn: () =>
@@ -153,6 +155,13 @@ export default function DashboardPage() {
     enabled: isOwner, // Solo ejecutar si es owner
     staleTime: 1000 * 60 * 2, // 2 minutos - más frecuente porque las queries son más rápidas con vistas materializadas
     refetchInterval: 1000 * 60 * 2, // Refrescar cada 2 minutos
+    retry: (failureCount, error: any) => {
+      // No reintentar si es error 403 (permisos) o 401 (auth)
+      if (error?.response?.status === 403 || error?.response?.status === 401) {
+        return false
+      }
+      return failureCount < 2
+    },
   })
 
   // Obtener tendencias - SOLO si el usuario es owner
@@ -160,13 +169,47 @@ export default function DashboardPage() {
     data: trends,
     isLoading: trendsLoading,
     isFetching: trendsFetching,
+    error: trendsError,
   } = useQuery({
     queryKey: ['dashboard', 'trends'],
     queryFn: () => dashboardService.getTrends(),
     enabled: isOwner, // Solo ejecutar si es owner
     staleTime: 1000 * 60 * 2, // 2 minutos
     refetchInterval: 1000 * 60 * 2, // Refrescar cada 2 minutos
+    retry: (failureCount, error: any) => {
+      // No reintentar si es error 403 (permisos) o 401 (auth)
+      if (error?.response?.status === 403 || error?.response?.status === 401) {
+        return false
+      }
+      return failureCount < 2
+    },
   })
+
+  // Manejar errores de las queries
+  useEffect(() => {
+    if (kpisError) {
+      const error: any = kpisError
+      console.error('[Dashboard] Error cargando KPIs:', error)
+      if (error?.response?.status === 403) {
+        toast.error('No tienes permisos para ver el dashboard. Se requiere rol de owner.')
+      } else if (error?.response?.status !== 401) {
+        // No mostrar error si es 401 (el interceptor lo maneja)
+        toast.error('Error al cargar los KPIs del dashboard')
+      }
+    }
+  }, [kpisError])
+
+  useEffect(() => {
+    if (trendsError) {
+      const error: any = trendsError
+      console.error('[Dashboard] Error cargando tendencias:', error)
+      if (error?.response?.status === 403) {
+        toast.error('No tienes permisos para ver las tendencias. Se requiere rol de owner.')
+      } else if (error?.response?.status !== 401) {
+        toast.error('Error al cargar las tendencias del dashboard')
+      }
+    }
+  }, [trendsError])
 
   // Función para imprimir/exportar PDF
   const handlePrint = useCallback(() => {
@@ -191,6 +234,74 @@ export default function DashboardPage() {
 
   const isLoading = kpisLoading || trendsLoading
   const isFetching = kpisFetching || trendsFetching
+  const hasError = kpisError || trendsError
+
+  // Si no es owner, mostrar mensaje
+  if (!isOwner) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <AlertCircle className="w-16 h-16 text-destructive mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Acceso Restringido</h2>
+            <p className="text-muted-foreground text-center mb-4">
+              Esta página requiere permisos de owner. Tu rol actual es: <strong>{user?.role || 'desconocido'}</strong>
+            </p>
+            <Link to="/app/pos">
+              <Button>Ir al POS</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Si hay errores, mostrar información de depuración
+  if (hasError) {
+    const error = kpisError || trendsError
+    const is403 = error?.response?.status === 403
+    const errorMessage = error?.response?.data?.message || error?.message || 'Error desconocido'
+    
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="w-5 h-5" />
+              Error al cargar el Dashboard
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-muted p-4 rounded-lg">
+              <p className="text-sm font-semibold mb-2">Detalles del error:</p>
+              <ul className="text-sm space-y-1 list-disc list-inside">
+                <li>Estado HTTP: {error?.response?.status || 'N/A'}</li>
+                <li>Mensaje: {errorMessage}</li>
+                <li>Rol del usuario: {user?.role || 'desconocido'}</li>
+                <li>Store ID: {user?.store_id || 'N/A'}</li>
+                {is403 && (
+                  <li className="text-destructive font-semibold">
+                    Este endpoint requiere rol 'owner'. Verifica tu token JWT.
+                  </li>
+                )}
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={() => window.location.reload()}>
+                Recargar Página
+              </Button>
+              <Button variant="outline" onClick={() => {
+                localStorage.removeItem('auth_token')
+                window.location.href = '/login'
+              }}>
+                Cerrar Sesión
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <>

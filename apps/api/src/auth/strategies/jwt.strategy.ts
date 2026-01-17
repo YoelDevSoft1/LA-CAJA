@@ -26,6 +26,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
+    console.log('[JwtStrategy] Validando token:', {
+      userId: payload.sub,
+      storeId: payload.store_id,
+      roleInToken: payload.role,
+      fullPayload: payload,
+    });
+    
     // Validar que el usuario existe en la tienda
     const member = await this.authService.validateUser(
       payload.sub,
@@ -35,10 +42,22 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Usuario no autorizado para esta tienda');
     }
 
+    console.log('[JwtStrategy] Usuario validado:', {
+      userId: payload.sub,
+      storeId: payload.store_id,
+      roleInToken: payload.role,
+      roleInDB: member.role,
+      rolesMatch: payload.role === member.role,
+      fullMember: member,
+    });
+
+    // ⚠️ IMPORTANTE: Usar el rol del token (payload.role), NO el de la DB
+    // Esto es porque el token ya fue firmado con el rol correcto en el momento del login/refresh
+    // Si hay discrepancia, significa que el token fue generado con un rol diferente al actual en DB
     return {
       sub: payload.sub,
       store_id: payload.store_id,
-      role: payload.role,
+      role: payload.role, // Usar rol del token
     };
   }
 }

@@ -482,7 +482,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### Robustez
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| DSC-RB-01 | Validación de % máximo de descuento | ⬜ | Alta |
+| DSC-RB-01 | Validación de % máximo de descuento | ✅ | Alta |
 | DSC-RB-02 | Registro de quién autorizó | ⬜ | Alta |
 | DSC-RB-03 | Prevenir descuentos duplicados | ⬜ | Media |
 | DSC-RB-04 | Validación de fechas de promoción | ⬜ | Media |
@@ -557,7 +557,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | WHS-RB-01 | Validación de stock en bodega origen | ⬜ | Alta |
 | WHS-RB-02 | Confirmación de recepción requerida | ⬜ | Alta |
 | WHS-RB-03 | Registro de diferencias en transferencia | ⬜ | Media |
-| WHS-RB-04 | Prevenir eliminar bodega con stock | ⬜ | Alta |
+| WHS-RB-04 | Prevenir eliminar bodega con stock | ✅ | Alta |
 
 ---
 
@@ -621,7 +621,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | FSC-UI-01 | Preview de factura fiscal | ⬜ | Media |
 | FSC-UI-02 | Estado de sincronización con SENIAT | ⬜ | Alta |
 | FSC-UI-03 | Indicador de secuencia de facturas | ⬜ | Media |
-| FSC-UI-04 | Formato de factura para imprimir | ⬜ | Alta |
+| FSC-UI-04 | Formato de factura para imprimir | ✅ | Alta |
 
 ### UX Flow
 | ID | Mejora | Estado | Prioridad |
@@ -630,7 +630,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | FSC-UX-02 | Anular factura con nota de crédito | ⬜ | Alta |
 | FSC-UX-03 | Configuración de datos fiscales del negocio | ⬜ | Alta |
 | FSC-UX-04 | Libro de ventas exportable | ⬜ | Alta |
-| FSC-UX-05 | Validación de RIF de cliente | ⬜ | Alta |
+| FSC-UX-05 | Validación de RIF de cliente | ✅ | Alta |
 
 ### Robustez
 | ID | Mejora | Estado | Prioridad |
@@ -792,7 +792,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | GLB-UI-01 | Tema oscuro consistente | ⬜ | Media |
 | GLB-UI-02 | Transiciones suaves entre páginas | ⬜ | Baja |
 | GLB-UI-03 | Loading states consistentes | ⬜ | Alta |
-| GLB-UI-04 | Empty states informativos | ⬜ | Alta |
+| GLB-UI-04 | Empty states informativos | ✅ | Alta |
 | GLB-UI-05 | Error states con acciones claras | ✅ | Alta |
 | GLB-UI-06 | Tooltips en iconos de acción | ⬜ | Media |
 
@@ -939,6 +939,11 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | 2026-01-17 | Dashboard | Exportar reportes a Excel (CSV) | Codex |
 | 2026-01-17 | Lotes | Alerta de productos próximos a vencer | Codex |
 | 2026-01-17 | Proveedores | Indicador de órdenes pendientes | Codex |
+| 2026-01-17 | Fiscal | Validación de RIF venezolano con algoritmo SENIAT | Codex |
+| 2026-01-17 | Fiscal | Formato profesional de factura para imprimir | Codex |
+| 2026-01-17 | Descuentos | Validación de % máximo por rol (30% cajero, 100% owner) | Codex |
+| 2026-01-17 | Bodegas | Verificación de stock antes de eliminar | Codex |
+| 2026-01-17 | Global | Componente EmptyState reutilizable | Codex |
 
 ---
 

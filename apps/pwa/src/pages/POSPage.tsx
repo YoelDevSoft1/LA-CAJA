@@ -860,6 +860,9 @@ export default function POSPage() {
     return exchangeRate > 0 ? exchangeRate : 1
   }
 
+  // Porcentaje máximo de descuento permitido (configurable por rol en el futuro)
+  const MAX_DISCOUNT_PERCENT = user?.role === 'owner' ? 100 : 30 // Cajeros: 30%, Dueños: 100%
+
   const handleDiscountChange = (item: CartItem, value: string) => {
     setDiscountInputs((prev) => ({ ...prev, [item.id]: value }))
 
@@ -870,6 +873,23 @@ export default function POSPage() {
 
     const parsed = Number(value)
     if (Number.isNaN(parsed) || parsed < 0) {
+      return
+    }
+
+    // Calcular el precio unitario total de la línea
+    const lineTotal = Number(item.unit_price_usd || 0) * Number(item.qty || 1)
+    
+    // Validar que el descuento no exceda el % máximo permitido
+    const discountPercent = lineTotal > 0 ? (parsed / lineTotal) * 100 : 0
+    const maxDiscountAmount = (lineTotal * MAX_DISCOUNT_PERCENT) / 100
+    
+    if (discountPercent > MAX_DISCOUNT_PERCENT) {
+      toast.error(`El descuento no puede exceder el ${MAX_DISCOUNT_PERCENT}% del precio (máx: $${maxDiscountAmount.toFixed(2)})`)
+      // Aplicar el máximo permitido
+      const rate = resolveItemRate(item)
+      const maxBs = Math.round(maxDiscountAmount * rate * 100) / 100
+      updateItem(item.id, { discount_usd: maxDiscountAmount, discount_bs: maxBs })
+      setDiscountInputs((prev) => ({ ...prev, [item.id]: maxDiscountAmount.toFixed(2) }))
       return
     }
 

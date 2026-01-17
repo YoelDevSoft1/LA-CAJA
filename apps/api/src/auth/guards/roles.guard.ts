@@ -23,8 +23,28 @@ export class RolesGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const userRole = request?.user?.role || 'cashier';
+    const userId = request?.user?.sub || 'unknown';
+    const storeId = request?.user?.store_id || 'unknown';
+    
+    // Logging para depuración
+    console.log('[RolesGuard] Validando acceso:', {
+      endpoint: `${request.method} ${request.path}`,
+      userId,
+      storeId,
+      userRole,
+      requiredRoles,
+      requestUser: request?.user,
+    });
     
     if (!requiredRoles.includes(userRole)) {
+      console.warn('[RolesGuard] Acceso denegado:', {
+        endpoint: `${request.method} ${request.path}`,
+        userId,
+        storeId,
+        userRole,
+        requiredRoles,
+        fullUser: request?.user,
+      });
       throw new ForbiddenException(
         `Este endpoint requiere uno de los siguientes roles: ${requiredRoles.join(', ')}. Tu rol actual es: ${userRole}`,
       );

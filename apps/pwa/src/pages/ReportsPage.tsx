@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/stores/auth.store'
 import {
   BarChart3,
@@ -134,27 +135,166 @@ export default function ReportsPage() {
   }, [dateRange, customStartDate, customEndDate])
 
   // Query: Ventas por día - SOLO si el usuario es owner
-  const { data: salesReport, isLoading: loadingSales, refetch: refetchSales } = useQuery({
+  const { 
+    data: salesReport, 
+    isLoading: loadingSales, 
+    refetch: refetchSales,
+    error: salesError,
+  } = useQuery({
     queryKey: ['reports', 'sales-by-day', startDate, endDate],
     queryFn: () => reportsService.getSalesByDay({ start_date: startDate, end_date: endDate }),
     enabled: isOwner, // Solo ejecutar si es owner
+    retry: (failureCount, error: any) => {
+      // No reintentar si es error 403 (permisos) o 401 (auth)
+      if (error?.response?.status === 403 || error?.response?.status === 401) {
+        return false
+      }
+      return failureCount < 2
+    },
   })
 
   // Query: Top productos - SOLO si el usuario es owner
-  const { data: topProducts, isLoading: loadingProducts } = useQuery({
+  const { 
+    data: topProducts, 
+    isLoading: loadingProducts,
+    error: productsError,
+  } = useQuery({
     queryKey: ['reports', 'top-products', startDate, endDate],
     queryFn: () => reportsService.getTopProducts(10, { start_date: startDate, end_date: endDate }),
     enabled: isOwner, // Solo ejecutar si es owner
+    retry: (failureCount, error: any) => {
+      // No reintentar si es error 403 (permisos) o 401 (auth)
+      if (error?.response?.status === 403 || error?.response?.status === 401) {
+        return false
+      }
+      return failureCount < 2
+    },
   })
 
   // Query: Resumen de deudas - SOLO si el usuario es owner
-  const { data: debtSummary, isLoading: loadingDebts } = useQuery({
+  const { 
+    data: debtSummary, 
+    isLoading: loadingDebts,
+    error: debtsError,
+  } = useQuery({
     queryKey: ['reports', 'debt-summary'],
     queryFn: () => reportsService.getDebtSummary(),
     enabled: isOwner, // Solo ejecutar si es owner
+    retry: (failureCount, error: any) => {
+      // No reintentar si es error 403 (permisos) o 401 (auth)
+      if (error?.response?.status === 403 || error?.response?.status === 401) {
+        return false
+      }
+      return failureCount < 2
+    },
   })
 
+  // Manejar errores de las queries
+  useEffect(() => {
+    if (salesError) {
+      const error: any = salesError
+      console.error('[Reports] Error cargando ventas por día:', error)
+      if (error?.response?.status === 403) {
+        toast.error('No tienes permisos para ver reportes. Se requiere rol de owner.')
+      } else if (error?.response?.status !== 401) {
+        toast.error('Error al cargar el reporte de ventas por día')
+      }
+    }
+  }, [salesError])
+
+  useEffect(() => {
+    if (productsError) {
+      const error: any = productsError
+      console.error('[Reports] Error cargando top productos:', error)
+      if (error?.response?.status === 403) {
+        toast.error('No tienes permisos para ver reportes. Se requiere rol de owner.')
+      } else if (error?.response?.status !== 401) {
+        toast.error('Error al cargar el reporte de top productos')
+      }
+    }
+  }, [productsError])
+
+  useEffect(() => {
+    if (debtsError) {
+      const error: any = debtsError
+      console.error('[Reports] Error cargando resumen de deudas:', error)
+      if (error?.response?.status === 403) {
+        toast.error('No tienes permisos para ver reportes. Se requiere rol de owner.')
+      } else if (error?.response?.status !== 401) {
+        toast.error('Error al cargar el resumen de deudas')
+      }
+    }
+  }, [debtsError])
+
   const isLoading = loadingSales || loadingProducts || loadingDebts
+  const hasError = salesError || productsError || debtsError
+
+  // Si no es owner, mostrar mensaje
+  if (!isOwner) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <AlertCircle className="w-16 h-16 text-destructive mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Acceso Restringido</h2>
+            <p className="text-muted-foreground text-center mb-4">
+              Esta página requiere permisos de owner. Tu rol actual es: <strong>{user?.role || 'desconocido'}</strong>
+            </p>
+            <Link to="/app/pos">
+              <Button>Ir al POS</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Si hay errores, mostrar información de depuración
+  if (hasError && !isLoading) {
+    const error = salesError || productsError || debtsError
+    const is403 = error?.response?.status === 403
+    const errorMessage = error?.response?.data?.message || error?.message || 'Error desconocido'
+    
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="w-5 h-5" />
+              Error al cargar los Reportes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-muted p-4 rounded-lg">
+              <p className="text-sm font-semibold mb-2">Detalles del error:</p>
+              <ul className="text-sm space-y-1 list-disc list-inside">
+                <li>Estado HTTP: {error?.response?.status || 'N/A'}</li>
+                <li>Mensaje: {errorMessage}</li>
+                <li>Rol del usuario: {user?.role || 'desconocido'}</li>
+                <li>Store ID: {user?.store_id || 'N/A'}</li>
+                {is403 && (
+                  <li className="text-destructive font-semibold">
+                    Este endpoint requiere rol 'owner'. Verifica tu token JWT.
+                  </li>
+                )}
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={() => window.location.reload()}>
+                Recargar Página
+              </Button>
+              <Button variant="outline" onClick={() => {
+                localStorage.removeItem('auth_token')
+                window.location.href = '/login'
+              }}>
+                Cerrar Sesión
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   // Exportar CSV
   const handleExportCSV = async () => {
@@ -286,7 +426,7 @@ export default function ReportsPage() {
               <TrendingUp className="w-5 h-5 text-primary" />
           </div>
             <p className="text-2xl sm:text-3xl font-bold text-foreground">
-            {salesReport?.total_sales || 0}
+            {(salesReport as any)?.total_sales || 0}
           </p>
             <p className="text-xs text-muted-foreground mt-1">transacciones</p>
           </CardContent>
@@ -299,10 +439,10 @@ export default function ReportsPage() {
               <DollarSign className="w-5 h-5 text-primary" />
           </div>
             <p className="text-xl sm:text-2xl font-bold text-foreground">
-            ${(salesReport?.total_amount_usd || 0).toFixed(2)}
+            ${((salesReport as any)?.total_amount_usd || 0).toFixed(2)}
           </p>
             <p className="text-xs text-muted-foreground mt-1">
-            {(salesReport?.total_amount_bs || 0).toFixed(2)} Bs
+            {((salesReport as any)?.total_amount_bs || 0).toFixed(2)} Bs
           </p>
           </CardContent>
         </Card>
@@ -314,10 +454,10 @@ export default function ReportsPage() {
               <Wallet className="w-5 h-5 text-success" />
           </div>
             <p className="text-xl sm:text-2xl font-bold text-success">
-            ${(salesReport?.total_profit_usd || 0).toFixed(2)}
+            ${((salesReport as any)?.total_profit_usd || 0).toFixed(2)}
           </p>
             <p className="text-xs text-success mt-1">
-            {(salesReport?.total_profit_bs || 0).toFixed(2)} Bs
+            {((salesReport as any)?.total_profit_bs || 0).toFixed(2)} Bs
           </p>
           </CardContent>
         </Card>
@@ -345,10 +485,10 @@ export default function ReportsPage() {
               <TrendingDown className="w-5 h-5 text-destructive" />
           </div>
             <p className="text-lg sm:text-xl font-bold text-destructive">
-            ${(salesReport?.total_cost_usd || 0).toFixed(2)}
+            ${((salesReport as any)?.total_cost_usd || 0).toFixed(2)}
           </p>
             <p className="text-xs text-muted-foreground mt-1">
-            {(salesReport?.total_cost_bs || 0).toFixed(2)} Bs
+            {((salesReport as any)?.total_cost_bs || 0).toFixed(2)} Bs
           </p>
           </CardContent>
         </Card>
@@ -360,7 +500,7 @@ export default function ReportsPage() {
               <AlertCircle className="w-5 h-5 text-warning" />
           </div>
             <p className="text-lg sm:text-xl font-bold text-warning">
-            ${(debtSummary?.total_pending_usd || 0).toFixed(2)}
+            ${((debtSummary as any)?.total_pending_usd || 0).toFixed(2)}
           </p>
             <p className="text-xs text-muted-foreground mt-1">por cobrar (FIAO)</p>
           </CardContent>
@@ -373,7 +513,7 @@ export default function ReportsPage() {
               <Users className="w-5 h-5 text-warning" />
           </div>
             <p className="text-lg sm:text-xl font-bold text-foreground">
-            {(debtSummary?.by_status.open || 0) + (debtSummary?.by_status.partial || 0)}
+            {((debtSummary as any)?.by_status?.open || 0) + ((debtSummary as any)?.by_status?.partial || 0)}
           </p>
             <p className="text-xs text-muted-foreground mt-1">clientes con deuda</p>
           </CardContent>
@@ -386,8 +526,8 @@ export default function ReportsPage() {
               <BarChart3 className="w-5 h-5 text-primary" />
           </div>
             <p className="text-lg sm:text-xl font-bold text-foreground">
-            ${salesReport && salesReport.total_sales > 0
-              ? (salesReport.total_amount_usd / salesReport.total_sales).toFixed(2)
+            ${salesReport && (salesReport as any).total_sales > 0
+              ? ((salesReport as any).total_amount_usd / (salesReport as any).total_sales).toFixed(2)
               : '0.00'}
           </p>
             <p className="text-xs text-muted-foreground mt-1">USD por venta</p>
@@ -396,7 +536,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Ventas por Método de Pago */}
-      {salesReport && Object.keys(salesReport.by_payment_method).length > 0 && (
+      {salesReport && (salesReport as any).by_payment_method && Object.keys((salesReport as any).by_payment_method).length > 0 && (
         <Card className="mb-4 sm:mb-6 border border-border">
           <CardHeader>
             <CardTitle className="text-lg flex items-center">
@@ -406,14 +546,14 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {Object.entries(salesReport.by_payment_method)
+              {Object.entries((salesReport as any).by_payment_method)
                 .sort(([a], [b]) => {
                   // Priorizar FIAO al inicio
                   if (a === 'FIAO') return -1
                   if (b === 'FIAO') return 1
                   return 0
                 })
-                .map(([method, data]) => {
+                .map(([method, data]: [string, any]) => {
                   const isFIAO = method === 'FIAO'
                   return (
                     <Card
@@ -434,15 +574,15 @@ export default function ReportsPage() {
                       {paymentMethodLabels[method] || method}
                     </span>
                           <Badge variant={isFIAO ? 'default' : 'secondary'} className={isFIAO ? 'bg-warning text-white' : ''}>
-                      {data.count} ventas
+                      {(data?.count || 0)} ventas
                           </Badge>
                   </div>
                         <div className="text-sm">
                           <p className={cn(isFIAO ? 'text-warning' : 'text-muted-foreground')}>
-                            {data.amount_bs.toFixed(2)} Bs
+                            {(data?.amount_bs || 0).toFixed(2)} Bs
                           </p>
                           <p className={cn('font-medium', isFIAO ? 'text-warning' : 'text-foreground')}>
-                            ${data.amount_usd.toFixed(2)} USD
+                            ${(data?.amount_usd || 0).toFixed(2)} USD
                           </p>
                   </div>
                       </CardContent>
@@ -466,47 +606,49 @@ export default function ReportsPage() {
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4">
               {/* Stats de deudas */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-                <Card className="bg-muted/50 border-border">
-                  <CardContent className="p-3">
-                    <p className="text-xs text-muted-foreground">Total Fiado</p>
-                    <p className="text-lg font-bold text-foreground">
-                    ${debtSummary.total_debt_usd.toFixed(2)}
-                  </p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-success/5 !border-success border">
-                  <CardContent className="p-3">
-                    <p className="text-xs text-muted-foreground">Total Cobrado</p>
-                    <p className="text-lg font-bold text-success">
-                    ${debtSummary.total_paid_usd.toFixed(2)}
-                  </p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-warning/5 !border-warning border">
-                  <CardContent className="p-3">
-                    <p className="text-xs text-muted-foreground">Pendiente</p>
-                    <p className="text-lg font-bold text-warning">
-                    ${debtSummary.total_pending_usd.toFixed(2)}
-                  </p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-info/5 !border-info border">
-                  <CardContent className="p-3">
-                    <p className="text-xs text-muted-foreground">Deudas Abiertas</p>
-                    <p className="text-lg font-bold text-info">
-                    {debtSummary.by_status.open + debtSummary.by_status.partial}
-                  </p>
-                  </CardContent>
-                </Card>
-              </div>
+              {debtSummary ? (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                    <Card className="bg-muted/50 border-border">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">Total Fiado</p>
+                        <p className="text-lg font-bold text-foreground">
+                        ${((debtSummary as any).total_debt_usd || 0).toFixed(2)}
+                      </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-success/5 !border-success border">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">Total Cobrado</p>
+                        <p className="text-lg font-bold text-success">
+                        ${((debtSummary as any).total_paid_usd || 0).toFixed(2)}
+                      </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-warning/5 !border-warning border">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">Pendiente</p>
+                        <p className="text-lg font-bold text-warning">
+                        ${((debtSummary as any).total_pending_usd || 0).toFixed(2)}
+                      </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-info/5 !border-info border">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">Deudas Abiertas</p>
+                        <p className="text-lg font-bold text-info">
+                        {((debtSummary as any).by_status?.open || 0) + ((debtSummary as any).by_status?.partial || 0)}
+                      </p>
+                      </CardContent>
+                    </Card>
+                  </div>
 
-              {/* Top deudores */}
-              {debtSummary.top_debtors.length > 0 && (
+                  {/* Top deudores */}
+                  {(debtSummary as any).top_debtors && Array.isArray((debtSummary as any).top_debtors) && (debtSummary as any).top_debtors.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-foreground mb-3">Top 10 Deudores</h3>
                   <div className="space-y-2">
-                    {debtSummary.top_debtors.map((debtor, index) => (
+                    {debtSummary.top_debtors.map((debtor: any, index: number) => (
                       <Card
                         key={debtor.customer_id}
                         className="bg-muted/50 border-border"
@@ -535,6 +677,12 @@ export default function ReportsPage() {
                     ))}
                   </div>
                 </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">
+                  <p>No hay datos de deudas disponibles</p>
+                </div>
               )}
             </AccordionContent>
           </AccordionItem>
@@ -542,7 +690,7 @@ export default function ReportsPage() {
       )}
 
       {/* Top Productos - Accordion */}
-      {topProducts && topProducts.length > 0 && (
+      {topProducts && Array.isArray(topProducts) && topProducts.length > 0 && (
         <Accordion type="single" collapsible className="mb-4 sm:mb-6" defaultValue="products">
           <AccordionItem value="products" className="border border-border rounded-lg">
             <AccordionTrigger className="px-4 hover:no-underline">
@@ -553,7 +701,7 @@ export default function ReportsPage() {
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4">
               <div className="space-y-2">
-                {topProducts.map((product, index) => {
+                {topProducts.map((product: any, index: number) => {
                   const maxQty = topProducts[0]?.quantity_sold || 1
                   const percentage = (product.quantity_sold / maxQty) * 100
 
@@ -610,7 +758,7 @@ export default function ReportsPage() {
       )}
 
       {/* Ventas Diarias - Accordion */}
-      {salesReport && salesReport.daily.length > 0 && (
+      {salesReport && (salesReport as any).daily && Array.isArray((salesReport as any).daily) && (salesReport as any).daily.length > 0 && (
         <Accordion type="single" collapsible className="mb-4 sm:mb-6" defaultValue="daily">
           <AccordionItem value="daily" className="border border-border rounded-lg">
             <AccordionTrigger className="px-4 hover:no-underline">
@@ -632,7 +780,7 @@ export default function ReportsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                  {salesReport.daily.map((day) => (
+                  {(salesReport as any).daily && Array.isArray((salesReport as any).daily) && (salesReport as any).daily.map((day: any) => (
                       <TableRow key={day.date}>
                         <TableCell>
                           <span className="font-medium text-foreground">
@@ -683,7 +831,7 @@ export default function ReportsPage() {
       )}
 
       {/* Estado vacío */}
-      {!isLoading && (!salesReport || salesReport.total_sales === 0) && (
+      {!isLoading && (!salesReport || (salesReport as any)?.total_sales === 0) && (
         <Card className="border border-border">
           <CardContent className="p-8 text-center">
             <div className="flex flex-col items-center justify-center py-8">

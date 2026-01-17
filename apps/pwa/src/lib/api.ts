@@ -1,5 +1,29 @@
 import axios from 'axios';
-import { useAuth } from '@/stores/auth.store'
+import { useAuth, type AuthUser } from '@/stores/auth.store'
+
+/**
+ * Decodifica un token JWT sin verificar la firma (solo para extraer datos)
+ * Los tokens JWT tienen formato: header.payload.signature
+ */
+function decodeJWT(token: string): any | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return null;
+    }
+    // Decodificar el payload (segunda parte)
+    const payload = parts[1];
+    // Reemplazar caracteres base64url por base64 estándar
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    // Agregar padding si es necesario
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const decoded = atob(padded);
+    return JSON.parse(decoded);
+  } catch (error) {
+    console.error('[API] Error decodificando JWT:', error);
+    return null;
+  }
+}
 
 // Detectar automáticamente la URL del API basándose en la URL actual
 function getApiUrl(): string {
@@ -45,6 +69,33 @@ api.interceptors.request.use(
 
     const token = localStorage.getItem('auth_token');
     if (token) {
+      // Decodificar token para logging de depuración
+      const decoded = decodeJWT(token);
+      const authState = useAuth.getState();
+      
+      if (decoded) {
+        console.log('[API Request] Token info:', {
+          url: config.url,
+          roleInToken: decoded.role,
+          roleInStore: authState.user?.role,
+          userIdInToken: decoded.sub,
+          userIdInStore: authState.user?.user_id,
+          storeIdInToken: decoded.store_id,
+          storeIdInStore: authState.user?.store_id,
+          rolesMatch: decoded.role === authState.user?.role,
+        });
+        
+        // Si hay discrepancia, advertir
+        if (decoded.role !== authState.user?.role) {
+          console.error('[API Request] ⚠️ DISCREPANCIA DE ROL:', {
+            tokenRole: decoded.role,
+            storeRole: authState.user?.role,
+            fullToken: decoded,
+            fullStore: authState.user,
+          });
+        }
+      }
+      
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -130,6 +181,56 @@ api.interceptors.response.use(
         const { access_token, refresh_token: newRefreshToken } = response.data;
 
         console.log('[API] ✅ Token renovado exitosamente');
+
+        // Decodificar el nuevo token para extraer información del usuario
+        const decoded = decodeJWT(access_token);
+        if (decoded) {
+          console.log('[API] Token decodificado:', decoded);
+          
+          // Actualizar el estado del usuario con la información del token
+          const auth = useAuth.getState();
+          const currentUser = auth.user;
+          
+          if (currentUser) {
+            // El JWT solo contiene: sub (user_id), store_id, role
+            // Mantener los demás campos del usuario actual (full_name, license_status, etc.)
+            const updatedUser: AuthUser = {
+              user_id: decoded.sub || currentUser.user_id,
+              store_id: decoded.store_id || currentUser.store_id,
+              role: decoded.role || currentUser.role, // Actualizar rol del token
+              full_name: currentUser.full_name, // Mantener nombre del usuario actual
+              license_status: currentUser.license_status,
+              license_expires_at: currentUser.license_expires_at,
+            };
+            
+            // Si el rol cambió, loguear el cambio y mostrar advertencia
+            if (updatedUser.role !== currentUser.role) {
+              console.warn(
+                `[API] ⚠️ Rol del usuario cambió en el token: ${currentUser.role} -> ${updatedUser.role}`,
+                { 
+                  tokenPayload: decoded,
+                  oldUser: currentUser, 
+                  newUser: updatedUser 
+                }
+              );
+              // Mostrar toast de advertencia al usuario
+              import('react-hot-toast').then(({ default: toast }) => {
+                toast.error(
+                  `Tu rol ha cambiado a: ${updatedUser.role === 'owner' ? 'Propietario' : 'Cajero'}. Recarga la página.`,
+                  { duration: 5000 }
+                );
+              });
+            }
+            
+            // Actualizar el usuario en el store
+            auth.setUser(updatedUser);
+          } else {
+            // Si no hay usuario actual pero tenemos token, intentar crear uno básico
+            console.warn('[API] ⚠️ No hay usuario en el store pero se renovó el token');
+          }
+        } else {
+          console.warn('[API] ⚠️ No se pudo decodificar el token, manteniendo estado actual');
+        }
 
         // Actualizar tokens en localStorage y store
         localStorage.setItem('auth_token', access_token);
