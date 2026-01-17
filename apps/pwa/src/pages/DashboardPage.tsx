@@ -756,7 +756,7 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
+                <div className="overflow-x-auto overflow-y-auto max-h-[280px] sm:max-h-[380px] min-h-0 [-webkit-overflow-scrolling:touch]">
                   <Table>
                     <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
