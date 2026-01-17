@@ -127,23 +127,13 @@ export default defineConfig(({ mode }) => ({
             options: {
               cacheName: 'html-cache',
               expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 año (cache persistente)
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60, // 1 hora
               },
               cacheableResponse: {
-                statuses: [0, 200], // Cachear incluso errores de red (status 0 = offline)
+                statuses: [200], // Evitar cachear respuestas offline o parciales
               },
-              networkTimeoutSeconds: 0.3, // Timeout muy corto (300ms) para detectar offline rápido
-              // Plugin para cachear incluso cuando falla la red
-              plugins: [
-                {
-                  cacheWillUpdate: async ({ response }) => {
-                    // Cachear siempre, incluso si la respuesta es un error de red (status 0)
-                    // Esto permite que el caché tenga algo que servir cuando está offline
-                    return response && (response.status === 0 || response.status === 200) ? response : null;
-                  },
-                },
-              ],
+              networkTimeoutSeconds: 3, // Dar tiempo real a la red antes de usar cache
             },
           },
           {
