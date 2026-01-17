@@ -393,8 +393,9 @@ export default defineConfig(({ mode }) => ({
   build: {
     // Optimizaciones de bundle size
     rollupOptions: {
-      // Asegurar orden de dependencias para evitar problemas de carga
-      preserveEntrySignatures: 'strict',
+      // Cambiar a 'allow-extension' para permitir más flexibilidad en el orden
+      // 'strict' puede causar problemas de inicialización con dependencias circulares
+      preserveEntrySignatures: 'allow-extension',
       output: {
         // SOLUCIÓN SIMPLIFICADA: Agrupar TODO React y dependencias en un solo chunk
         // El análisis recursivo y separaciones complejas causan errores de inicialización
