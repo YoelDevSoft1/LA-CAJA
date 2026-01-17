@@ -387,6 +387,23 @@ export default defineConfig(({ mode }) => ({
             return undefined;
           }
 
+          // CRÍTICO: Verificar dependencias críticas PRIMERO para garantizar orden correcto
+          // Goober debe ir ANTES que react-hot-toast en react-vendor para evitar
+          // "Cannot access 'kn' before initialization"
+          if (id.includes('node_modules/goober')) {
+            return 'react-vendor';
+          }
+
+          // React-hot-toast depende de goober, debe estar en el mismo chunk
+          if (id.includes('node_modules/react-hot-toast')) {
+            return 'react-vendor';
+          }
+
+          // Recharts: mover a react-vendor para evitar dependencias circulares
+          if (id.includes('node_modules/recharts')) {
+            return 'react-vendor';
+          }
+
           // Analizar si el módulo depende de React (directa o indirectamente)
           // Usar análisis de grafo de dependencias para agrupar correctamente
           const stack = new Set<string>();
@@ -402,12 +419,6 @@ export default defineConfig(({ mode }) => ({
           // Date-fns: biblioteca de fechas que NO depende de React
           if (id.includes('node_modules/date-fns')) {
             return 'date-fns-vendor';
-          }
-
-          // Recharts: mover a react-vendor para evitar dependencias circulares
-          // Recharts depende de React internamente y puede causar problemas si está separado
-          if (id.includes('node_modules/recharts')) {
-            return 'react-vendor';
           }
 
           // Resto de vendor (axios, dexie, zustand, socket.io, etc.)
