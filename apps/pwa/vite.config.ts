@@ -347,9 +347,15 @@ export default defineConfig(({ mode }) => ({
         start_url: '/',
         icons: [
           {
-            src: '/favicon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
+            src: '/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
+          {
+            src: '/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
             purpose: 'any maskable',
           },
         ],
@@ -406,35 +412,19 @@ export default defineConfig(({ mode }) => ({
             return undefined;
           }
 
-          // CRÍTICO: Agrupar TODO React y ecosistema en react-vendor
-          // Esto evita problemas de orden de inicialización dentro del chunk
-          if (
-            reactDepRegex.test(id) || // React core
-            id.includes('node_modules/goober') ||
-            id.includes('node_modules/react-hot-toast') ||
-            id.includes('node_modules/react-router') ||
-            id.includes('node_modules/@tanstack') ||
-            id.includes('node_modules/@radix-ui') ||
-            id.includes('node_modules/react-hook-form') ||
-            id.includes('node_modules/react-day-picker') ||
-            id.includes('node_modules/react-helmet-async') ||
-            id.includes('node_modules/framer-motion') ||
-            id.includes('node_modules/@hookform/resolvers') ||
-            id.includes('node_modules/lucide-react') ||
-            id.includes('node_modules/dexie-react-hooks') ||
-            id.includes('node_modules/recharts')
-          ) {
-            return 'react-vendor';
-          }
-
           // Date-fns: biblioteca de fechas que NO depende de React (puede ir separada)
           if (id.includes('node_modules/date-fns')) {
             return 'date-fns-vendor';
           }
 
-          // Resto de vendor (axios, dexie, zustand, socket.io, etc.)
-          // Estas NO dependen de React y pueden ir en un chunk separado
-          return 'vendor';
+          // CRÍTICO: Agrupar TODO lo demás en react-vendor para evitar errores
+          // "Cannot read properties of undefined (reading 'useLayoutEffect')"
+          // Cualquier subdependencia que use React debe estar en el mismo chunk que React
+          // Separar chunks causa problemas de orden de inicialización
+          // Excepciones: date-fns (ya manejado arriba)
+          
+          // React core y todo su ecosistema va a react-vendor
+          return 'react-vendor';
         },
         // Optimizar nombres de chunks para mejor cacheo
         chunkFileNames: 'assets/[name]-[hash].js',
