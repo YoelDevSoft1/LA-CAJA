@@ -37,14 +37,41 @@ interface CustomTooltipProps {
     value: number
     dataKey: string
     color: string
+    payload?: {
+      date: string
+      formattedDate: string
+      amount: number
+      count: number
+    }
   }>
-  label?: string
   currency: 'BS' | 'USD'
 }
 
-const CustomTooltip = ({ active, payload, label, currency }: CustomTooltipProps) => {
-  if (active && payload && payload.length && label) {
-    const date = parseISO(label)
+const CustomTooltip = ({ active, payload, currency }: CustomTooltipProps) => {
+  if (active && payload && payload.length) {
+    // Obtener la fecha original del payload (no usar label que está formateado)
+    const firstPayload = payload[0]?.payload
+    const dateString = firstPayload?.date
+    
+    if (!dateString) {
+      return null
+    }
+    
+    // Validar y parsear la fecha
+    let date: Date
+    try {
+      date = parseISO(dateString)
+      
+      // Verificar que la fecha sea válida
+      if (isNaN(date.getTime())) {
+        console.warn('[SalesTrendChart] Invalid date:', dateString)
+        return null
+      }
+    } catch (error) {
+      console.warn('[SalesTrendChart] Error parsing date:', dateString, error)
+      return null
+    }
+    
     return (
       <div className="bg-popover border border-border rounded-lg shadow-lg p-3 min-w-[180px]">
         <p className="font-semibold text-foreground mb-2">

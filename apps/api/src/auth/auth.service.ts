@@ -454,6 +454,12 @@ export class AuthService {
     userId: string,
     storeId: string,
   ): Promise<StoreMember | null> {
+    this.logger.log('[AuthService] validateUser - Buscando usuario:', {
+      userId,
+      storeId,
+    });
+
+    // Primero buscar el miembro
     const member = await this.storeMemberRepository.findOne({
       where: {
         user_id: userId,
@@ -461,20 +467,38 @@ export class AuthService {
       },
       relations: ['profile'],
     });
-    
-    if (member) {
-      this.logger.debug('[AuthService] validateUser:', {
+
+    // Si no se encuentra, buscar todos los miembros de la tienda para debugging
+    if (!member) {
+      const allMembers = await this.storeMemberRepository.find({
+        where: { store_id: storeId },
+        relations: ['profile'],
+      });
+      
+      this.logger.warn('[AuthService] validateUser - Usuario no encontrado:', {
+        userId,
+        storeId,
+        searchedFor: { user_id: userId, store_id: storeId },
+        allMembersInStore: allMembers.map(m => ({
+          user_id: m.user_id,
+          store_id: m.store_id,
+          role: m.role,
+          full_name: m.profile?.full_name,
+        })),
+      });
+    } else {
+      this.logger.log('[AuthService] validateUser - Usuario encontrado:', {
         userId,
         storeId,
         memberRole: member.role,
         memberId: member.user_id,
         hasProfile: !!member.profile,
-        fullMember: member,
-      });
-    } else {
-      this.logger.warn('[AuthService] validateUser - Usuario no encontrado:', {
-        userId,
-        storeId,
+        profileName: member.profile?.full_name,
+        fullMemberData: {
+          user_id: member.user_id,
+          store_id: member.store_id,
+          role: member.role,
+        },
       });
     }
     

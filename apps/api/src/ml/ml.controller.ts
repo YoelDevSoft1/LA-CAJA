@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { MLService } from './ml.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { PredictDemandDto } from './dto/predict-demand.dto';
 import { EvaluateDemandDto } from './dto/evaluate-demand.dto';
@@ -19,7 +20,7 @@ import { DetectAnomaliesDto } from './dto/detect-anomalies.dto';
 import { ResolveAnomalyDto } from './dto/resolve-anomaly.dto';
 
 @Controller('ml')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('owner')
 export class MLController {
   constructor(private readonly mlService: MLService) {}

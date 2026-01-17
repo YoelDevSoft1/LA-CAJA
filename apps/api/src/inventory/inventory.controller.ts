@@ -15,12 +15,13 @@ import { InventoryService } from './inventory.service';
 import { StockReceivedDto } from './dto/stock-received.dto';
 import { StockAdjustedDto } from './dto/stock-adjusted.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ApproveStockDto } from './dto/approve-stock.dto';
 import { GetStockStatusDto } from './dto/get-stock-status.dto';
 
 @Controller('inventory')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 

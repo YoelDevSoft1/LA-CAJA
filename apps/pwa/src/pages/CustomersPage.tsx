@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { Search, Plus, Edit, Users, Phone, CreditCard, FileText, History, Mail, DollarSign, Trash2, AlertTriangle } from 'lucide-react'
+import { Search, Plus, Edit, Users, Phone, CreditCard, FileText, History, Mail, DollarSign, Trash2, AlertTriangle, Printer } from 'lucide-react'
 import { customersService, Customer } from '@/services/customers.service'
 import { debtsService, DebtSummary } from '@/services/debts.service'
 import CustomerFormModal from '@/components/customers/CustomerFormModal'
 import CustomerHistoryModal from '@/components/customers/CustomerHistoryModal'
+import CustomerStatementModal from '@/components/customers/CustomerStatementModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -28,6 +29,7 @@ export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [isStatementOpen, setIsStatementOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -56,6 +58,16 @@ export default function CustomersPage() {
   const handleViewHistory = (customer: Customer) => {
     setSelectedCustomer(customer)
     setIsHistoryOpen(true)
+  }
+
+  const handleViewStatement = (customer: Customer) => {
+    setSelectedCustomer(customer)
+    setIsStatementOpen(true)
+  }
+
+  const handleCloseStatement = () => {
+    setIsStatementOpen(false)
+    setSelectedCustomer(null)
   }
 
   const handleCreate = () => {
@@ -288,6 +300,21 @@ export default function CustomersPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  onClick={() => handleViewStatement(customer)}
+                                  className="h-9 w-9 min-h-[44px] min-w-[44px]"
+                                >
+                                  <Printer className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Estado de cuenta</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
                                   onClick={() => handleEdit(customer)}
                                   className="h-9 w-9 min-h-[44px] min-w-[44px]"
                                 >
@@ -380,6 +407,15 @@ export default function CustomersPage() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        onClick={() => handleViewStatement(customer)}
+                        className="h-11 w-11 min-h-[44px] min-w-[44px]"
+                        title="Estado de cuenta"
+                      >
+                        <Printer className="w-5 h-5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => handleEdit(customer)}
                         className="h-11 w-11 min-h-[44px] min-w-[44px]"
                         title="Editar"
@@ -417,6 +453,13 @@ export default function CustomersPage() {
       <CustomerHistoryModal
         isOpen={isHistoryOpen}
         onClose={handleCloseHistory}
+        customer={selectedCustomer}
+      />
+
+      {/* Statement Modal */}
+      <CustomerStatementModal
+        isOpen={isStatementOpen}
+        onClose={handleCloseStatement}
         customer={selectedCustomer}
       />
 

@@ -19,10 +19,11 @@ import { ChangePriceDto } from './dto/change-price.dto';
 import { BulkPriceChangeDto } from './dto/bulk-price-change.dto';
 import { SearchProductsDto } from './dto/search-products.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 
 @Controller('products')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 

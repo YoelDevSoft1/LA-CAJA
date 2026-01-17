@@ -208,10 +208,8 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
       provide: APP_GUARD,
       useClass: LicenseGuard,
     },
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
-    },
+    // RolesGuard removido de guards globales - debe ejecutarse DESPUÉS de JwtAuthGuard
+    // Se aplica explícitamente en controladores que lo requieren: @UseGuards(JwtAuthGuard, RolesGuard)
     // Interceptor global para manejar errores de base de datos
     {
       provide: APP_INTERCEPTOR,

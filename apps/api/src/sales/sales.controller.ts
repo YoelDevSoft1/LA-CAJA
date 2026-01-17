@@ -19,10 +19,11 @@ import { CreateSaleDto } from './dto/create-sale.dto';
 import { VoidSaleDto } from './dto/void-sale.dto';
 import { ReturnSaleDto } from './dto/return-sale.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 
 @Controller('sales')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 

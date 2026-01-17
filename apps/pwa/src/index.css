@@ -134,16 +134,16 @@
     --secondary: 240 5% 96%;
     --secondary-foreground: 240 6% 10%;
 
-    /* Muted - Soft gray palette */
+    /* Muted - Soft gray palette - WCAG AA: al menos 4.5:1 contraste */
     --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 46%;
+    --muted-foreground: 240 5% 35%; /* Mejorado de 46% a 35% para mejor contraste WCAG AA */
 
     /* Accent - Minimal highlight */
     --accent: 240 5% 96%;
     --accent-foreground: 240 6% 10%;
 
-    /* Destructive - Understated red */
-    --destructive: 0 72% 51%;
+    /* Destructive - Understated red - WCAG AA: 4.5:1+ contraste */
+    --destructive: 0 72% 48%; /* Mejorado de 51% a 48% para mejor contraste */
     --destructive-foreground: 0 0% 98%;
 
     /* Success - Calm green */
@@ -158,9 +158,9 @@
     --info: 199 89% 48%;
     --info-foreground: 0 0% 98%;
 
-    /* Borders & Inputs - Visible but refined lines */
-    --border: 240 5.9% 70%;
-    --input: 240 5.9% 70%;
+    /* Borders & Inputs - Visible but refined lines - WCAG AA: contraste visible */
+    --border: 240 5.9% 65%; /* Mejorado de 70% a 65% para mejor visibilidad */
+    --input: 240 5.9% 65%; /* Mejorado de 70% a 65% para mejor visibilidad */
     --ring: 240 6% 10%;
 
     /* Radius - Softer corners */
@@ -188,9 +188,9 @@
     --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
 
-    /* Muted */
+    /* Muted - WCAG AA: al menos 4.5:1 contraste en modo oscuro */
     --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
+    --muted-foreground: 240 5% 75%; /* Mejorado de 64.9% a 75% para mejor contraste */
 
     /* Accent */
     --accent: 262 90% 50%;
@@ -266,5 +266,31 @@
 @layer utilities {
   .bg-gradient-radial {
     background-image: radial-gradient(circle, var(--tw-gradient-stops));
+  }
+
+  /* A11Y-03: Utilidades para asegurar contraste WCAG AA */
+  /* WCAG AA requiere mínimo 4.5:1 para texto normal y 3:1 para texto grande (18pt+) */
+  
+  /* Texto sobre fondos de color - asegurar contraste suficiente */
+  .text-wcag-safe {
+    color: hsl(var(--foreground));
+  }
+
+  /* Badges y etiquetas con contraste mejorado */
+  .badge-wcag-safe {
+    background-color: hsl(var(--muted));
+    color: hsl(var(--foreground));
+  }
+
+  /* Link con contraste mejorado cuando tiene hover */
+  .link-wcag-safe {
+    color: hsl(var(--primary));
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .link-wcag-safe:hover {
+    color: hsl(var(--primary));
+    opacity: 0.8;
   }
 }

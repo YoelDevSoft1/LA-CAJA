@@ -83,11 +83,26 @@ api.interceptors.request.use(
           storeIdInToken: decoded.store_id,
           storeIdInStore: authState.user?.store_id,
           rolesMatch: decoded.role === authState.user?.role,
+          userIdsMatch: decoded.sub === authState.user?.user_id,
         });
         
         // Si hay discrepancia, advertir
         if (decoded.role !== authState.user?.role) {
           console.error('[API Request] ⚠️ DISCREPANCIA DE ROL:', {
+            tokenRole: decoded.role,
+            storeRole: authState.user?.role,
+            tokenUserId: decoded.sub,
+            storeUserId: authState.user?.user_id,
+            fullToken: decoded,
+            fullStore: authState.user,
+          });
+        }
+        
+        // Si hay discrepancia en user_id, advertir también
+        if (decoded.sub !== authState.user?.user_id) {
+          console.error('[API Request] ⚠️ DISCREPANCIA DE USER_ID:', {
+            tokenUserId: decoded.sub,
+            storeUserId: authState.user?.user_id,
             tokenRole: decoded.role,
             storeRole: authState.user?.role,
             fullToken: decoded,

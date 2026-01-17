@@ -201,7 +201,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | INV-UI-01 | Gráfico de stock por producto | ⬜ | Media |
 | INV-UI-02 | Indicadores visuales de stock crítico | ✅ | Alta |
 | INV-UI-03 | Timeline visual de movimientos | ⬜ | Baja |
-| INV-UI-04 | Código de colores por tipo de movimiento | ⬜ | Media |
+| INV-UI-04 | Código de colores por tipo de movimiento | ✅ | Media |
 | INV-UI-05 | Barra de progreso de stock vs mínimo | ⬜ | Media |
 
 ### UX Flow
@@ -222,7 +222,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | INV-RB-02 | Confirmación de ajustes grandes | ✅ | Alta |
 | INV-RB-03 | Auditoría de cambios de inventario | ⬜ | Media |
 | INV-RB-04 | Bloqueo de ajuste si hay ventas pendientes | ⬜ | Alta |
-| INV-RB-05 | Validación de razón en ajustes | ⬜ | Media |
+| INV-RB-05 | Validación de razón en ajustes | ✅ | Media |
 
 ### Performance
 | ID | Mejora | Estado | Prioridad |
@@ -376,7 +376,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | CUS-UX-03 | Historial de compras del cliente | ✅ | Media |
 | CUS-UX-04 | Recordatorio de cobro (WhatsApp/SMS) | 🔮 | Media |
 | CUS-UX-05 | Límite de crédito configurable | ✅ | Alta |
-| CUS-UX-06 | Estado de cuenta imprimible | ⬜ | Media |
+| CUS-UX-06 | Estado de cuenta imprimible | ✅ | Media |
 | CUS-UX-07 | Abono parcial de deuda | ✅ | Alta |
 | CUS-UX-08 | Verificación de crédito disponible | ✅ | Alta |
 
@@ -417,7 +417,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### UI Visual
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| SUP-UI-01 | Estado de orden con colores | ⬜ | Media |
+| SUP-UI-01 | Estado de orden con colores | ✅ | Media |
 | SUP-UI-02 | Timeline de estados de orden | ⬜ | Baja |
 | SUP-UI-03 | Indicador de órdenes pendientes | ✅ | Alta |
 | SUP-UI-04 | Comparación de precios entre proveedores | 🔮 | Media |
@@ -838,9 +838,9 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| A11Y-01 | Navegación por teclado completa | ⬜ | Alta |
-| A11Y-02 | Labels en todos los inputs | ⬜ | Alta |
-| A11Y-03 | Contraste de colores WCAG AA | ⬜ | Alta |
+| A11Y-01 | Navegación por teclado completa | ✅ | Alta |
+| A11Y-02 | Labels en todos los inputs | ✅ | Alta |
+| A11Y-03 | Contraste de colores WCAG AA | ✅ | Alta |
 | A11Y-04 | Focus visible en todos los elementos | ✅ | Alta |
 | A11Y-05 | Aria labels en iconos | ⬜ | Media |
 | A11Y-06 | Anuncios de screen reader | ⬜ | Media |
@@ -863,7 +863,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | MOB-06 | Orientación landscape para tablets | ⬜ | Media |
 | MOB-07 | PWA install prompt | ✅ | Alta |
 | MOB-08 | Splash screen optimizado | ⬜ | Baja |
-| MOB-09 | Offline mode UX | ⬜ | Alta |
+| MOB-09 | Offline mode UX | ✅ | Alta |
 | MOB-10 | Haptic feedback | 🔮 | Baja |
 
 ---
@@ -953,6 +953,14 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | 2026-01-17 | A11y | Soporte de prefers-reduced-motion | Codex |
 | 2026-01-17 | Productos | Exportar productos a Excel (CSV) | Codex |
 | 2026-01-17 | Performance | Preload de rutas críticas (POS, Sales, Dashboard) | Codex |
+| 2026-01-17 | Inventario | Verificación: código de colores por tipo de movimiento ya implementado | Codex |
+| 2026-01-17 | Proveedores | Verificación: estado de orden con colores ya implementado | Codex |
+| 2026-01-17 | Mobile | OfflineBanner prominente con info de funciones disponibles offline | Codex |
+| 2026-01-17 | Inventario | Validación de razón obligatoria cuando se selecciona "Otro" en ajustes | Codex |
+| 2026-01-17 | Clientes | Estado de cuenta imprimible con deudas, historial y crédito | Codex |
+| 2026-01-17 | A11y | Ayuda de atajos de teclado (modal con '?' shortcut) | Codex |
+| 2026-01-17 | A11y | Mejora de contraste de colores WCAG AA (muted-foreground, borders, destructive) | Codex |
+| 2026-01-17 | A11y | Verificación: labels en formularios principales ya implementados | Codex |
 
 ---
 
@@ -964,11 +972,11 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 |--------|-------------|-------------|------------|
 | POS | 35 | 25 | 71% |
 | Productos | 31 | 18 | 58% |
-| Inventario | 22 | 5 | 23% |
+| Inventario | 22 | 7 | 32% |
 | Ventas | 22 | 16 | 73% |
 | Caja/Turnos | 22 | 12 | 55% |
-| Clientes/Deudas | 24 | 19 | 79% |
-| Proveedores | 18 | 1 | 6% |
+| Clientes/Deudas | 24 | 20 | 83% |
+| Proveedores | 18 | 2 | 11% |
 | Descuentos | 13 | 1 | 8% |
 | Lotes/Seriales | 14 | 5 | 36% |
 | Bodegas | 13 | 1 | 8% |
@@ -980,9 +988,9 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | Periféricos | 10 | 0 | 0% |
 | Global | 16 | 7 | 44% |
 | Performance | 10 | 6 | 60% |
-| A11y | 10 | 2 | 20% |
-| Mobile | 10 | 3 | 30% |
-| **TOTAL** | **334** | **127** | **38%** |
+| A11y | 10 | 5 | 50% |
+| Mobile | 10 | 4 | 40% |
+| **TOTAL** | **334** | **136** | **41%** |
 
 ---
 

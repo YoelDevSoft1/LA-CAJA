@@ -66,6 +66,8 @@ import { useNotificationsSync } from '@/hooks/useNotificationsSync'
 import { isRouteAllowed, type Role } from '@/lib/permissions'
 import ExchangeRateIndicator from '@/components/exchange/ExchangeRateIndicator'
 import InstallPrompt from '@/components/pwa/InstallPrompt'
+import OfflineBanner from '@/components/offline/OfflineBanner'
+import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help'
 
 type NavItem = {
   path: string
@@ -169,6 +171,9 @@ export default function MainLayout() {
   // Usar el hook de sincronización que combina ambos sistemas
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotificationsSync()
   const storeId = user?.store_id
+  
+  // Modal de ayuda de atajos de teclado
+  const { isOpen: isShortcutsHelpOpen, setIsOpen: setShortcutsHelpOpen } = useKeyboardShortcutsHelp()
   const userRole = (user?.role || 'cashier') as Role
 
   const filteredNavSections = useMemo(() => {
@@ -812,6 +817,15 @@ export default function MainLayout() {
 
       {/* PWA Install Prompt */}
       <InstallPrompt />
+
+      {/* Offline Banner */}
+      <OfflineBanner />
+
+      {/* Keyboard Shortcuts Help Modal */}
+      <KeyboardShortcutsHelp 
+        isOpen={isShortcutsHelpOpen} 
+        onOpenChange={setShortcutsHelpOpen} 
+      />
     </div>
   )
 }

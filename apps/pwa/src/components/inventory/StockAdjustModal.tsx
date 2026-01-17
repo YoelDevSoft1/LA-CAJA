@@ -46,7 +46,19 @@ const stockAdjustSchema = z.object({
   ),
   reason: z.enum(['loss', 'damage', 'count', 'other']),
   note: z.string().optional(),
-})
+}).refine(
+  (data) => {
+    // Si la razón es "other", la nota es obligatoria
+    if (data.reason === 'other') {
+      return data.note && data.note.trim().length >= 10
+    }
+    return true
+  },
+  {
+    message: 'Debes especificar una descripción (mínimo 10 caracteres) cuando seleccionas "Otro"',
+    path: ['note'],
+  }
+)
 
 type StockAdjustForm = z.infer<typeof stockAdjustSchema>
 
@@ -330,14 +342,26 @@ export default function StockAdjustModal({
 
               {/* Nota */}
               <div>
-                <Label htmlFor="note">Nota</Label>
+                <Label htmlFor="note">
+                  Nota {watch('reason') === 'other' && <span className="text-destructive">*</span>}
+                </Label>
                 <Textarea
                   id="note"
                   {...register('note')}
                   rows={3}
                   className="mt-2 resize-none"
-                  placeholder="Descripción del ajuste (opcional)"
+                  placeholder={watch('reason') === 'other' 
+                    ? "Describe el motivo del ajuste (obligatorio)" 
+                    : "Descripción del ajuste (opcional)"}
                 />
+                {errors.note && (
+                  <p className="mt-1 text-sm text-destructive">{errors.note.message}</p>
+                )}
+                {watch('reason') === 'other' && (
+                  <p className="mt-1 text-xs text-amber-600">
+                    La nota es obligatoria cuando seleccionas "Otro" como razón
+                  </p>
+                )}
               </div>
             </div>
           </div>
