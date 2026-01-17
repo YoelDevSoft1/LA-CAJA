@@ -10,6 +10,24 @@ const reactChunkCache = new Map<string, boolean>();
 const nodeModulesRegex = /[\\/](node_modules)[\\/]/;
 const reactDepRegex = /[\\/](node_modules)[\\/](react|react-dom|scheduler|react-is|use-sync-external-store)[\\/]/;
 
+// Lista explícita de librerías que DEBEN estar en react-vendor (en orden de dependencias)
+// CRÍTICO: goober debe ir antes que react-hot-toast para evitar errores de inicialización
+const reactVendorExplicitList = [
+  'goober', // DEBE ir primero - es dependencia de react-hot-toast
+  'react-hot-toast',
+  'recharts',
+  '@radix-ui',
+  '@tanstack',
+  'react-router',
+  'react-hook-form',
+  'react-day-picker',
+  'react-helmet-async',
+  'framer-motion',
+  '@hookform/resolvers',
+  'lucide-react',
+  'dexie-react-hooks',
+];
+
 const isReactChunkModule = (
   id: string,
   getModuleInfo: (id: string) => {
@@ -387,32 +405,26 @@ export default defineConfig(({ mode }) => ({
             return undefined;
           }
 
-          // CRÍTICO: Verificar dependencias críticas PRIMERO para garantizar orden correcto
-          // Goober debe ir ANTES que react-hot-toast en react-vendor para evitar
-          // "Cannot access 'kn' before initialization"
-          if (id.includes('node_modules/goober')) {
-            return 'react-vendor';
+          // CRÍTICO: Verificar lista explícita PRIMERO para garantizar orden y dependencias correctas
+          // Esto evita problemas de inicialización como "Cannot access 'kn' before initialization"
+          for (const lib of reactVendorExplicitList) {
+            if (id.includes(`node_modules/${lib}`)) {
+              return 'react-vendor';
+            }
           }
 
-          // React-hot-toast depende de goober, debe estar en el mismo chunk
-          if (id.includes('node_modules/react-hot-toast')) {
-            return 'react-vendor';
-          }
-
-          // Recharts: mover a react-vendor para evitar dependencias circulares
-          if (id.includes('node_modules/recharts')) {
+          // Verificar React core directamente (debe estar en react-vendor)
+          if (reactDepRegex.test(id)) {
             return 'react-vendor';
           }
 
           // Analizar si el módulo depende de React (directa o indirectamente)
-          // Usar análisis de grafo de dependencias para agrupar correctamente
+          // Usar análisis de grafo de dependencias como respaldo
           const stack = new Set<string>();
           const isReact = isReactChunkModule(id, getModuleInfo, stack);
 
           if (isReact) {
             // Todos los módulos que dependen de React van en react-vendor
-            // Esto incluye: React core, librerías de UI, hooks, forms, etc.
-            // Agrupar todo en un solo chunk evita problemas de inicialización
             return 'react-vendor';
           }
 
