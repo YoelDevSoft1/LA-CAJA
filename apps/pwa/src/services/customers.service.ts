@@ -106,4 +106,11 @@ export const customersService = {
     )
     return response.data
   },
+
+  /**
+   * Delete a customer by ID
+   */
+  async delete(id: string): Promise<void> {
+    await api.delete(`/customers/${id}`)
+  },
 }

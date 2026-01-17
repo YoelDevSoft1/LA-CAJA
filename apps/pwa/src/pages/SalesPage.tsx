@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileText, Eye, Calendar as CalendarIcon, Store, AlertCircle, Printer, Receipt } from 'lucide-react'
+import { FileText, Eye, Calendar as CalendarIcon, Store, AlertCircle, Printer, Receipt, Download } from 'lucide-react'
 import { salesService, Sale } from '@/services/sales.service'
 import { authService } from '@/services/auth.service'
 import { useAuth } from '@/stores/auth.store'
@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { exportToCSV } from '@/utils/export-excel'
+import toast from 'react-hot-toast'
 import {
   Table,
   TableBody,
@@ -182,6 +184,90 @@ export default function SalesPage() {
     setCurrentPage(1)
   }
 
+  // Exportar ventas a Excel
+  const handleExportExcel = () => {
+    if (sales.length === 0) {
+      toast.error('No hay ventas para exportar')
+      return
+    }
+
+    const timestamp = format(new Date(), 'yyyy-MM-dd')
+    const dateRangeStr = dateFrom && dateTo 
+      ? `${format(dateFrom, 'dd-MM-yyyy')}_a_${format(dateTo, 'dd-MM-yyyy')}`
+      : timestamp
+
+    exportToCSV(
+      sales,
+      [
+        {
+          header: 'Fecha',
+          accessor: (sale) => format(new Date(sale.sold_at), 'dd/MM/yyyy HH:mm'),
+        },
+        {
+          header: 'Factura',
+          accessor: (sale) => sale.invoice_full_number || '-',
+        },
+        {
+          header: 'Productos',
+          accessor: (sale) => sale.items.length,
+          format: 'number',
+        },
+        {
+          header: 'Total Bs',
+          accessor: (sale) => Number(sale.totals.total_bs),
+          format: 'currency',
+        },
+        {
+          header: 'Total USD',
+          accessor: (sale) => Number(sale.totals.total_usd),
+          format: 'currency',
+        },
+        {
+          header: 'Moneda',
+          accessor: (sale) => currencyLabels[sale.currency] || sale.currency,
+        },
+        {
+          header: 'Método de Pago',
+          accessor: (sale) => paymentMethodLabels[sale.payment.method] || sale.payment.method,
+        },
+        {
+          header: 'Responsable',
+          accessor: (sale) => sale.sold_by_user?.full_name || 'N/A',
+        },
+        {
+          header: 'Cliente',
+          accessor: (sale) => sale.customer?.name || '-',
+        },
+        {
+          header: 'Cédula Cliente',
+          accessor: (sale) => sale.customer?.document_id || '-',
+        },
+        {
+          header: 'Estado',
+          accessor: (sale) => sale.voided_at ? 'Anulada' : 'Completada',
+        },
+        {
+          header: 'Estado Deuda',
+          accessor: (sale) => {
+            if (sale.payment.method !== 'FIAO') return '-'
+            if (!sale.debt) return 'Sin deuda'
+            switch (sale.debt.status) {
+              case 'paid': return 'Pagado'
+              case 'partial': return 'Parcial'
+              case 'open': return 'Pendiente'
+              default: return sale.debt.status
+            }
+          },
+        },
+      ],
+      {
+        filename: `Ventas_${dateRangeStr}`,
+      }
+    )
+
+    toast.success(`${sales.length} ventas exportadas a Excel`)
+  }
+
   return (
     <div className="h-full max-w-7xl mx-auto">
       {/* Header */}
@@ -196,19 +282,30 @@ export default function SalesPage() {
             </p>
           </div>
           {total > 0 && (
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-right">
-              <div>
-                <p className="text-xs text-muted-foreground">Total en Bs</p>
-                <p className="text-lg font-bold text-foreground">
-                  {totalSalesBs.toFixed(2)} Bs
-                </p>
+            <div className="flex flex-col sm:flex-row items-end gap-2 sm:gap-4">
+              <div className="flex gap-4 text-right">
+                <div>
+                  <p className="text-xs text-muted-foreground">Total en Bs</p>
+                  <p className="text-lg font-bold text-foreground">
+                    {totalSalesBs.toFixed(2)} Bs
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Total en USD</p>
+                  <p className="text-lg font-bold text-foreground">
+                    ${totalSalesUsd.toFixed(2)}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Total en USD</p>
-                <p className="text-lg font-bold text-foreground">
-                  ${totalSalesUsd.toFixed(2)}
-                </p>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportExcel}
+                className="min-h-[44px] min-w-[44px]"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Exportar Excel
+              </Button>
             </div>
           )}
         </div>
@@ -517,19 +614,19 @@ export default function SalesPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleViewDetail(sale)}
-                              className="text-primary hover:text-primary"
+                              className="text-primary hover:text-primary min-h-[44px] min-w-[44px]"
                             >
                               <Eye className="w-4 h-4 mr-1.5" />
-                              Ver
+                              <span className="hidden sm:inline">Ver</span>
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handlePrint(sale)}
-                              className="text-primary"
+                              className="text-primary min-h-[44px] min-w-[44px]"
                             >
-                              <Printer className="w-4 h-4 mr-1" />
-                              Ticket
+                              <Printer className="w-4 h-4 sm:mr-1" />
+                              <span className="hidden sm:inline">Ticket</span>
                             </Button>
                           </TableCell>
                         </TableRow>

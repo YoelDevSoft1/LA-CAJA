@@ -262,7 +262,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | SLS-UX-02 | Búsqueda por número de venta | ✅ | Alta |
 | SLS-UX-03 | Reimprimir ticket | ✅ | Alta |
 | SLS-UX-04 | Anular venta con razón | ✅ | Alta |
-| SLS-UX-05 | Exportar ventas a Excel | ⬜ | Media |
+| SLS-UX-05 | Exportar ventas a Excel | ✅ | Media |
 | SLS-UX-06 | Devolución parcial de productos | ✅ | Alta |
 | SLS-UX-07 | Notas/comentarios en venta | ⬜ | Baja |
 
@@ -386,7 +386,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | CUS-RB-01 | Validación de cédula única | ✅ | Alta |
 | CUS-RB-02 | Validación de teléfono | ✅ | Media |
 | CUS-RB-03 | Bloqueo de venta fiada si excede límite | ✅ | Alta |
-| CUS-RB-04 | Confirmación antes de eliminar cliente con deuda | ⬜ | Alta |
+| CUS-RB-04 | Confirmación antes de eliminar cliente con deuda | ✅ | Alta |
 | CUS-RB-05 | Registro de quién registró el pago | ✅ | Media |
 
 ### Performance
@@ -791,7 +791,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 |----|--------|--------|-----------|
 | GLB-UI-01 | Tema oscuro consistente | ⬜ | Media |
 | GLB-UI-02 | Transiciones suaves entre páginas | ⬜ | Baja |
-| GLB-UI-03 | Loading states consistentes | ⬜ | Alta |
+| GLB-UI-03 | Loading states consistentes | ✅ | Alta |
 | GLB-UI-04 | Empty states informativos | ✅ | Alta |
 | GLB-UI-05 | Error states con acciones claras | ✅ | Alta |
 | GLB-UI-06 | Tooltips en iconos de acción | ⬜ | Media |
@@ -811,7 +811,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | GLB-RB-01 | Error boundary global | ✅ | Alta |
 | GLB-RB-02 | Manejo de sesión expirada | ✅ | Alta |
 | GLB-RB-03 | Indicador de modo offline | ✅ | Alta |
-| GLB-RB-04 | Confirmación antes de salir con cambios | ⬜ | Alta |
+| GLB-RB-04 | Confirmación antes de salir con cambios | ✅ | Alta |
 | GLB-RB-05 | Retry automático en errores de red | ✅ | Alta |
 
 ---
@@ -855,7 +855,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| MOB-01 | Touch targets mínimo 44px | ⬜ | Alta |
+| MOB-01 | Touch targets mínimo 44px | ✅ | Alta |
 | MOB-02 | Gestos swipe en listas | ⬜ | Media |
 | MOB-03 | Bottom navigation para móvil | ⬜ | Media |
 | MOB-04 | Pull to refresh | ⬜ | Media |
@@ -944,6 +944,11 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | 2026-01-17 | Descuentos | Validación de % máximo por rol (30% cajero, 100% owner) | Codex |
 | 2026-01-17 | Bodegas | Verificación de stock antes de eliminar | Codex |
 | 2026-01-17 | Global | Componente EmptyState reutilizable | Codex |
+| 2026-01-17 | Global | Componente PageLoader para loading states consistentes | Codex |
+| 2026-01-17 | Global | Hook useUnsavedChanges para detectar cambios sin guardar | Codex |
+| 2026-01-17 | Clientes | Confirmación antes de eliminar cliente con verificación de deuda | Codex |
+| 2026-01-17 | Ventas | Exportar ventas a Excel (CSV) | Codex |
+| 2026-01-17 | Mobile | Touch targets mínimo 44px en botones de acción | Codex |
 
 ---
 
@@ -956,24 +961,24 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | POS | 35 | 25 | 71% |
 | Productos | 31 | 17 | 55% |
 | Inventario | 22 | 5 | 23% |
-| Ventas | 22 | 15 | 68% |
+| Ventas | 22 | 16 | 73% |
 | Caja/Turnos | 22 | 12 | 55% |
-| Clientes/Deudas | 24 | 18 | 75% |
-| Proveedores | 18 | 0 | 0% |
-| Descuentos | 13 | 0 | 0% |
+| Clientes/Deudas | 24 | 19 | 79% |
+| Proveedores | 18 | 1 | 6% |
+| Descuentos | 13 | 1 | 8% |
 | Lotes/Seriales | 14 | 5 | 36% |
-| Bodegas | 13 | 0 | 0% |
+| Bodegas | 13 | 1 | 8% |
 | Dashboard | 17 | 12 | 71% |
-| Fiscal | 13 | 0 | 0% |
+| Fiscal | 13 | 2 | 15% |
 | ML | 11 | 0 | 0% |
 | Realtime | 11 | 0 | 0% |
 | Mesas | 12 | 0 | 0% |
 | Periféricos | 10 | 0 | 0% |
-| Global | 16 | 5 | 31% |
-| Performance | 10 | 3 | 30% |
+| Global | 16 | 7 | 44% |
+| Performance | 10 | 5 | 50% |
 | A11y | 10 | 1 | 10% |
-| Mobile | 10 | 0 | 0% |
-| **TOTAL** | **334** | **118** | **35%** |
+| Mobile | 10 | 3 | 30% |
+| **TOTAL** | **334** | **123** | **37%** |
 
 ---
 
@@ -992,5 +997,5 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 
 ---
 
-**Última actualización:** 2026-01-16
+**Última actualización:** 2026-01-17
 **Próxima revisión programada:** Semanal

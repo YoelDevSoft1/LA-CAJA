@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Search, Plus, Edit, Users, Phone, CreditCard, FileText, History, Mail, DollarSign } from 'lucide-react'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { Search, Plus, Edit, Users, Phone, CreditCard, FileText, History, Mail, DollarSign, Trash2, AlertTriangle } from 'lucide-react'
 import { customersService, Customer } from '@/services/customers.service'
+import { debtsService, DebtSummary } from '@/services/debts.service'
 import CustomerFormModal from '@/components/customers/CustomerFormModal'
 import CustomerHistoryModal from '@/components/customers/CustomerHistoryModal'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,18 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import toast from 'react-hot-toast'
 
 export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -17,6 +30,10 @@ export default function CustomersPage() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null)
+  const [customerDebtSummary, setCustomerDebtSummary] = useState<DebtSummary | null>(null)
+  const [isLoadingDebt, setIsLoadingDebt] = useState(false)
   const queryClient = useQueryClient()
 
   // Obtener datos del prefetch como placeholderData
@@ -60,6 +77,57 @@ export default function CustomersPage() {
     queryClient.invalidateQueries({ queryKey: ['customers'] })
     handleCloseForm()
   }
+
+  // Mutación para eliminar cliente
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => customersService.delete(id),
+    onSuccess: () => {
+      toast.success('Cliente eliminado exitosamente')
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
+      setShowDeleteConfirm(false)
+      setCustomerToDelete(null)
+      setCustomerDebtSummary(null)
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Error al eliminar el cliente'
+      toast.error(message)
+    },
+  })
+
+  // Manejar solicitud de eliminar (verificar deudas primero)
+  const handleDeleteRequest = async (customer: Customer) => {
+    setCustomerToDelete(customer)
+    setIsLoadingDebt(true)
+    setCustomerDebtSummary(null)
+    setShowDeleteConfirm(true)
+
+    try {
+      const summary = await debtsService.getCustomerSummary(customer.id)
+      setCustomerDebtSummary(summary)
+    } catch (error) {
+      // Si no hay deudas o error, mostrar como sin deuda
+      setCustomerDebtSummary(null)
+    } finally {
+      setIsLoadingDebt(false)
+    }
+  }
+
+  // Confirmar eliminación
+  const confirmDelete = () => {
+    if (customerToDelete) {
+      deleteMutation.mutate(customerToDelete.id)
+    }
+  }
+
+  // Cancelar eliminación
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false)
+    setCustomerToDelete(null)
+    setCustomerDebtSummary(null)
+  }
+
+  // Verificar si el cliente tiene deuda pendiente
+  const hasOpenDebt = customerDebtSummary && customerDebtSummary.remaining_usd > 0
 
   return (
     <div className="h-full max-w-7xl mx-auto">
@@ -206,7 +274,7 @@ export default function CustomersPage() {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => handleViewHistory(customer)}
-                                  className="h-8 w-8"
+                                  className="h-9 w-9 min-h-[44px] min-w-[44px]"
                                 >
                                   <History className="w-4 h-4" />
                                 </Button>
@@ -221,12 +289,27 @@ export default function CustomersPage() {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => handleEdit(customer)}
-                                  className="h-8 w-8"
+                                  className="h-9 w-9 min-h-[44px] min-w-[44px]"
                                 >
                                   <Edit className="w-4 h-4" />
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>Editar cliente</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteRequest(customer)}
+                                  className="h-9 w-9 min-h-[44px] min-w-[44px] text-destructive hover:text-destructive hover:bg-destructive/10"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Eliminar cliente</TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                         </div>
@@ -289,19 +372,28 @@ export default function CustomersPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => handleViewHistory(customer)}
-                        className="h-8 w-8"
+                        className="h-11 w-11 min-h-[44px] min-w-[44px]"
                         title="Historial"
                       >
-                        <History className="w-4 h-4" />
+                        <History className="w-5 h-5" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => handleEdit(customer)}
-                        className="h-8 w-8"
+                        className="h-11 w-11 min-h-[44px] min-w-[44px]"
                         title="Editar"
                       >
-                        <Edit className="w-4 h-4" />
+                        <Edit className="w-5 h-5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteRequest(customer)}
+                        className="h-11 w-11 min-h-[44px] min-w-[44px] text-destructive hover:text-destructive hover:bg-destructive/10"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-5 h-5" />
                       </Button>
                     </div>
                   </div>
@@ -327,6 +419,67 @@ export default function CustomersPage() {
         onClose={handleCloseHistory}
         customer={selectedCustomer}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar Cliente</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  ¿Estás seguro de eliminar al cliente{' '}
+                  <span className="font-semibold text-foreground">
+                    "{customerToDelete?.name}"
+                  </span>
+                  ?
+                </p>
+
+                {isLoadingDebt && (
+                  <p className="text-sm text-muted-foreground animate-pulse">
+                    Verificando deudas pendientes...
+                  </p>
+                )}
+
+                {!isLoadingDebt && hasOpenDebt && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>¡Atención!</strong> Este cliente tiene una deuda pendiente de{' '}
+                      <span className="font-bold">
+                        ${customerDebtSummary?.remaining_usd.toFixed(2)} USD
+                      </span>{' '}
+                      ({customerDebtSummary?.remaining_bs.toFixed(2)} Bs).
+                      <br />
+                      Eliminar este cliente <strong>no cancelará</strong> la deuda pendiente.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {!isLoadingDebt && !hasOpenDebt && customerDebtSummary && (
+                  <p className="text-sm text-green-600">
+                    ✓ Este cliente no tiene deudas pendientes.
+                  </p>
+                )}
+
+                <p className="text-sm text-muted-foreground">
+                  Esta acción no se puede deshacer.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelDelete}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending || isLoadingDebt}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? 'Eliminando...' : 'Eliminar Cliente'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

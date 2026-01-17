@@ -168,6 +168,19 @@ export class AuthService {
       throw new UnauthorizedException('PIN incorrecto o usuario no encontrado');
     }
 
+    // Logging para depuración del login
+    this.logger.log('[AuthService] Login exitoso:', {
+      userId: validMember.user_id,
+      storeId: validMember.store_id,
+      role: validMember.role,
+      fullName: validMember.profile?.full_name,
+      allMembersInStore: members.map(m => ({
+        userId: m.user_id,
+        role: m.role,
+        hasPin: !!m.pin_hash,
+      })),
+    });
+
     // Validar licencia de la tienda
     const store = await this.storeRepository.findOne({
       where: { id: dto.store_id },
@@ -441,12 +454,45 @@ export class AuthService {
     userId: string,
     storeId: string,
   ): Promise<StoreMember | null> {
-    return this.storeMemberRepository.findOne({
+    const member = await this.storeMemberRepository.findOne({
       where: {
         user_id: userId,
         store_id: storeId,
       },
       relations: ['profile'],
     });
+    
+    if (member) {
+      this.logger.debug('[AuthService] validateUser:', {
+        userId,
+        storeId,
+        memberRole: member.role,
+        memberId: member.user_id,
+        hasProfile: !!member.profile,
+        fullMember: member,
+      });
+    } else {
+      this.logger.warn('[AuthService] validateUser - Usuario no encontrado:', {
+        userId,
+        storeId,
+      });
+    }
+    
+    return member;
+  }
+
+  async getAllMembersInStore(
+    storeId: string,
+  ): Promise<Array<{ user_id: string; role: string; full_name: string | null }>> {
+    const members = await this.storeMemberRepository.find({
+      where: { store_id: storeId },
+      relations: ['profile'],
+    });
+
+    return members.map((member) => ({
+      user_id: member.user_id,
+      role: member.role,
+      full_name: member.profile?.full_name || null,
+    }));
   }
 }

@@ -46,6 +46,36 @@ export class AuthController {
     return this.authService.getCashiers(storeId);
   }
 
+  @Get('debug/me')
+  @UseGuards(JwtAuthGuard)
+  async getCurrentUser(@Request() req: any): Promise<any> {
+    // Endpoint de depuración para verificar el usuario actual
+    const userId = req.user?.sub;
+    const storeId = req.user?.store_id;
+    const roleInToken = req.user?.role;
+
+    // Obtener el miembro desde la base de datos
+    const member = await this.authService.validateUser(userId, storeId);
+
+    return {
+      userFromRequest: req.user,
+      userFromDB: member
+        ? {
+            user_id: member.user_id,
+            store_id: member.store_id,
+            role: member.role,
+            full_name: member.profile?.full_name,
+          }
+        : null,
+      comparison: {
+        roleInToken,
+        roleInDB: member?.role,
+        match: roleInToken === member?.role,
+      },
+      allMembersInStore: await this.authService.getAllMembersInStore(storeId),
+    };
+  }
+
   @Post('stores')
   @HttpCode(HttpStatus.CREATED)
   async createStore(
