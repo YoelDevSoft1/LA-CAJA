@@ -5,6 +5,64 @@ import path from 'path';
 
 const buildId = process.env.PWA_BUILD_ID || new Date().toISOString();
 const buildIdJson = JSON.stringify(buildId);
+const reactChunkCache = new Map<string, boolean>();
+const nodeModulesRegex = /[\\/](node_modules)[\\/]/;
+const reactDepRegex = /[\\/](node_modules)[\\/](react|react-dom|scheduler|react-is|use-sync-external-store)[\\/]/;
+
+const isReactChunkModule = (
+  id: string,
+  getModuleInfo: (id: string) => {
+    importedIds?: readonly string[];
+    dynamicallyImportedIds?: readonly string[];
+    importers?: readonly string[];
+    dynamicImporters?: readonly string[];
+  } | null,
+  stack: Set<string>,
+): boolean => {
+  if (!nodeModulesRegex.test(id)) {
+    return false;
+  }
+
+  if (reactChunkCache.has(id)) {
+    return reactChunkCache.get(id) as boolean;
+  }
+
+  if (reactDepRegex.test(id)) {
+    reactChunkCache.set(id, true);
+    return true;
+  }
+
+  if (stack.has(id)) {
+    return false;
+  }
+
+  const info = getModuleInfo(id);
+  if (!info) {
+    reactChunkCache.set(id, false);
+    return false;
+  }
+
+  stack.add(id);
+  const deps = [
+    ...(info.importedIds || []),
+    ...(info.dynamicallyImportedIds || []),
+  ];
+
+  if (deps.some((dep) => isReactChunkModule(dep, getModuleInfo, stack))) {
+    stack.delete(id);
+    reactChunkCache.set(id, true);
+    return true;
+  }
+
+  const importers = [
+    ...(info.importers || []),
+    ...(info.dynamicImporters || []),
+  ];
+  const result = importers.some((dep) => isReactChunkModule(dep, getModuleInfo, stack));
+  stack.delete(id);
+  reactChunkCache.set(id, result);
+  return result;
+};
 
 export default defineConfig(({ mode }) => ({
   plugins: [
@@ -97,7 +155,6 @@ export default defineConfig(({ mode }) => ({
         navigateFallback: 'index.html',
         // Deshabilitar en desarrollo porque Vite necesita el servidor
         // En producción funciona perfectamente offline
-        disableDevLogs: true,
       },
       workbox: {
         // CRÍTICO: Incluir runtime de Workbox directamente en el Service Worker
@@ -314,56 +371,41 @@ export default defineConfig(({ mode }) => ({
       // Asegurar orden de dependencias para evitar problemas de carga
       preserveEntrySignatures: 'strict',
       output: {
-        // Separar chunks por vendor y código propio
-        // IMPORTANTE: React y todas las librerías que lo usan directamente deben estar
-        // en el MISMO chunk para evitar "Cannot read properties of undefined (reading 'createContext')"
-        manualChunks: (id) => {
-          // IMPORTANTE: React y TODAS sus dependencias DEBEN estar en el MISMO chunk
-          // para evitar "Cannot read properties of undefined (reading 'forwardRef')"
-          
-          // Primero verificar React core (debe ir primero para estar disponible)
-          if (
-            id.includes('node_modules/react') ||
-            id.includes('node_modules/react-dom') ||
-            id.includes('node_modules/react-is') ||
-            id.includes('node_modules/scheduler') ||
-            id.includes('node_modules/use-sync-external-store')
-          ) {
+        // Separar chunks por vendor usando análisis de grafo de dependencias
+        // CRÍTICO: Usar getModuleInfo para analizar dependencias reales y evitar
+        // problemas de inicialización como "Cannot access 'rp' before initialization"
+        manualChunks: (id, { getModuleInfo }) => {
+          // Solo procesar node_modules (el código propio se mantiene junto)
+          if (!id.includes('node_modules')) {
+            return undefined;
+          }
+
+          // Analizar si el módulo depende de React (directa o indirectamente)
+          // Usar análisis de grafo de dependencias para agrupar correctamente
+          const stack = new Set<string>();
+          const isReact = isReactChunkModule(id, getModuleInfo, stack);
+
+          if (isReact) {
+            // Todos los módulos que dependen de React van en react-vendor
+            // Esto incluye: React core, librerías de UI, hooks, forms, etc.
+            // Agrupar todo en un solo chunk evita problemas de inicialización
             return 'react-vendor';
           }
-          
-          // Todas las librerías que dependen de React (verificar ANTES de date-fns y recharts)
-          if (
-            id.includes('node_modules/@radix-ui') ||
-            id.includes('node_modules/@tanstack') ||
-            id.includes('node_modules/react-router') ||
-            id.includes('node_modules/react-hot-toast') ||
-            id.includes('node_modules/react-hook-form') ||
-            id.includes('node_modules/react-day-picker') ||
-            id.includes('node_modules/react-helmet-async') ||
-            id.includes('node_modules/framer-motion') ||
-            id.includes('node_modules/@hookform/resolvers') ||
-            id.includes('node_modules/lucide-react') || // Usa forwardRef - CRÍTICO
-            id.includes('node_modules/dexie-react-hooks') || // Usa hooks de React
-            id.includes('node_modules/goober') // Dependencia de react-hot-toast
-          ) {
-            return 'react-vendor';
-          }
-          
-          // Date-fns (no depende de React, puede ir separado)
+
+          // Date-fns: biblioteca de fechas que NO depende de React
           if (id.includes('node_modules/date-fns')) {
             return 'date-fns-vendor';
           }
-          
-          // Recharts (usa React pero puede ir en chunk separado si se carga lazy)
+
+          // Recharts: puede ir separado si se carga lazy (aunque usa React internamente)
+          // Si causa problemas, moverlo a react-vendor
           if (id.includes('node_modules/recharts')) {
             return 'recharts-vendor';
           }
-          
-          // Otras librerías que NO dependen de React (axios, dexie, zustand, socket.io, etc.)
-          if (id.includes('node_modules')) {
-            return 'vendor';
-          }
+
+          // Resto de vendor (axios, dexie, zustand, socket.io, etc.)
+          // Estas NO dependen de React y pueden ir en un chunk separado
+          return 'vendor';
         },
         // Optimizar nombres de chunks para mejor cacheo
         chunkFileNames: 'assets/[name]-[hash].js',
