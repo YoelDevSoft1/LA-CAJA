@@ -208,18 +208,23 @@ export default defineConfig(({ mode }) => ({
   build: {
     // Optimizaciones de bundle size
     rollupOptions: {
+      // Asegurar orden de dependencias para evitar problemas de carga
+      preserveEntrySignatures: 'strict',
       output: {
         // Separar chunks por vendor y código propio
         // IMPORTANTE: React y todas las librerías que lo usan directamente deben estar
         // en el MISMO chunk para evitar "Cannot read properties of undefined (reading 'createContext')"
         manualChunks: (id) => {
-          // React core Y todas las librerías que dependen de React DEBEN estar
-          // en el MISMO chunk para evitar errores de orden de carga.
-          // Separar React de sus dependencias causa "Cannot read properties of undefined (reading 'forwardRef')"
-          // porque las librerías intentan usar React antes de que esté disponible.
+          // IMPORTANTE: React y TODAS sus dependencias DEBEN estar en el MISMO chunk
+          // para evitar "Cannot read properties of undefined (reading 'forwardRef')"
+          
+          // Primero verificar React core (debe ir primero para estar disponible)
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'react-vendor';
+          }
+          
+          // Todas las librerías que dependen de React (verificar ANTES de date-fns y recharts)
           if (
-            id.includes('node_modules/react') ||
-            id.includes('node_modules/react-dom') ||
             id.includes('node_modules/@radix-ui') ||
             id.includes('node_modules/@tanstack') ||
             id.includes('node_modules/react-router') ||
@@ -229,20 +234,20 @@ export default defineConfig(({ mode }) => ({
             id.includes('node_modules/react-helmet-async') ||
             id.includes('node_modules/framer-motion') ||
             id.includes('node_modules/@hookform/resolvers') ||
-            id.includes('node_modules/lucide-react') || // Usa forwardRef
+            id.includes('node_modules/lucide-react') || // Usa forwardRef - CRÍTICO
             id.includes('node_modules/dexie-react-hooks') // Usa hooks de React
           ) {
             return 'react-vendor';
           }
           
+          // Date-fns (no depende de React, puede ir separado)
+          if (id.includes('node_modules/date-fns')) {
+            return 'date-fns-vendor';
+          }
+          
           // Recharts (usa React pero puede ir en chunk separado si se carga lazy)
           if (id.includes('node_modules/recharts')) {
             return 'recharts-vendor';
-          }
-          
-          // Date-fns (no depende de React)
-          if (id.includes('node_modules/date-fns')) {
-            return 'date-fns-vendor';
           }
           
           // Otras librerías que NO dependen de React (axios, dexie, zustand, socket.io, etc.)
