@@ -18,6 +18,7 @@ import {
   PurchaseOrder,
   ReceivePurchaseOrderDto,
 } from '@/services/purchase-orders.service'
+import { useBarcodeScanner } from '@/hooks/use-barcode-scanner'
 import toast from 'react-hot-toast'
 
 interface PurchaseOrderReceptionModalProps {
@@ -42,9 +43,9 @@ export default function PurchaseOrderReceptionModal({
     if (isOpen && order) {
       const quantities: Record<string, number> = {}
       order.items.forEach((item) => {
-        // Prellenar con cantidad pendiente (quantity - quantity_received)
-        const pending = item.quantity - item.quantity_received
-        quantities[item.id] = pending > 0 ? pending : 0
+        // Prellenar con 0 para permitir recepción parcial explícita
+        // El usuario puede ingresar la cantidad que desea recibir
+        quantities[item.id] = 0
       })
       setReceivedQuantities(quantities)
       setNote('')
@@ -90,12 +91,27 @@ export default function PurchaseOrderReceptionModal({
         )
         return
       }
+
+      // Validar que la cantidad recibida en esta recepción sea válida
+      if (received < 0) {
+        toast.error(
+          `La cantidad recibida de ${item.product?.name || 'producto'} no puede ser negativa`
+        )
+        return
+      }
     }
 
+    // Calcular el total acumulado (cantidad ya recibida + cantidad en esta recepción)
     const data: ReceivePurchaseOrderDto = {
-      items: order.items.map((item) => ({
-        quantity_received: receivedQuantities[item.id] || 0,
-      })),
+      items: order.items.map((item) => {
+        const receivedInThisReception = receivedQuantities[item.id] || 0
+        const alreadyReceived = item.quantity_received || 0
+        const totalReceived = alreadyReceived + receivedInThisReception
+
+        return {
+          quantity_received: totalReceived, // Backend espera el total acumulado
+        }
+      }),
       note: note || undefined,
     }
 
@@ -109,13 +125,63 @@ export default function PurchaseOrderReceptionModal({
     }))
   }
 
+  // Handler para escaneo de código de barras
+  const handleBarcodeScan = (barcode: string) => {
+    // Buscar el item de la orden que corresponde al código de barras escaneado
+    const matchingItem = order.items.find((item) => {
+      const productBarcode = item.product?.barcode?.toLowerCase()
+      const scannedBarcode = barcode.toLowerCase()
+      
+      return productBarcode === scannedBarcode
+    })
+
+    if (!matchingItem) {
+      toast.error(`Producto no encontrado en la orden: ${barcode}`, {
+        icon: '🔍',
+        duration: 3000,
+      })
+      return
+    }
+
+    // Obtener la cantidad pendiente
+    const pending = matchingItem.quantity - matchingItem.quantity_received
+    
+    if (pending <= 0) {
+      toast.error(`${matchingItem.product?.name || 'Producto'} ya está completamente recibido`, {
+        icon: '⚠️',
+        duration: 3000,
+      })
+      return
+    }
+
+    // Incrementar cantidad recibida en 1 (si hay pendiente)
+    const currentReceived = receivedQuantities[matchingItem.id] || 0
+    const newReceived = Math.min(currentReceived + 1, pending)
+    
+    updateReceivedQuantity(matchingItem.id, newReceived)
+    
+    toast.success(`${matchingItem.product?.name || 'Producto'} - Cantidad: ${newReceived}/${pending}`, {
+      icon: '✅',
+      duration: 2000,
+    })
+  }
+
+  // Integrar scanner de código de barras (solo cuando el modal está abierto y no hay input activo)
+  useBarcodeScanner({
+    onScan: handleBarcodeScan,
+    enabled: isOpen && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA',
+    minLength: 4,
+    maxLength: 50,
+    maxIntervalMs: 50,
+  })
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[85vh] sm:max-h-[90vh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-border flex-shrink-0">
           <DialogTitle className="text-lg sm:text-xl">Recibir Orden de Compra {order.order_number}</DialogTitle>
           <DialogDescription>
-            Indica las cantidades recibidas de cada producto
+            Indica las cantidades recibidas de cada producto. Puedes recibir parcialmente ingresando menos de la cantidad pendiente.
           </DialogDescription>
         </DialogHeader>
 
@@ -146,7 +212,7 @@ export default function PurchaseOrderReceptionModal({
                         )}
                       </div>
 
-                      <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                         <div>
                           <Label className="text-xs text-muted-foreground">
                             Cantidad Solicitada
@@ -168,11 +234,45 @@ export default function PurchaseOrderReceptionModal({
                           <p className="text-lg font-bold text-orange-600">{pending}</p>
                         </div>
                       </div>
+                      
+                      {/* Mostrar diferencia si existe después de esta recepción */}
+                      {received > 0 && (() => {
+                        const totalReceivedAfter = item.quantity_received + received;
+                        const difference = totalReceivedAfter - item.quantity;
+                        
+                        if (difference !== 0) {
+                          return (
+                            <div className="mt-2 p-2 rounded-md bg-amber-50 border border-amber-200">
+                              <p className="text-xs font-medium text-amber-800">
+                                {difference < 0 ? (
+                                  <>⚠️ Se registrará un faltante de {Math.abs(difference)} unidades (solicitadas: {item.quantity}, recibidas: {totalReceivedAfter})</>
+                                ) : (
+                                  <>⚠️ Se registrará un excedente de {difference} unidades (solicitadas: {item.quantity}, recibidas: {totalReceivedAfter})</>
+                                )}
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
 
                       <div>
-                        <Label htmlFor={`received_${item.id}`}>
-                          Cantidad a Recibir *
-                        </Label>
+                        <div className="flex items-center justify-between mb-1">
+                          <Label htmlFor={`received_${item.id}`}>
+                            Cantidad a Recibir *
+                          </Label>
+                          {pending > 0 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-xs"
+                              onClick={() => updateReceivedQuantity(item.id, pending)}
+                            >
+                              Recibir todo ({pending})
+                            </Button>
+                          )}
+                        </div>
                         <Input
                           id={`received_${item.id}`}
                           type="number"
@@ -187,9 +287,22 @@ export default function PurchaseOrderReceptionModal({
                           }
                           required
                           className="mt-1"
+                          inputMode="numeric"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Máximo: {pending} unidades
+                          {received > 0 && received < pending && (
+                            <span className="text-orange-600 font-medium">
+                              Recepción parcial: {received} de {pending} unidades
+                            </span>
+                          )}
+                          {received === pending && pending > 0 && (
+                            <span className="text-green-600 font-medium">
+                              Recepción completa
+                            </span>
+                          )}
+                          {received === 0 && (
+                            <span>Máximo: {pending} unidades (puedes recibir parcialmente)</span>
+                          )}
                         </p>
                       </div>
                     </div>

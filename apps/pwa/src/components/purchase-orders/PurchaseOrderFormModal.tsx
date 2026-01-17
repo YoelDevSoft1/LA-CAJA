@@ -46,6 +46,7 @@ interface PurchaseOrderFormModalProps {
   onClose: () => void
   order?: PurchaseOrder | null
   initialSupplierId?: string
+  initialProducts?: Array<{ product_id: string; quantity?: number }> // Productos para pre-llenar (ej: desde stock bajo)
   onSuccess?: () => void
 }
 
@@ -54,6 +55,7 @@ export default function PurchaseOrderFormModal({
   onClose,
   order,
   initialSupplierId,
+  initialProducts,
   onSuccess,
 }: PurchaseOrderFormModalProps) {
   const queryClient = useQueryClient()
@@ -88,7 +90,7 @@ export default function PurchaseOrderFormModal({
     staleTime: 1000 * 60 * 5,
   })
 
-  // Cargar datos si es edición
+  // Cargar datos si es edición o si hay productos iniciales
   useEffect(() => {
     if (order && isOpen) {
       setSelectedSupplierId(order.supplier_id)
@@ -128,6 +130,45 @@ export default function PurchaseOrderFormModal({
       setProductSearch('')
     }
   }, [order, isOpen, initialSupplierId])
+
+  // Cargar productos iniciales cuando se abre el modal
+  useEffect(() => {
+    if (!isOpen || order || !initialProducts || initialProducts.length === 0) return
+    if (!user?.store_id) return
+
+    const loadInitialProducts = async () => {
+      try {
+        const loadedItems: PurchaseOrderItemForm[] = []
+        
+        for (const { product_id, quantity = 1 } of initialProducts) {
+          try {
+            const product = await productsService.getById(product_id, user.store_id)
+            loadedItems.push({
+              product_id: product.id,
+              variant_id: null,
+              quantity,
+              unit_cost_bs: Number(product.cost_bs) || 0,
+              unit_cost_usd: Number(product.cost_usd) || 0,
+              product,
+            })
+          } catch (error) {
+            console.warn(`[PurchaseOrderFormModal] No se pudo cargar producto ${product_id}:`, error)
+            // Continuar con los demás productos
+          }
+        }
+
+        if (loadedItems.length > 0) {
+          setItems(loadedItems)
+          toast.success(`${loadedItems.length} producto(s) agregado(s) desde stock bajo`)
+        }
+      } catch (error) {
+        console.error('[PurchaseOrderFormModal] Error cargando productos iniciales:', error)
+        toast.error('Error al cargar productos iniciales')
+      }
+    }
+
+    loadInitialProducts()
+  }, [isOpen, initialProducts, user?.store_id, order])
 
   // Mutations
   const createMutation = useMutation({

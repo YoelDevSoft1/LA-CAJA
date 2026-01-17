@@ -132,7 +132,10 @@ export default function PurchaseOrderDetailModal({
 
   if (!order) return null
 
-  const canEdit = order.status === 'draft'
+  // Bloquear edición si la orden fue recibida (parcial o completa) o completada
+  // También bloquear si tiene cualquier cantidad recibida en sus items
+  const hasReceivedItems = order.items.some(item => item.quantity_received > 0)
+  const canEdit = order.status === 'draft' && !hasReceivedItems
   const canSend = order.status === 'draft'
   const canConfirm = order.status === 'sent'
   const canReceive = order.status === 'confirmed' || order.status === 'partial'
@@ -300,7 +303,7 @@ export default function PurchaseOrderDetailModal({
           {/* Acciones */}
           <DialogFooter className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-border flex-shrink-0">
             <div className="flex gap-2 w-full">
-              {canEdit && (
+              {canEdit ? (
                 <Button
                   variant="outline"
                   onClick={() => setIsEditOpen(true)}
@@ -309,7 +312,17 @@ export default function PurchaseOrderDetailModal({
                   <Edit className="w-4 h-4 mr-2" />
                   Editar
                 </Button>
-              )}
+              ) : hasReceivedItems ? (
+                <Button
+                  variant="outline"
+                  disabled
+                  className="flex-1"
+                  title="No se puede editar una orden que ya tiene productos recibidos"
+                >
+                  <Edit className="w-4 h-4 mr-2" />
+                  Editar (Bloqueado)
+                </Button>
+              ) : null}
               {canSend && (
                 <Button
                   variant="default"

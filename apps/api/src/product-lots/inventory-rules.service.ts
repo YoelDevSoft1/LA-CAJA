@@ -22,12 +22,43 @@ export class InventoryRulesService {
     quantity: number,
     lots: ProductLot[],
   ): LotAllocation[] {
-    // Filtrar solo lotes del producto con stock disponible
-    const availableLots = lots.filter(
-      (lot) => lot.product_id === productId && lot.remaining_quantity > 0,
-    );
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Filtrar solo lotes del producto con stock disponible Y que no estén vencidos
+    const availableLots = lots.filter((lot) => {
+      if (lot.product_id !== productId || lot.remaining_quantity <= 0) {
+        return false;
+      }
+
+      // Si el lote tiene fecha de vencimiento, verificar que no esté vencido
+      if (lot.expiration_date) {
+        const expiration = new Date(lot.expiration_date);
+        expiration.setHours(0, 0, 0, 0);
+        if (expiration < today) {
+          return false; // Lote vencido - excluir
+        }
+      }
+
+      return true;
+    });
 
     if (availableLots.length === 0) {
+      // Verificar si hay lotes vencidos para dar un mensaje más específico
+      const expiredLots = lots.filter(
+        (lot) =>
+          lot.product_id === productId &&
+          lot.remaining_quantity > 0 &&
+          lot.expiration_date &&
+          new Date(lot.expiration_date).setHours(0, 0, 0, 0) < today.getTime(),
+      );
+
+      if (expiredLots.length > 0) {
+        throw new BadRequestException(
+          `No se puede vender este producto. Hay ${expiredLots.length} lote(s) vencido(s) con stock. Debe primero ajustar el inventario para los lotes vencidos.`,
+        );
+      }
+
       throw new BadRequestException(
         `No hay lotes disponibles para el producto ${productId}`,
       );

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Plus, Edit, Trash2, Package, CheckCircle, DollarSign, Layers, Boxes, Hash, Upload, AlertTriangle, LayoutGrid, LayoutList, Download } from 'lucide-react'
+import { Search, Plus, Edit, Trash2, Package, CheckCircle, DollarSign, Layers, Boxes, Hash, Upload, AlertTriangle, LayoutGrid, LayoutList, Download, Copy } from 'lucide-react'
 import { productsService, Product, ProductSearchResponse } from '@/services/products.service'
 import { productsCacheService } from '@/services/products-cache.service'
 import { warehousesService } from '@/services/warehouses.service'
@@ -25,6 +25,8 @@ import { inventoryService, StockStatus } from '@/services/inventory.service'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { exportToCSV } from '@/utils/export-excel'
+import { usePullToRefresh } from '@/hooks/use-pull-to-refresh'
+import { PullToRefreshIndicator } from '@/components/ui/pull-to-refresh-indicator'
 
 type WeightUnit = 'kg' | 'g' | 'lb' | 'oz'
 
@@ -59,6 +61,7 @@ export default function ProductsPage() {
   const [pageSize] = useState(50) // 50 productos por página
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [duplicatingProduct, setDuplicatingProduct] = useState<Product | null>(null)
   const [isPriceModalOpen, setIsPriceModalOpen] = useState(false)
   const [priceProduct, setPriceProduct] = useState<Product | null>(null)
   const [isBulkPriceModalOpen, setIsBulkPriceModalOpen] = useState(false)
@@ -151,6 +154,15 @@ export default function ProductsPage() {
   const total = productsData?.total || 0
   const isOfflineEmpty = !isOnline && products.length === 0
 
+  // Pull-to-refresh para móvil
+  const pullToRefresh = usePullToRefresh({
+    onRefresh: async () => {
+      await refetch()
+    },
+    enabled: true,
+    threshold: 80,
+  })
+
   // Mutación para desactivar producto
   const deactivateMutation = useMutation({
     mutationFn: (id: string) => productsService.deactivate(id, user?.store_id),
@@ -179,10 +191,26 @@ export default function ProductsPage() {
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product)
+    setDuplicatingProduct(null)
     setIsFormOpen(true)
   }
 
   const handleCreate = () => {
+    setEditingProduct(null)
+    setDuplicatingProduct(null)
+    setIsFormOpen(true)
+  }
+
+  const handleDuplicate = (product: Product) => {
+    // Preparar producto duplicado: copiar todos los datos pero limpiar campos únicos
+    const duplicated: Product = {
+      ...product,
+      id: '', // Sin ID para que se cree uno nuevo
+      name: `${product.name} (Copia)`, // Agregar "(Copia)" al nombre
+      sku: '', // Limpiar SKU (debe ser único)
+      barcode: '', // Limpiar código de barras (debe ser único)
+    }
+    setDuplicatingProduct(duplicated)
     setEditingProduct(null)
     setIsFormOpen(true)
   }
@@ -190,6 +218,7 @@ export default function ProductsPage() {
   const handleCloseForm = () => {
     setIsFormOpen(false)
     setEditingProduct(null)
+    setDuplicatingProduct(null)
   }
 
   const handleDeactivate = (product: Product) => {
@@ -254,6 +283,13 @@ export default function ProductsPage() {
 
   return (
     <div className="h-full max-w-7xl mx-auto">
+      {/* Indicador de pull-to-refresh */}
+      <PullToRefreshIndicator
+        isPulling={pullToRefresh.isPulling}
+        isRefreshing={pullToRefresh.isRefreshing}
+        pullDistance={pullToRefresh.pullDistance}
+        threshold={80}
+      />
       {/* Header */}
       <div className="mb-4 sm:mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -451,6 +487,7 @@ export default function ProductsPage() {
                   product={product}
                   stock={stockByProduct[product.id]}
                   onEdit={handleEdit}
+                  onDuplicate={handleDuplicate}
                   onChangePrice={handleChangePrice}
                   onManageVariants={handleManageVariants}
                   onManageLots={handleManageLots}
@@ -597,11 +634,22 @@ export default function ProductsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() => handleDuplicate(product)}
+                          className="h-8 w-8 text-blue-600 hover:text-blue-600 hover:bg-blue-600/10"
+                          title="Duplicar"
+                          aria-label="Duplicar producto"
+                        >
+                          <Copy className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleEdit(product)}
                           className="h-8 w-8"
                           title="Editar"
+                          aria-label="Editar producto"
                         >
-                          <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
+                          <Edit className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
                         </Button>
                         {product.is_active ? (
                           <Button
@@ -674,6 +722,7 @@ export default function ProductsPage() {
         isOpen={isFormOpen}
         onClose={handleCloseForm}
         product={editingProduct}
+        templateProduct={duplicatingProduct}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['products'] })
           queryClient.invalidateQueries({ queryKey: ['inventory', 'status'] })

@@ -22,6 +22,7 @@ import {
   CheckCircle,
   Barcode,
   AlertTriangle,
+  Copy,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -52,6 +53,7 @@ interface ProductCardProps {
   product: Product
   stock?: StockStatus
   onEdit: (product: Product) => void
+  onDuplicate?: (product: Product) => void
   onChangePrice: (product: Product) => void
   onManageVariants: (product: Product) => void
   onManageLots: (product: Product) => void
@@ -66,6 +68,7 @@ export default function ProductCard({
   product,
   stock,
   onEdit,
+  onDuplicate,
   onChangePrice,
   onManageVariants,
   onManageLots,
@@ -133,6 +136,12 @@ export default function ProductCard({
                 <Edit className="w-4 h-4 mr-2" />
                 Editar producto
               </DropdownMenuItem>
+              {onDuplicate && (
+                <DropdownMenuItem onClick={() => onDuplicate(product)}>
+                  <Copy className="w-4 h-4 mr-2" />
+                  Duplicar producto
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => onChangePrice(product)}>
                 <DollarSign className="w-4 h-4 mr-2" />
                 Cambiar precio

@@ -8,6 +8,7 @@ import { exchangeService } from '@/services/exchange.service'
 import { warehousesService } from '@/services/warehouses.service'
 import { useAuth } from '@/stores/auth.store'
 import { useMobileOptimizedQuery } from '@/hooks/use-mobile-optimized-query'
+import { useBarcodeScanner } from '@/hooks/use-barcode-scanner'
 import { Plus, Trash2, Search, Scale } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -269,6 +270,66 @@ export default function StockReceivedModal({
   const removeProduct = (itemId: string) => {
     setProductItems(productItems.filter((item) => item.id !== itemId))
   }
+
+  // Handler para escaneo de código de barras
+  const handleBarcodeScan = async (barcode: string) => {
+    try {
+      const products = productsData?.products || []
+      
+      // Buscar producto por código de barras exacto
+      const product = products.find(
+        (p) => p.barcode?.toLowerCase() === barcode.toLowerCase()
+      )
+
+      if (!product) {
+        toast.error(`Producto no encontrado: ${barcode}`, {
+          icon: '🔍',
+          duration: 3000,
+        })
+        return
+      }
+
+      // Verificar si el producto ya está en la lista
+      const existingItem = productItems.find(
+        (item) => item.product_id === product.id
+      )
+
+      if (existingItem) {
+        // Si ya existe, incrementar cantidad (solo si no es por peso)
+        if (!existingItem.is_weight_product) {
+          updateProductItem(existingItem.id, 'qty', existingItem.qty + 1)
+          toast.success(`${product.name} - Cantidad incrementada`, {
+            icon: '✅',
+            duration: 2000,
+          })
+        } else {
+          toast(`${product.name} es un producto por peso. Ingresa la cantidad manualmente.`, {
+            icon: '⚖️',
+            duration: 3000,
+          })
+        }
+      } else {
+        // Agregar nuevo producto
+        addProduct(product)
+        toast.success(`${product.name} agregado`, {
+          icon: '✅',
+          duration: 2000,
+        })
+      }
+    } catch (error) {
+      console.error('[StockReceivedModal] Error al buscar producto por código de barras:', error)
+      toast.error('Error al buscar producto')
+    }
+  }
+
+  // Integrar scanner de código de barras (solo cuando el modal está abierto y no hay input activo)
+  useBarcodeScanner({
+    onScan: handleBarcodeScan,
+    enabled: isOpen && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA',
+    minLength: 4,
+    maxLength: 50,
+    maxIntervalMs: 50,
+  })
 
   const updateProductItem = (
     itemId: string,

@@ -65,6 +65,7 @@ interface ProductFormModalProps {
   isOpen: boolean
   onClose: () => void
   product?: Product | null
+  templateProduct?: Product | null // Producto template para duplicar (pre-llena el formulario en modo creación)
   onSuccess?: () => void
 }
 
@@ -72,9 +73,11 @@ export default function ProductFormModal({
   isOpen,
   onClose,
   product,
+  templateProduct,
   onSuccess,
 }: ProductFormModalProps) {
-  const isEditing = !!product
+  const isEditing = !!product && !!product.id
+  const productToUse = product || templateProduct
 
   const {
     register,
@@ -328,39 +331,39 @@ export default function ProductFormModal({
     }
   }, [isOpen, reset])
 
-  // Cargar datos del producto si está en modo edición
+  // Cargar datos del producto si está en modo edición o duplicando
   useEffect(() => {
     if (!isOpen) return
     
-    if (product) {
+    if (productToUse) {
       reset({
-        name: product.name,
-        category: product.category || '',
-        sku: product.sku || '',
-        barcode: product.barcode || '',
-        price_bs: Number(product.price_bs),
-        price_usd: Number(product.price_usd),
-        cost_bs: Number(product.cost_bs),
-        cost_usd: Number(product.cost_usd),
-        low_stock_threshold: product.low_stock_threshold || 0,
-        is_weight_product: product.is_weight_product || false,
-        weight_unit: product.weight_unit || null,
-        price_per_weight_bs: product.price_per_weight_bs
-          ? Number(product.price_per_weight_bs)
+        name: productToUse.name,
+        category: productToUse.category || '',
+        sku: productToUse.sku || '',
+        barcode: productToUse.barcode || '',
+        price_bs: Number(productToUse.price_bs),
+        price_usd: Number(productToUse.price_usd),
+        cost_bs: Number(productToUse.cost_bs),
+        cost_usd: Number(productToUse.cost_usd),
+        low_stock_threshold: productToUse.low_stock_threshold || 0,
+        is_weight_product: productToUse.is_weight_product || false,
+        weight_unit: productToUse.weight_unit || null,
+        price_per_weight_bs: productToUse.price_per_weight_bs
+          ? Number(productToUse.price_per_weight_bs)
           : null,
-        price_per_weight_usd: product.price_per_weight_usd
-          ? Number(product.price_per_weight_usd)
+        price_per_weight_usd: productToUse.price_per_weight_usd
+          ? Number(productToUse.price_per_weight_usd)
           : null,
-        cost_per_weight_bs: product.cost_per_weight_bs
-          ? Number(product.cost_per_weight_bs)
+        cost_per_weight_bs: productToUse.cost_per_weight_bs
+          ? Number(productToUse.cost_per_weight_bs)
           : null,
-        cost_per_weight_usd: product.cost_per_weight_usd
-          ? Number(product.cost_per_weight_usd)
+        cost_per_weight_usd: productToUse.cost_per_weight_usd
+          ? Number(productToUse.cost_per_weight_usd)
           : null,
-        min_weight: product.min_weight ? Number(product.min_weight) : null,
-        max_weight: product.max_weight ? Number(product.max_weight) : null,
-        scale_plu: product.scale_plu || null,
-        scale_department: product.scale_department || null,
+        min_weight: productToUse.min_weight ? Number(productToUse.min_weight) : null,
+        max_weight: productToUse.max_weight ? Number(productToUse.max_weight) : null,
+        scale_plu: productToUse.scale_plu || null,
+        scale_department: productToUse.scale_department || null,
       })
     } else {
       reset({
@@ -385,7 +388,7 @@ export default function ProductFormModal({
         scale_department: null,
       })
     }
-  }, [isOpen, product, reset])
+  }, [isOpen, productToUse, reset])
 
   useEffect(() => {
     if (!isOpen) return
@@ -742,6 +745,7 @@ export default function ProductFormModal({
               <Input
                 id="price_bs"
                 type="number"
+                inputMode="decimal"
                 step="0.01"
                 {...register('price_bs', { valueAsNumber: true })}
                 className="mt-2 text-base"
@@ -758,6 +762,7 @@ export default function ProductFormModal({
               <Input
                 id="price_usd"
                 type="number"
+                inputMode="decimal"
                 step="0.01"
                 {...register('price_usd', { valueAsNumber: true })}
                 className="mt-2 text-base"
@@ -778,6 +783,7 @@ export default function ProductFormModal({
               <Input
                 id="cost_usd"
                 type="number"
+                inputMode="decimal"
                 step="0.01"
                 {...register('cost_usd', { valueAsNumber: true })}
                 className="mt-2 text-base"
@@ -854,6 +860,7 @@ export default function ProductFormModal({
             <Input
               id="low_stock_threshold"
               type="number"
+              inputMode="numeric"
               step="1"
               {...register('low_stock_threshold', { valueAsNumber: true })}
               className="mt-2 text-base"
@@ -923,6 +930,7 @@ export default function ProductFormModal({
                   <Input
                     id="price_per_weight_usd"
                     type="number"
+                    inputMode="decimal"
                     step={weightPriceStep}
                     {...register('price_per_weight_usd', { valueAsNumber: true })}
                     className="mt-2 text-base"
@@ -968,6 +976,7 @@ export default function ProductFormModal({
                   <Input
                     id="cost_per_weight_usd"
                     type="number"
+                    inputMode="decimal"
                     step={weightPriceStep}
                     {...register('cost_per_weight_usd', { valueAsNumber: true })}
                     className="mt-2 text-base"
@@ -1012,6 +1021,7 @@ export default function ProductFormModal({
                   <Input
                     id="min_weight"
                     type="number"
+                    inputMode="decimal"
                     step="0.001"
                     {...register('min_weight', { valueAsNumber: true })}
                     className="mt-2 text-base"
@@ -1028,6 +1038,7 @@ export default function ProductFormModal({
                   <Input
                     id="max_weight"
                     type="number"
+                    inputMode="decimal"
                     step="0.001"
                     {...register('max_weight', { valueAsNumber: true })}
                     className="mt-2 text-base"
@@ -1064,6 +1075,7 @@ export default function ProductFormModal({
                   <Input
                     id="scale_department"
                     type="number"
+                    inputMode="numeric"
                     step="1"
                     min="1"
                     {...register('scale_department', { valueAsNumber: true })}

@@ -1,0 +1,146 @@
+import { useEffect, useRef, useState } from 'react'
+
+interface UsePullToRefreshOptions {
+  onRefresh: () => Promise<void> | void
+  enabled?: boolean
+  threshold?: number // Distancia en px que el usuario debe arrastrar
+  resistance?: number // Factor de resistencia al arrastrar (0-1)
+}
+
+interface PullToRefreshState {
+  isPulling: boolean
+  isRefreshing: boolean
+  pullDistance: number
+}
+
+/**
+ * Hook para implementar pull-to-refresh en móviles
+ * Detecta cuando el usuario arrastra hacia abajo desde la parte superior de la página
+ */
+export function usePullToRefresh({
+  onRefresh,
+  enabled = true,
+  threshold = 80,
+  resistance = 0.5,
+}: UsePullToRefreshOptions) {
+  const [state, setState] = useState<PullToRefreshState>({
+    isPulling: false,
+    isRefreshing: false,
+    pullDistance: 0,
+  })
+
+  const startY = useRef<number>(0)
+  const currentY = useRef<number>(0)
+  const isDragging = useRef<boolean>(false)
+  const touchTarget = useRef<EventTarget | null>(null)
+
+  useEffect(() => {
+    if (!enabled) return
+
+    const handleTouchStart = (e: TouchEvent) => {
+      // Solo activar si estamos en la parte superior de la página y no hay otros elementos bloqueando
+      if (window.scrollY !== 0) return
+      if (e.target !== document.body && !(e.target as Element).closest('.scrollable-content')) {
+        return
+      }
+
+      const touch = e.touches[0]
+      if (!touch) return
+
+      startY.current = touch.clientY
+      currentY.current = touch.clientY
+      isDragging.current = false
+      touchTarget.current = e.target
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (startY.current === 0) return
+
+      const touch = e.touches[0]
+      if (!touch) return
+
+      currentY.current = touch.clientY
+      const deltaY = currentY.current - startY.current
+
+      // Solo activar pull-to-refresh si el usuario arrastra hacia abajo desde la parte superior
+      if (deltaY > 0 && window.scrollY === 0) {
+        // Prevenir scroll normal mientras arrastramos
+        if (deltaY > 10) {
+          e.preventDefault()
+          isDragging.current = true
+        }
+
+        // Calcular distancia con resistencia
+        const distance = Math.min(deltaY * resistance, threshold * 2)
+
+        setState((prev) => ({
+          ...prev,
+          isPulling: true,
+          pullDistance: distance,
+        }))
+      } else if (deltaY < 0 || window.scrollY > 0) {
+        // Si el usuario arrastra hacia arriba o la página ya tiene scroll, resetear
+        reset()
+      }
+    }
+
+    const handleTouchEnd = async (_e: TouchEvent) => {
+      if (!isDragging.current) {
+        reset()
+        return
+      }
+
+      const deltaY = currentY.current - startY.current
+
+      // Si el usuario arrastró lo suficiente, activar refresh
+      if (deltaY >= threshold) {
+        setState((prev) => ({
+          ...prev,
+          isPulling: false,
+          isRefreshing: true,
+          pullDistance: 0,
+        }))
+
+        try {
+          await onRefresh()
+        } catch (error) {
+          console.error('[PullToRefresh] Error al refrescar:', error)
+        } finally {
+          setState({
+            isPulling: false,
+            isRefreshing: false,
+            pullDistance: 0,
+          })
+        }
+      } else {
+        // Si no arrastró lo suficiente, resetear sin refrescar
+        reset()
+      }
+    }
+
+    const reset = () => {
+      startY.current = 0
+      currentY.current = 0
+      isDragging.current = false
+      touchTarget.current = null
+      setState({
+        isPulling: false,
+        isRefreshing: false,
+        pullDistance: 0,
+      })
+    }
+
+    // Agregar event listeners
+    document.addEventListener('touchstart', handleTouchStart, { passive: true })
+    document.addEventListener('touchmove', handleTouchMove, { passive: false })
+    document.addEventListener('touchend', handleTouchEnd, { passive: true })
+
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart)
+      document.removeEventListener('touchmove', handleTouchMove)
+      document.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [enabled, onRefresh, threshold, resistance])
+
+  return state
+}

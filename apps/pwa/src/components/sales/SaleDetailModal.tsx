@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { FileText, Package, DollarSign, Calendar, User, CreditCard, UserCircle, Receipt, ReceiptText, ExternalLink, Printer, Ban, Undo2 } from 'lucide-react'
+import { FileText, Package, DollarSign, Calendar, User, CreditCard, UserCircle, Receipt, ReceiptText, ExternalLink, Printer, Ban, Undo2, MessageCircle } from 'lucide-react'
 import { Sale, salesService } from '@/services/sales.service'
 import { fiscalInvoicesService, FiscalInvoice } from '@/services/fiscal-invoices.service'
 import { printService } from '@/services/print.service'
@@ -58,6 +58,63 @@ const formatWeightValue = (value: number, unit?: string | null) => {
   const fixed = safeValue.toFixed(decimals)
   const trimmed = fixed.replace(/\.?0+$/, '')
   return `${trimmed} ${safeUnit}`
+}
+
+/**
+ * Formatea un ticket de venta como texto para compartir por WhatsApp
+ */
+const formatSaleForWhatsApp = (sale: Sale, storeName: string = 'SISTEMA POS'): string => {
+  const soldAt = format(new Date(sale.sold_at), 'dd/MM/yyyy HH:mm')
+  const saleId = sale.id.slice(0, 8).toUpperCase()
+  
+  let text = `🧾 *${storeName}*\n`
+  text += `📋 Venta #${saleId}\n`
+  text += `📅 ${soldAt}\n`
+  text += `\n`
+  
+  // Items
+  text += `*PRODUCTOS:*\n`
+  sale.items.forEach((item, index) => {
+    const qty = item.is_weight_product 
+      ? formatWeightValue(Number(item.qty), item.weight_unit)
+      : item.qty.toString()
+    const unitPrice = item.is_weight_product
+      ? Number(item.price_per_weight_usd ?? item.unit_price_usd).toFixed(2)
+      : Number(item.unit_price_usd).toFixed(2)
+    const lineTotal = (Number(item.qty) * Number(item.unit_price_usd) - Number(item.discount_usd || 0)).toFixed(2)
+    
+    text += `${index + 1}. ${item.product?.name || 'Producto'}\n`
+    text += `   ${qty} x $${unitPrice} = $${lineTotal}\n`
+    if (Number(item.discount_usd || 0) > 0) {
+      text += `   💰 Descuento: $${Number(item.discount_usd).toFixed(2)}\n`
+    }
+  })
+  
+  text += `\n`
+  text += `*TOTALES:*\n`
+  text += `Total Bs: ${Number(sale.totals.total_bs).toFixed(2)}\n`
+  text += `Total USD: $${Number(sale.totals.total_usd).toFixed(2)}\n`
+  text += `Tasa: ${Number(sale.exchange_rate || 0).toFixed(2)}\n`
+  
+  text += `\n`
+  text += `*PAGO:*\n`
+  text += `${paymentMethodLabels[sale.payment.method] || sale.payment.method}\n`
+  
+  if (sale.customer) {
+    text += `\n`
+    text += `*CLIENTE:*\n`
+    text += `${sale.customer.name || ''}\n`
+    if (sale.customer.document_id) {
+      text += `Cédula: ${sale.customer.document_id}\n`
+    }
+  }
+  
+  if (sale.invoice_full_number) {
+    text += `\n`
+    text += `📄 Factura: ${sale.invoice_full_number}\n`
+  }
+  
+  return text
 }
 
 export default function SaleDetailModal({
@@ -722,6 +779,25 @@ export default function SaleDetailModal({
             >
               <Printer className="w-4 h-4 mr-2" />
               Reimprimir Ticket
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                try {
+                  const text = formatSaleForWhatsApp(sale, 'SISTEMA POS')
+                  const encodedText = encodeURIComponent(text)
+                  const whatsappUrl = `https://wa.me/?text=${encodedText}`
+                  window.open(whatsappUrl, '_blank')
+                  toast.success('Abriendo WhatsApp...')
+                } catch (error) {
+                  toast.error('Error al compartir por WhatsApp')
+                  console.error('[SaleDetail] Error sharing to WhatsApp:', error)
+                }
+              }}
+              className="flex-1"
+            >
+              <MessageCircle className="w-4 h-4 mr-2" />
+              Compartir por WhatsApp
             </Button>
             <Button onClick={onClose} className="flex-1">
               Cerrar

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { Search, Plus, Edit, Users, Phone, CreditCard, FileText, History, Mail, DollarSign, Trash2, AlertTriangle, Printer } from 'lucide-react'
+import { Search, Plus, Edit, Users, Phone, CreditCard, FileText, History, Mail, DollarSign, Trash2, AlertTriangle, Printer, MessageCircle } from 'lucide-react'
 import { customersService, Customer } from '@/services/customers.service'
 import { debtsService, DebtSummary } from '@/services/debts.service'
 import CustomerFormModal from '@/components/customers/CustomerFormModal'
@@ -88,6 +88,30 @@ export default function CustomersPage() {
   const handleSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ['customers'] })
     handleCloseForm()
+  }
+
+  // Handlers para comunicación con clientes
+  const handleCall = (phone: string) => {
+    if (!phone) {
+      toast.error('El cliente no tiene teléfono registrado')
+      return
+    }
+    const cleanPhone = phone.replace(/\D/g, '') // Remover caracteres no numéricos
+    const telUrl = `tel:${cleanPhone}`
+    window.location.href = telUrl
+  }
+
+  const handleWhatsApp = (phone: string, customerName: string) => {
+    if (!phone) {
+      toast.error('El cliente no tiene teléfono registrado')
+      return
+    }
+    const cleanPhone = phone.replace(/\D/g, '') // Remover caracteres no numéricos
+    // Formato para WhatsApp: solo números sin + ni espacios
+    const whatsappPhone = cleanPhone.startsWith('58') ? cleanPhone : `58${cleanPhone}`
+    const message = encodeURIComponent(`Hola ${customerName},`)
+    const whatsappUrl = `https://wa.me/${whatsappPhone}?text=${message}`
+    window.open(whatsappUrl, '_blank')
   }
 
   // Mutación para eliminar cliente
@@ -279,6 +303,42 @@ export default function CustomersPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
+                          {customer.phone && (
+                            <>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleCall(customer.phone!)}
+                                      className="h-9 w-9 min-h-[44px] min-w-[44px] text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      aria-label="Llamar"
+                                    >
+                                      <Phone className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Llamar a {customer.phone}</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleWhatsApp(customer.phone!, customer.name)}
+                                      className="h-9 w-9 min-h-[44px] min-w-[44px] text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      aria-label="WhatsApp"
+                                    >
+                                      <MessageCircle className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Enviar WhatsApp</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </>
+                          )}
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -395,6 +455,30 @@ export default function CustomersPage() {
                       </div>
                     </div>
                     <div className="flex flex-col gap-1">
+                      {customer.phone && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleCall(customer.phone!)}
+                            className="h-11 w-11 min-h-[44px] min-w-[44px] text-green-600 hover:text-green-700 hover:bg-green-50"
+                            title="Llamar"
+                            aria-label="Llamar"
+                          >
+                            <Phone className="w-5 h-5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleWhatsApp(customer.phone!, customer.name)}
+                            className="h-11 w-11 min-h-[44px] min-w-[44px] text-green-600 hover:text-green-700 hover:bg-green-50"
+                            title="WhatsApp"
+                            aria-label="WhatsApp"
+                          >
+                            <MessageCircle className="w-5 h-5" />
+                          </Button>
+                        </>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"

@@ -247,21 +247,54 @@ export class PurchaseOrdersService {
         const item = order.items[i];
         const receivedDto = dto.items[i];
 
+        // Validar que la cantidad total recibida no exceda la solicitada
         if (receivedDto.quantity_received > item.quantity) {
           throw new BadRequestException(
-            `La cantidad recibida no puede ser mayor a la solicitada para el item ${i + 1}`,
+            `La cantidad total recibida (${receivedDto.quantity_received}) no puede ser mayor a la solicitada (${item.quantity}) para el item ${i + 1} (${item.product?.name || 'producto'})`,
           );
         }
 
+        // Validar que la cantidad recibida no sea negativa
         if (receivedDto.quantity_received < 0) {
           throw new BadRequestException(
-            `La cantidad recibida no puede ser negativa para el item ${i + 1}`,
+            `La cantidad recibida no puede ser negativa para el item ${i + 1} (${item.product?.name || 'producto'})`,
           );
         }
 
-        // Actualizar cantidad recibida
+        // Validar que la cantidad recibida no sea menor a la ya recibida (no se puede "des-recibir")
+        if (receivedDto.quantity_received < item.quantity_received) {
+          throw new BadRequestException(
+            `La cantidad total recibida (${receivedDto.quantity_received}) no puede ser menor a la ya recibida (${item.quantity_received}) para el item ${i + 1} (${item.product?.name || 'producto'})`,
+          );
+        }
+
+        // Calcular diferencia (si hay)
         const previousReceived = item.quantity_received;
-        item.quantity_received = receivedDto.quantity_received;
+        const newReceived = receivedDto.quantity_received;
+        const difference = newReceived - previousReceived;
+        const totalDifference = newReceived - item.quantity; // Diferencia total vs solicitado
+        
+        // Actualizar cantidad recibida
+        item.quantity_received = newReceived;
+        
+        // Registrar diferencias en la nota del item si existe discrepancia
+        if (totalDifference !== 0) {
+          const differenceNote = totalDifference > 0 
+            ? `[Excedente: +${totalDifference} unidades]`
+            : `[Faltante: ${totalDifference} unidades]`;
+          
+          // Agregar o actualizar nota de diferencia
+          if (item.note && (item.note.includes('[Faltante:') || item.note.includes('[Excedente:'))) {
+            // Reemplazar nota de diferencia anterior
+            item.note = item.note.replace(/\[(Faltante|Excedente):[^\]]+\]/g, differenceNote);
+          } else {
+            // Agregar nota de diferencia
+            item.note = item.note 
+              ? `${item.note} ${differenceNote}`
+              : differenceNote;
+          }
+        }
+        
         await manager.save(PurchaseOrderItem, item);
 
         // Si se recibió algo nuevo, actualizar inventario

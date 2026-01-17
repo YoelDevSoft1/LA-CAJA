@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Package, TrendingUp, TrendingDown, ShoppingCart } from 'lucide-react'
 import { inventoryService, StockStatus } from '@/services/inventory.service'
@@ -46,6 +46,15 @@ export default function MovementsModal({
 }: MovementsModalProps) {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 20 // Mostrar 20 movimientos por página
+
+  // Reset page cuando cambian los filtros de fecha
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [startDate, endDate])
+
+  const offset = (currentPage - 1) * pageSize
 
   const { data: movementsData, isLoading } = useQuery({
     queryKey: [
@@ -54,12 +63,13 @@ export default function MovementsModal({
       product?.product_id || 'all',
       startDate,
       endDate,
+      currentPage,
     ],
     queryFn: () =>
       inventoryService.getMovements({
         product_id: product?.product_id || undefined,
-        limit: 100,
-        offset: 0,
+        limit: pageSize,
+        offset,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
       }),
@@ -68,6 +78,7 @@ export default function MovementsModal({
 
   const movements = movementsData?.movements || []
   const total = movementsData?.total || 0
+  const totalPages = Math.ceil(total / pageSize)
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -239,8 +250,40 @@ export default function MovementsModal({
             )}
         </div>
 
-        {/* Footer */}
-        <div className="flex-shrink-0 border-t border-border px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+        {/* Footer con paginación */}
+        <div className="flex-shrink-0 border-t border-border px-3 sm:px-4 md:px-6 py-3 sm:py-4 space-y-3">
+          {/* Paginación */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between flex-col sm:flex-row gap-3">
+              <div className="text-xs sm:text-sm text-muted-foreground">
+                Mostrando {offset + 1} - {Math.min(offset + pageSize, total)} de {total} movimientos
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <div className="flex items-center gap-2 px-2 sm:px-3">
+                  <span className="text-xs sm:text-sm">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
+          
           <Button onClick={onClose} variant="outline" className="w-full">
             Cerrar
           </Button>

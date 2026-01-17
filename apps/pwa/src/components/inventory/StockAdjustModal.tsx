@@ -6,6 +6,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { inventoryService, StockAdjustedRequest, StockStatus } from '@/services/inventory.service'
 import { warehousesService } from '@/services/warehouses.service'
+import { salesService } from '@/services/sales.service'
 import { useAuth } from '@/stores/auth.store'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import {
@@ -79,6 +80,8 @@ export default function StockAdjustModal({
   const [warehouseId, setWarehouseId] = useState<string | null>(null)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [pendingData, setPendingData] = useState<StockAdjustForm | null>(null)
+  const [hasRecentSales, setHasRecentSales] = useState(false)
+  const [recentSalesCount, setRecentSalesCount] = useState(0)
 
   // Obtener bodegas
   const { data: warehouses = [] } = useQuery({
@@ -100,6 +103,49 @@ export default function StockAdjustModal({
       setWarehouseId(defaultWarehouse.id)
     }
   }, [isOpen, defaultWarehouse, warehouseId])
+
+  // Verificar ventas recientes del producto (últimas 2 horas)
+  const { data: recentSalesData } = useQuery({
+    queryKey: ['sales', 'recent', product?.product_id, user?.store_id],
+    queryFn: async () => {
+      if (!product?.product_id || !user?.store_id) return { sales: [], total: 0 }
+      
+      // Buscar ventas de las últimas 2 horas
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+      const now = new Date().toISOString()
+      
+      const result = await salesService.list({
+        date_from: twoHoursAgo,
+        date_to: now,
+        limit: 100, // Límite alto para buscar todas las ventas recientes
+        store_id: user.store_id,
+      })
+      
+      // Filtrar ventas que incluyan este producto
+      const salesWithProduct = result.sales.filter((sale) =>
+        sale.items.some((item) => item.product_id === product.product_id)
+      )
+      
+      return {
+        sales: salesWithProduct,
+        total: salesWithProduct.length,
+      }
+    },
+    enabled: isOpen && !!product?.product_id && !!user?.store_id,
+    staleTime: 1000 * 30, // 30 segundos
+  })
+
+  // Actualizar estado de ventas recientes
+  useEffect(() => {
+    if (recentSalesData) {
+      const count = recentSalesData.total
+      setHasRecentSales(count > 0)
+      setRecentSalesCount(count)
+    } else {
+      setHasRecentSales(false)
+      setRecentSalesCount(0)
+    }
+  }, [recentSalesData])
 
   const {
     register,
@@ -179,6 +225,15 @@ export default function StockAdjustModal({
 
   const onSubmit = (data: StockAdjustForm) => {
     if (!product) return
+    
+    // Bloquear ajuste si hay ventas recientes
+    if (hasRecentSales) {
+      toast.error(
+        `No se puede ajustar el stock. Hay ${recentSalesCount} venta(s) reciente(s) que incluyen este producto. Espera al menos 2 horas después de la última venta.`,
+        { duration: 6000 }
+      )
+      return
+    }
     
     // Verificar si necesita confirmación
     if (isLargeAdjustment(data.qty_delta)) {
@@ -264,6 +319,17 @@ export default function StockAdjustModal({
                   )}
                 </CardContent>
               </Card>
+
+              {/* Alerta de ventas recientes */}
+              {hasRecentSales && (
+                <Alert className="bg-orange-50 dark:bg-orange-950/20 border-orange-500/50">
+                  <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                  <AlertDescription className="text-xs text-orange-800 dark:text-orange-200">
+                    <strong>⚠️ Ajuste bloqueado:</strong> Hay {recentSalesCount} venta(s) reciente(s) que incluyen este producto. 
+                    Para evitar inconsistencias, espera al menos 2 horas después de la última venta antes de ajustar el stock.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* Cantidad delta */}
               <div>
@@ -381,7 +447,7 @@ export default function StockAdjustModal({
               <Button
                 type="submit"
                 className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
-                disabled={isLoading || qtyDelta === 0 || resultingStock < 0}
+                disabled={isLoading || qtyDelta === 0 || resultingStock < 0 || hasRecentSales}
               >
                 {isLoading ? 'Ajustando...' : 'Ajustar Stock'}
               </Button>

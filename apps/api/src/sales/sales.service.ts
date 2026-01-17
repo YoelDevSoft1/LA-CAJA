@@ -499,7 +499,8 @@ export class SalesService {
 
         // Si el producto tiene lotes, usar lógica FIFO
         if (productLots.length > 0) {
-          // Filtrar lotes disponibles (con stock)
+          // Filtrar lotes disponibles (con stock) - getLotsForSale también filtra vencidos,
+          // pero hacerlo aquí mejora la claridad del código
           const availableLots = productLots.filter(
             (lot) => lot.remaining_quantity > 0,
           );
@@ -510,7 +511,7 @@ export class SalesService {
             );
           }
 
-          // Obtener asignación FIFO
+          // Obtener asignación FIFO (excluye lotes vencidos automáticamente)
           const allocations = this.inventoryRulesService.getLotsForSale(
             product.id,
             requestedQty,

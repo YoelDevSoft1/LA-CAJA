@@ -24,6 +24,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import SerialSelector from '@/components/serials/SerialSelector'
 import SplitPaymentManager from './SplitPaymentManager'
@@ -789,25 +795,23 @@ export default function CheckoutModal({
     return orderA - orderB
   })
 
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-1 sm:p-4">
-      <Card className="w-full max-w-md lg:max-w-4xl xl:max-w-5xl h-[85vh] sm:h-[90vh] lg:h-[85vh] flex flex-col border border-border overflow-hidden">
-        {/* Header */}
-        <div className="sticky top-0 bg-background border-b border-border px-3 sm:px-4 lg:px-6 py-2 sm:py-3 flex items-center justify-between z-10 rounded-t-lg">
-          <h2 className="text-lg sm:text-xl font-bold text-foreground">Procesar Venta</h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="h-8 w-8"
-            aria-label="Cerrar"
-          >
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
+  // Detectar si es móvil para usar bottom sheet
+  const [isMobile, setIsMobile] = useState(false)
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024) // lg breakpoint
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
-        {/* Content - Two columns on desktop */}
-        <CardContent className="p-3 sm:p-4 lg:p-6 overflow-y-auto flex-1 min-h-0 overscroll-contain">
+  // Contenido del modal/sheet (reutilizable)
+  const modalContent = (
+    <>
+      {/* Content - Two columns on desktop */}
+      <CardContent className="p-3 sm:p-4 lg:p-6 overflow-y-auto flex-1 min-h-0 overscroll-contain">
           <div className="lg:grid lg:grid-cols-2 lg:gap-6 space-y-4 sm:space-y-6 lg:space-y-0">
             {/* LEFT COLUMN */}
             <div className="space-y-4 sm:space-y-6">
@@ -1758,19 +1762,68 @@ export default function CheckoutModal({
             </Button>
           </div>
         </div>
-      </Card>
+    </>
+  )
 
-      {/* Selector de seriales */}
-      {serialSelectorItem && (
-        <SerialSelector
-          isOpen={!!serialSelectorItem}
-          onClose={() => setSerialSelectorItem(null)}
-          productId={serialSelectorItem.productId}
-          productName={serialSelectorItem.productName}
-          quantity={serialSelectorItem.quantity}
-          onSelect={handleSerialSelect}
-        />
-      )}
+  // Usar Sheet en móvil, modal en desktop
+  if (isMobile) {
+    return (
+      <>
+        <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
+          <SheetContent side="bottom" className="h-[90vh] max-h-[90vh] overflow-hidden flex flex-col p-0">
+            <SheetHeader className="px-4 py-3 border-b">
+              <SheetTitle>Procesar Venta</SheetTitle>
+            </SheetHeader>
+            <div className="flex-1 overflow-y-auto">
+              {modalContent}
+            </div>
+          </SheetContent>
+        </Sheet>
+        {/* Selector de seriales */}
+        {serialSelectorItem && (
+          <SerialSelector
+            isOpen={!!serialSelectorItem}
+            onClose={() => setSerialSelectorItem(null)}
+            productId={serialSelectorItem.productId}
+            productName={serialSelectorItem.productName}
+            quantity={serialSelectorItem.quantity}
+            onSelect={handleSerialSelect}
+          />
+        )}
+      </>
+    )
+  }
+
+  // Modal en desktop
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-1 sm:p-4">
+      <Card className="w-full max-w-md lg:max-w-4xl xl:max-w-5xl h-[85vh] sm:h-[90vh] lg:h-[85vh] flex flex-col border border-border overflow-hidden">
+        {/* Header */}
+        <div className="sticky top-0 bg-background border-b border-border px-3 sm:px-4 lg:px-6 py-2 sm:py-3 flex items-center justify-between z-10 rounded-t-lg">
+          <h2 className="text-lg sm:text-xl font-bold text-foreground">Procesar Venta</h2>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="h-8 w-8"
+            aria-label="Cerrar"
+          >
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+        {modalContent}
+        {/* Selector de seriales */}
+        {serialSelectorItem && (
+          <SerialSelector
+            isOpen={!!serialSelectorItem}
+            onClose={() => setSerialSelectorItem(null)}
+            productId={serialSelectorItem.productId}
+            productName={serialSelectorItem.productName}
+            quantity={serialSelectorItem.quantity}
+            onSelect={handleSerialSelect}
+          />
+        )}
+      </Card>
     </div>
   )
 }

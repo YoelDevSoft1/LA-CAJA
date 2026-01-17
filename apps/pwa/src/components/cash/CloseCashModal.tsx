@@ -223,6 +223,7 @@ export default function CloseCashModal({
                           <Input
                             id="counted_bs"
                             type="number"
+                            inputMode="decimal"
                             step="0.01"
                             min="0"
                             max="999999999.99"
@@ -249,6 +250,7 @@ export default function CloseCashModal({
                           <Input
                             id="counted_usd"
                             type="number"
+                            inputMode="decimal"
                             step="0.01"
                             min="0"
                             max="999999999.99"

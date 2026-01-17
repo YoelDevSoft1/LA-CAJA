@@ -90,6 +90,7 @@ export default function OpenCashModal({
                   <Input
                     id="cash_bs"
                     type="number"
+                    inputMode="decimal"
                     step="0.01"
                     min="0"
                     max="999999999.99"
@@ -113,6 +114,7 @@ export default function OpenCashModal({
                   <Input
                     id="cash_usd"
                     type="number"
+                    inputMode="decimal"
                     step="0.01"
                     min="0"
                     max="999999999.99"

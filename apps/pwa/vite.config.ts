@@ -201,4 +201,50 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     host: '0.0.0.0', // Exponer en la red local
   },
+  build: {
+    // Optimizaciones de bundle size
+    rollupOptions: {
+      output: {
+        // Separar chunks por vendor y código propio
+        manualChunks: (id) => {
+          // React y React DOM
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'react-vendor';
+          }
+          // Radix UI (componentes UI)
+          if (id.includes('node_modules/@radix-ui')) {
+            return 'radix-vendor';
+          }
+          // TanStack Query (gestión de estado del servidor)
+          if (id.includes('node_modules/@tanstack')) {
+            return 'tanstack-vendor';
+          }
+          // Otras librerías grandes
+          if (id.includes('node_modules/recharts')) {
+            return 'recharts-vendor';
+          }
+          if (id.includes('node_modules/date-fns')) {
+            return 'date-fns-vendor';
+          }
+          // Vendor chunk para el resto de node_modules
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        },
+        // Optimizar nombres de chunks para mejor cacheo
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+      },
+    },
+    // Chunk size warning límite (500kb es razonable para PWAs)
+    chunkSizeWarningLimit: 500,
+    // Minificación automática (Vite usa terser/esbuild por defecto)
+    minify: 'esbuild', // Más rápido que terser
+    // Source maps para producción (deshabilitar si no son necesarios para reducir tamaño)
+    sourcemap: false,
+    // Optimizaciones adicionales
+    cssCodeSplit: true, // Separar CSS en chunks
+    // Tree shaking automático (habilitado por defecto en Vite)
+  },
 }));

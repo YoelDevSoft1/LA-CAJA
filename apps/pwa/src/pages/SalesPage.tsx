@@ -1,18 +1,31 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileText, Eye, Calendar as CalendarIcon, Store, AlertCircle, Printer, Receipt, Download, Filter, X } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { salesService, Sale } from '@/services/sales.service'
 import { authService } from '@/services/auth.service'
+import { reportsService } from '@/services/reports.service'
 import { useAuth } from '@/stores/auth.store'
 import SaleDetailModal from '@/components/sales/SaleDetailModal'
-import { format } from 'date-fns'
+import { format, parseISO, isSameDay } from 'date-fns'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { exportToCSV } from '@/utils/export-excel'
 import toast from 'react-hot-toast'
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts'
 import {
   Table,
   TableBody,
@@ -101,6 +114,15 @@ export default function SalesPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const limit = 20
+  
+  // Filtros avanzados
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'voided'>('all')
+  const [debtFilter, setDebtFilter] = useState<'all' | 'with_debt' | 'without_debt' | 'paid'>('all')
+  const [minAmountUsd, setMinAmountUsd] = useState<string>('')
+  const [maxAmountUsd, setMaxAmountUsd] = useState<string>('')
+  const [customerSearch, setCustomerSearch] = useState<string>('')
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
 
   // Obtener lista de tiendas (solo para owners)
   const { data: stores } = useQuery({
@@ -143,11 +165,81 @@ export default function SalesPage() {
     }
   }, [salesData, isLoading]);
 
-  const sales = salesData?.sales || []
+  const rawSales = salesData?.sales || []
   const total = salesData?.total || 0
+
+  // Verificar si las fechas seleccionadas son del mismo día para mostrar gráfico
+  const isSameDaySelected = useMemo(() => {
+    if (!dateFrom || !dateTo) return false
+    return isSameDay(dateFrom, dateTo)
+  }, [dateFrom, dateTo])
+
+  // Obtener datos de ventas por día para el gráfico (solo si es el mismo día y es owner)
+  const { data: dailySalesData, isLoading: isLoadingDailySales } = useQuery({
+    queryKey: ['reports', 'sales-by-day', effectiveDateFrom, effectiveDateTo, effectiveStoreId],
+    queryFn: () => reportsService.getSalesByDay({
+      start_date: effectiveDateFrom,
+      end_date: effectiveDateTo,
+    }),
+    enabled: isOwner && isSameDaySelected && !!effectiveDateFrom && !!effectiveDateTo,
+    staleTime: 1000 * 60 * 5, // 5 minutos
+  })
+  
+  // Aplicar filtros avanzados (filtrado en frontend)
+  const sales = rawSales.filter((sale: Sale) => {
+    // Filtro por método de pago
+    if (paymentMethodFilter !== 'all' && sale.payment.method !== paymentMethodFilter) {
+      return false
+    }
+    
+    // Filtro por estado (anulada/no anulada)
+    if (statusFilter === 'voided' && !sale.voided_at) {
+      return false
+    }
+    if (statusFilter === 'completed' && sale.voided_at) {
+      return false
+    }
+    
+    // Filtro por deuda
+    if (debtFilter === 'with_debt') {
+      if (!sale.debt || (sale.debt.status !== 'open' && sale.debt.status !== 'partial')) {
+        return false
+      }
+    } else if (debtFilter === 'without_debt') {
+      if (sale.debt && (sale.debt.status === 'open' || sale.debt.status === 'partial')) {
+        return false
+      }
+    } else if (debtFilter === 'paid') {
+      if (!sale.debt || sale.debt.status !== 'paid') {
+        return false
+      }
+    }
+    
+    // Filtro por rango de montos (USD)
+    const amountUsd = Number(sale.totals.total_usd)
+    if (minAmountUsd && amountUsd < Number(minAmountUsd)) {
+      return false
+    }
+    if (maxAmountUsd && amountUsd > Number(maxAmountUsd)) {
+      return false
+    }
+    
+    // Filtro por búsqueda de cliente
+    if (customerSearch.trim()) {
+      const searchLower = customerSearch.toLowerCase().trim()
+      const customerName = sale.customer?.name?.toLowerCase() || ''
+      const customerDoc = sale.customer?.document_id?.toLowerCase() || ''
+      if (!customerName.includes(searchLower) && !customerDoc.includes(searchLower)) {
+        return false
+      }
+    }
+    
+    return true
+  })
+  
   const totalPages = Math.ceil(total / limit)
 
-  // Calcular totales
+  // Calcular totales (de las ventas filtradas)
   const totalSalesBs = sales.reduce(
     (sum: number, sale: Sale) => sum + Number(sale.totals.total_bs),
     0
@@ -156,6 +248,24 @@ export default function SalesPage() {
     (sum: number, sale: Sale) => sum + Number(sale.totals.total_usd),
     0
   )
+  
+  // Contar filtros activos
+  const activeFiltersCount = [
+    paymentMethodFilter !== 'all',
+    statusFilter !== 'all',
+    debtFilter !== 'all',
+    minAmountUsd !== '' || maxAmountUsd !== '',
+    customerSearch.trim() !== '',
+  ].filter(Boolean).length
+  
+  const handleResetAdvancedFilters = () => {
+    setPaymentMethodFilter('all')
+    setStatusFilter('all')
+    setDebtFilter('all')
+    setMinAmountUsd('')
+    setMaxAmountUsd('')
+    setCustomerSearch('')
+  }
 
   const handleViewDetail = (sale: Sale) => {
     setSelectedSale(sale)
@@ -276,7 +386,24 @@ export default function SalesPage() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Historial de Ventas</h1>
             <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              {total} venta{total !== 1 ? 's' : ''} en el período seleccionado
+              {activeFiltersCount > 0 ? (
+                <>
+                  {sales.length} de {rawSales.length} ventas mostradas
+                  {' · '}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleResetAdvancedFilters}
+                    className="h-auto p-0 text-xs underline"
+                  >
+                    Limpiar filtros
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {total} venta{total !== 1 ? 's' : ''} en el período seleccionado
+                </>
+              )}
               {' · '}
               Zona horaria: {getTimeZoneLabel()}
             </p>
@@ -383,9 +510,269 @@ export default function SalesPage() {
                 </Button>
           </div>
           </div>
+          
+          {/* Filtros avanzados */}
+          <div className="border-t border-border pt-3 sm:pt-4 mt-3 sm:mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className="gap-2"
+              >
+                <Filter className="w-4 h-4" />
+                Filtros Avanzados
+                {activeFiltersCount > 0 && (
+                  <Badge variant="secondary" className="ml-1">
+                    {activeFiltersCount}
+                  </Badge>
+                )}
+              </Button>
+              {activeFiltersCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetAdvancedFilters}
+                  className="text-xs gap-1"
+                >
+                  <X className="w-3 h-3" />
+                  Limpiar
+                </Button>
+              )}
+            </div>
+            
+            {showAdvancedFilters && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 pt-2">
+                {/* Método de pago */}
+                <div>
+                  <Label className="text-xs sm:text-sm font-semibold mb-2 block">
+                    Método de Pago
+                  </Label>
+                  <Select
+                    value={paymentMethodFilter}
+                    onValueChange={setPaymentMethodFilter}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {Object.entries(paymentMethodLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Estado */}
+                <div>
+                  <Label className="text-xs sm:text-sm font-semibold mb-2 block">
+                    Estado
+                  </Label>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={(v) => setStatusFilter(v as 'all' | 'completed' | 'voided')}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="completed">Completadas</SelectItem>
+                      <SelectItem value="voided">Anuladas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Estado de deuda */}
+                <div>
+                  <Label className="text-xs sm:text-sm font-semibold mb-2 block">
+                    Estado de Deuda
+                  </Label>
+                  <Select
+                    value={debtFilter}
+                    onValueChange={(v) => setDebtFilter(v as 'all' | 'with_debt' | 'without_debt' | 'paid')}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="with_debt">Con deuda pendiente</SelectItem>
+                      <SelectItem value="without_debt">Sin deuda</SelectItem>
+                      <SelectItem value="paid">Deuda pagada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Monto mínimo USD */}
+                <div>
+                  <Label className="text-xs sm:text-sm font-semibold mb-2 block">
+                    Monto Mínimo (USD)
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={minAmountUsd}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMinAmountUsd(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                {/* Monto máximo USD */}
+                <div>
+                  <Label className="text-xs sm:text-sm font-semibold mb-2 block">
+                    Monto Máximo (USD)
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={maxAmountUsd}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMaxAmountUsd(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                {/* Búsqueda por cliente */}
+                <div>
+                  <Label className="text-xs sm:text-sm font-semibold mb-2 block">
+                    Buscar Cliente
+                  </Label>
+                  <Input
+                    type="text"
+                    value={customerSearch}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomerSearch(e.target.value)}
+                    placeholder="Nombre o cédula/RIF"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         </CardContent>
       </Card>
+
+      {/* Gráfico de ventas del día (solo si es el mismo día y es owner) */}
+      {isOwner && isSameDaySelected && dailySalesData && (
+        <Card className="mb-4 sm:mb-6 border border-border">
+          <CardHeader>
+            <CardTitle className="text-base sm:text-lg">
+              Ventas del Día - {dateFrom ? format(dateFrom, 'dd/MM/yyyy') : ''}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoadingDailySales ? (
+              <div className="h-[300px] flex items-center justify-center">
+                <Skeleton className="h-full w-full" />
+              </div>
+            ) : dailySalesData.daily && dailySalesData.daily.length > 0 ? (
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={dailySalesData.daily.map((day) => ({
+                      ...day,
+                      formattedDate: format(parseISO(day.date), 'HH:mm'),
+                      total_bs: Number(day.total_bs),
+                      total_usd: Number(day.total_usd),
+                      sales_count: day.sales_count,
+                    }))}
+                    margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                    <XAxis
+                      dataKey="formattedDate"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                      dy={10}
+                    />
+                    <YAxis
+                      yAxisId="left"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                      tickFormatter={(value) =>
+                        value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value.toString()
+                      }
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                    />
+                    <RechartsTooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          return (
+                            <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+                              <p className="text-sm font-semibold mb-2">
+                                {payload[0]?.payload?.formattedDate}
+                              </p>
+                              {payload.map((entry, index) => (
+                                <p key={index} className="text-xs" style={{ color: entry.color }}>
+                                  {entry.name === 'total_bs' && `Total Bs: ${Number(entry.value).toFixed(2)}`}
+                                  {entry.name === 'total_usd' && `Total USD: $${Number(entry.value).toFixed(2)}`}
+                                  {entry.name === 'sales_count' && `Ventas: ${entry.value}`}
+                                </p>
+                              ))}
+                            </div>
+                          )
+                        }
+                        return null
+                      }}
+                    />
+                    <Legend
+                      verticalAlign="top"
+                      height={36}
+                      formatter={(value) => {
+                        if (value === 'total_bs') return 'Total Bs'
+                        if (value === 'total_usd') return 'Total USD'
+                        if (value === 'sales_count') return 'Cantidad de Ventas'
+                        return value
+                      }}
+                    />
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="total_bs"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      name="total_bs"
+                    />
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="total_usd"
+                      stroke="hsl(var(--chart-2))"
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      name="total_usd"
+                    />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="sales_count"
+                      stroke="hsl(var(--chart-3))"
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      name="sales_count"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                No hay datos de ventas para mostrar
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Lista de ventas */}
       <Card className="border border-border">
@@ -414,7 +801,7 @@ export default function SalesPage() {
                 <Skeleton className="h-4 w-32" />
               </div>
           </div>
-        ) : sales.length === 0 ? (
+        ) : rawSales.length === 0 ? (
             <div className="p-8 text-center">
               <div className="flex flex-col items-center justify-center py-8">
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -428,6 +815,27 @@ export default function SalesPage() {
                 </p>
               </div>
           </div>
+        ) : sales.length === 0 && activeFiltersCount > 0 ? (
+            <div className="p-8 text-center">
+              <div className="flex flex-col items-center justify-center py-8">
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                  <Filter className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <p className="text-sm sm:text-base font-medium text-foreground mb-1">
+                  No hay ventas que coincidan con los filtros
+                </p>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-4">
+                  Se encontraron {rawSales.length} ventas, pero ninguna coincide con los filtros aplicados
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResetAdvancedFilters}
+                >
+                  Limpiar filtros
+                </Button>
+              </div>
+          </div>
         ) : (
           <>
               <div className="overflow-x-auto">
@@ -437,6 +845,7 @@ export default function SalesPage() {
                       <TableHead>Fecha/Hora</TableHead>
                       <TableHead className="hidden sm:table-cell">Factura</TableHead>
                       <TableHead className="hidden sm:table-cell">Productos</TableHead>
+                      <TableHead className="hidden lg:table-cell">Preview</TableHead>
                       <TableHead className="text-center">Total</TableHead>
                       <TableHead className="text-center hidden md:table-cell">Moneda</TableHead>
                       <TableHead className="text-center hidden lg:table-cell">Método de Pago</TableHead>
@@ -524,6 +933,27 @@ export default function SalesPage() {
                             </p>
                           </div>
                           </TableCell>
+                          <TableCell className="hidden lg:table-cell">
+                            <div className="max-w-[200px]">
+                              <div className="flex flex-wrap gap-1">
+                                {sale.items.slice(0, 3).map((item, idx) => (
+                                  <Badge
+                                    key={idx}
+                                    variant="outline"
+                                    className="text-xs font-normal"
+                                  >
+                                    {item.product?.name || 'Producto'}
+                                    {item.qty > 1 && ` x${item.qty}`}
+                                  </Badge>
+                                ))}
+                                {sale.items.length > 3 && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    +{sale.items.length - 3} más
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
                           <TableCell className="text-center">
                           <div className="text-sm sm:text-base">
                               <p className="font-bold text-foreground">
@@ -610,24 +1040,44 @@ export default function SalesPage() {
                           </div>
                           </TableCell>
                           <TableCell className="text-right space-x-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleViewDetail(sale)}
-                              className="text-primary hover:text-primary min-h-[44px] min-w-[44px]"
-                            >
-                              <Eye className="w-4 h-4 mr-1.5" />
-                              <span className="hidden sm:inline">Ver</span>
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handlePrint(sale)}
-                              className="text-primary min-h-[44px] min-w-[44px]"
-                            >
-                              <Printer className="w-4 h-4 sm:mr-1" />
-                              <span className="hidden sm:inline">Ticket</span>
-                            </Button>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleViewDetail(sale)}
+                                    className="text-primary hover:text-primary min-h-[44px] min-w-[44px]"
+                                    aria-label="Ver detalles de venta"
+                                  >
+                                    <Eye className="w-4 h-4 mr-1.5" />
+                                    <span className="hidden sm:inline">Ver</span>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Ver detalles de la venta</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePrint(sale)}
+                                    className="text-primary min-h-[44px] min-w-[44px]"
+                                    aria-label="Imprimir ticket"
+                                  >
+                                    <Printer className="w-4 h-4 sm:mr-1" />
+                                    <span className="hidden sm:inline">Ticket</span>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Imprimir ticket de venta</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </TableCell>
                         </TableRow>
                     )

@@ -163,6 +163,7 @@ export default function DenominationCalculator({
                   </span>
                   <Input
                     type="number"
+                    inputMode="numeric"
                     min="0"
                     className="h-9 text-center text-sm px-1"
                     value={bsCounts[denom.value] || ''}
@@ -200,6 +201,7 @@ export default function DenominationCalculator({
                   </span>
                   <Input
                     type="number"
+                    inputMode="numeric"
                     min="0"
                     className="h-9 text-center text-sm px-1"
                     value={usdCounts[denom.value] || ''}

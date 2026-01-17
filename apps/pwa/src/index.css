@@ -268,6 +268,19 @@
     background-image: radial-gradient(circle, var(--tw-gradient-stops));
   }
 
+  /* A11Y-05: Screen reader only - ocultar visualmente pero mantener accesible */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
   /* A11Y-03: Utilidades para asegurar contraste WCAG AA */
   /* WCAG AA requiere mínimo 4.5:1 para texto normal y 3:1 para texto grande (18pt+) */
   

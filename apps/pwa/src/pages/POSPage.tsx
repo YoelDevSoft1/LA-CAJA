@@ -57,9 +57,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
+import { SwipeableItem } from '@/components/ui/swipeable-item'
+import { useMobileDetection } from '@/hooks/use-mobile-detection'
 
 export default function POSPage() {
   const { user } = useAuth()
+  const isMobile = useMobileDetection()
   const MAX_QTY_PER_PRODUCT = 999
   const queryClient = useQueryClient()
   const RECENT_SEARCHES_KEY = 'pos-recent-searches'
@@ -1736,56 +1739,70 @@ export default function POSPage() {
                     const isInvalid = invalidCartProductIds.includes(item.product_id)
 
                     return (
-                    <div
+                    <SwipeableItem
                       key={item.id}
-                      className={cn(
-                        "bg-muted/50 rounded-lg p-2.5 sm:p-3 border hover:border-primary/50 transition-all shadow-sm",
-                        isInvalid ? "border-destructive/60 bg-destructive/5" : "border-border"
-                      )}
-                    >
-                      <div className="flex items-start justify-between mb-2 gap-2 min-w-0">
-                        <div className="flex-1 min-w-0">
-                          <p
-                            className="font-medium text-xs sm:text-sm text-foreground break-words leading-snug flex items-center gap-1"
-                            title={item.product_name}
-                          >
-                            {item.is_weight_product && (
-                              <Scale className="w-3 h-3 text-primary flex-shrink-0" />
-                            )}
-                            {item.product_name}
-                            {isInvalid && (
-                              <Badge className="ml-1 bg-destructive/10 text-destructive border border-destructive/30">
-                                Inactivo
-                              </Badge>
-                            )}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {item.is_weight_product ? (
-                              <>
-                                {item.qty} {item.weight_unit || 'kg'} × $
-                                {Number(item.price_per_weight_usd ?? item.unit_price_usd).toFixed(
-                                  getWeightPriceDecimals(item.weight_unit)
-                                )}/
-                                {item.weight_unit || 'kg'}
-                              </>
-                            ) : (
-                              <>${item.unit_price_usd.toFixed(2)} c/u</>
-                            )}
-                          </p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            removeItem(item.id)
-                          }}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 w-7 flex-shrink-0"
-                          aria-label="Eliminar producto"
-                        >
+                      onSwipeLeft={isMobile ? () => removeItem(item.id) : undefined}
+                      leftAction={isMobile ? (
+                        <div className="flex items-center gap-2">
                           <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                          <span className="text-sm font-medium">Eliminar</span>
+                        </div>
+                      ) : undefined}
+                      enabled={isMobile}
+                      threshold={80}
+                      className="mb-2 sm:mb-3"
+                    >
+                      <div
+                        className={cn(
+                          "bg-muted/50 rounded-lg p-2.5 sm:p-3 border hover:border-primary/50 transition-all shadow-sm",
+                          isInvalid ? "border-destructive/60 bg-destructive/5" : "border-border"
+                        )}
+                      >
+                        <div className="flex items-start justify-between mb-2 gap-2 min-w-0">
+                          <div className="flex-1 min-w-0">
+                            <p
+                              className="font-medium text-xs sm:text-sm text-foreground break-words leading-snug flex items-center gap-1"
+                              title={item.product_name}
+                            >
+                              {item.is_weight_product && (
+                                <Scale className="w-3 h-3 text-primary flex-shrink-0" />
+                              )}
+                              {item.product_name}
+                              {isInvalid && (
+                                <Badge className="ml-1 bg-destructive/10 text-destructive border border-destructive/30">
+                                  Inactivo
+                                </Badge>
+                              )}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {item.is_weight_product ? (
+                                <>
+                                  {item.qty} {item.weight_unit || 'kg'} × $
+                                  {Number(item.price_per_weight_usd ?? item.unit_price_usd).toFixed(
+                                    getWeightPriceDecimals(item.weight_unit)
+                                  )}/
+                                  {item.weight_unit || 'kg'}
+                                </>
+                              ) : (
+                                <>${item.unit_price_usd.toFixed(2)} c/u</>
+                              )}
+                            </p>
+                          </div>
+                          {!isMobile && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                removeItem(item.id)
+                              }}
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 w-7 flex-shrink-0"
+                              aria-label="Eliminar producto"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
                       <div className="flex items-center justify-between gap-2">
                         {/* Solo mostrar controles de cantidad para productos normales */}
                         {item.is_weight_product ? (
@@ -1801,14 +1818,26 @@ export default function POSPage() {
                                 e.stopPropagation()
                                 handleUpdateQty(item.id, item.qty - 1)
                               }}
-                              className="h-8 w-8"
+                              className="h-8 w-8 min-h-[44px] min-w-[44px] sm:min-h-[32px] sm:min-w-[32px]"
                               aria-label="Disminuir cantidad"
                             >
                               <Minus className="w-3 h-3" />
                             </Button>
-                            <span className="w-8 text-center font-semibold text-sm sm:text-base tabular-nums">
-                              {item.qty}
-                            </span>
+                            <Input
+                              type="number"
+                              inputMode="numeric"
+                              min={1}
+                              max={MAX_QTY_PER_PRODUCT}
+                              value={item.qty}
+                              onChange={(e) => {
+                                const newQty = parseInt(e.target.value) || 1
+                                if (newQty >= 1 && newQty <= MAX_QTY_PER_PRODUCT) {
+                                  handleUpdateQty(item.id, newQty)
+                                }
+                              }}
+                              className="w-16 h-10 sm:h-8 text-center font-semibold text-sm sm:text-base tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              aria-label="Cantidad"
+                            />
                             <Button
                               variant="outline"
                               size="icon"
@@ -1816,7 +1845,7 @@ export default function POSPage() {
                                 e.stopPropagation()
                                 handleUpdateQty(item.id, item.qty + 1)
                               }}
-                              className="h-8 w-8"
+                              className="h-8 w-8 min-h-[44px] min-w-[44px] sm:min-h-[32px] sm:min-w-[32px]"
                               aria-label="Aumentar cantidad"
                             >
                               <Plus className="w-3 h-3" />
@@ -1859,7 +1888,8 @@ export default function POSPage() {
                           </div>
                         </div>
                       )}
-                    </div>
+                      </div>
+                    </SwipeableItem>
                   )
                   })}
                     </div>

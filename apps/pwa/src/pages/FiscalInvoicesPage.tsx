@@ -236,8 +236,9 @@ export default function FiscalInvoicesPage() {
                             onClick={() => navigate(`/app/fiscal-invoices/${invoice.id}`)}
                             className="h-8 w-8"
                             title="Ver detalle"
+                            aria-label="Ver detalle de factura fiscal"
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye className="w-4 h-4" aria-hidden="true" />
                           </Button>
                           {invoice.status === 'draft' && (
                             <>
@@ -248,8 +249,9 @@ export default function FiscalInvoicesPage() {
                                 disabled={issueMutation.isPending}
                                 className="h-8 w-8 text-green-600 hover:text-green-700"
                                 title="Emitir"
+                                aria-label="Emitir factura fiscal"
                               >
-                                <CheckCircle2 className="w-4 h-4" />
+                                <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
                               </Button>
                               <Button
                                 variant="ghost"
@@ -258,8 +260,9 @@ export default function FiscalInvoicesPage() {
                                 disabled={cancelMutation.isPending}
                                 className="h-8 w-8 text-red-600 hover:text-red-700"
                                 title="Cancelar"
+                                aria-label="Cancelar factura fiscal"
                               >
-                                <XCircle className="w-4 h-4" />
+                                <XCircle className="w-4 h-4" aria-hidden="true" />
                               </Button>
                             </>
                           )}

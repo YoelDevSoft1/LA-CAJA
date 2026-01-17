@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useAuth } from '@/stores/auth.store'
-import { Search, Package, AlertTriangle, Plus, TrendingUp, TrendingDown, History, Trash2, AlertOctagon, Download } from 'lucide-react'
+import { Search, Package, AlertTriangle, Plus, TrendingUp, TrendingDown, History, Trash2, AlertOctagon, Download, ShoppingCart } from 'lucide-react'
 import { inventoryService, StockStatus } from '@/services/inventory.service'
 import { warehousesService } from '@/services/warehouses.service'
 import StockReceivedModal from '@/components/inventory/StockReceivedModal'
 import StockAdjustModal from '@/components/inventory/StockAdjustModal'
+import BulkStockAdjustModal from '@/components/inventory/BulkStockAdjustModal'
 import MovementsModal from '@/components/inventory/MovementsModal'
+import PurchaseOrderFormModal from '@/components/purchase-orders/PurchaseOrderFormModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -84,7 +86,9 @@ export default function InventoryPage() {
   const [showLowStockOnly, setShowLowStockOnly] = useState(false)
   const [isStockReceivedModalOpen, setIsStockReceivedModalOpen] = useState(false)
   const [isStockAdjustModalOpen, setIsStockAdjustModalOpen] = useState(false)
+  const [isBulkStockAdjustModalOpen, setIsBulkStockAdjustModalOpen] = useState(false)
   const [isMovementsModalOpen, setIsMovementsModalOpen] = useState(false)
+  const [isPurchaseOrderModalOpen, setIsPurchaseOrderModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<StockStatus | null>(null)
   const [warehouseFilter, setWarehouseFilter] = useState('all')
   const [isExporting, setIsExporting] = useState(false)
@@ -205,6 +209,8 @@ export default function InventoryPage() {
   const handleCloseModals = () => {
     setIsStockReceivedModalOpen(false)
     setIsStockAdjustModalOpen(false)
+    setIsBulkStockAdjustModalOpen(false)
+    setIsPurchaseOrderModalOpen(false)
     setIsMovementsModalOpen(false)
     setIsResetProductModalOpen(false)
     setIsResetAllModalOpen(false)
@@ -288,6 +294,14 @@ export default function InventoryPage() {
             </Button>
             <Button
               variant="outline"
+              onClick={() => setIsBulkStockAdjustModalOpen(true)}
+              className="w-full sm:w-auto"
+            >
+              <TrendingUp className="w-4 h-4 mr-2" />
+              Ajuste Masivo
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => handleViewMovements(null)}
               className="w-full sm:w-auto"
             >
@@ -360,10 +374,11 @@ export default function InventoryPage() {
         )}
 
         {/* Filtro de stock bajo */}
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="low-stock-filter"
-              checked={showLowStockOnly}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="low-stock-filter"
+                checked={showLowStockOnly}
               onCheckedChange={setShowLowStockOnly}
             />
             <Label
@@ -373,7 +388,32 @@ export default function InventoryPage() {
               <AlertTriangle className="w-4 h-4 mr-1 text-orange-500" />
               Solo mostrar productos con stock bajo
             </Label>
-        </div>
+            </div>
+            {/* Botón para crear orden desde productos con stock bajo */}
+            {lowStockCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // Obtener productos con stock bajo
+                  const lowStockProducts = showLowStockOnly
+                    ? stockItems
+                    : stockItems.filter((item) => item.is_low_stock)
+                  
+                  if (lowStockProducts.length === 0) {
+                    toast.error('No hay productos con stock bajo para crear orden')
+                    return
+                  }
+
+                  setIsPurchaseOrderModalOpen(true)
+                }}
+                className="border-primary text-primary hover:bg-primary/10 min-h-[44px]"
+              >
+                <ShoppingCart className="w-4 h-4 mr-2" />
+                Crear Orden ({lowStockCount})
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -516,8 +556,9 @@ export default function InventoryPage() {
                           onClick={() => handleViewMovements(item)}
                               className="h-8 w-8 sm:h-9 sm:w-9"
                           title="Ver movimientos"
+                          aria-label="Ver movimientos de inventario"
                         >
-                          <History className="w-4 h-4 sm:w-5 sm:h-5" />
+                          <History className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
                             </Button>
                             <Button
                               variant="ghost"
@@ -525,8 +566,9 @@ export default function InventoryPage() {
                           onClick={() => handleReceiveStock(item)}
                               className="h-8 w-8 sm:h-9 sm:w-9 text-primary hover:text-primary hover:bg-primary/10"
                           title="Recibir stock"
+                          aria-label="Recibir stock"
                         >
-                          <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
+                          <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
                             </Button>
                             <Button
                               variant="ghost"
@@ -534,8 +576,9 @@ export default function InventoryPage() {
                           onClick={() => handleAdjustStock(item)}
                               className="h-8 w-8 sm:h-9 sm:w-9 text-purple-600 hover:text-purple-600 hover:bg-purple-50"
                           title="Ajustar stock"
+                          aria-label="Ajustar stock"
                         >
-                          <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5" />
+                          <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
                             </Button>
                             {/* Solo owners pueden vaciar stock de un producto */}
                             {isOwner && item.current_stock > 0 && (
@@ -611,6 +654,38 @@ export default function InventoryPage() {
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['inventory'] })
           handleCloseModals()
+        }}
+      />
+
+      <BulkStockAdjustModal
+        isOpen={isBulkStockAdjustModalOpen}
+        onClose={() => setIsBulkStockAdjustModalOpen(false)}
+        stockItems={stockItems}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['inventory'] })
+          setIsBulkStockAdjustModalOpen(false)
+        }}
+      />
+
+      <PurchaseOrderFormModal
+        isOpen={isPurchaseOrderModalOpen}
+        onClose={() => setIsPurchaseOrderModalOpen(false)}
+        initialProducts={
+          showLowStockOnly
+            ? stockItems.map((item) => ({
+                product_id: item.product_id,
+                quantity: Math.max(1, Math.ceil((item.low_stock_threshold || 10) * 1.5)), // Sugerir cantidad basada en umbral
+              }))
+            : stockItems
+                .filter((item) => item.is_low_stock)
+                .map((item) => ({
+                  product_id: item.product_id,
+                  quantity: Math.max(1, Math.ceil((item.low_stock_threshold || 10) * 1.5)),
+                }))
+        }
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['purchase-orders'] })
+          setIsPurchaseOrderModalOpen(false)
         }}
       />
 

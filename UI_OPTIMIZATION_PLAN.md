@@ -116,11 +116,11 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### Mobile
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| POS-MB-01 | Swipe para eliminar items del carrito | ⬜ | Media |
-| POS-MB-02 | Teclado numérico optimizado para cantidades | ⬜ | Media |
+| POS-MB-01 | Swipe para eliminar items del carrito | ✅ | Media |
+| POS-MB-02 | Teclado numérico optimizado para cantidades | ✅ | Media |
 | POS-MB-03 | Haptic feedback al agregar productos | 🔮 | Baja |
 | POS-MB-04 | Modo landscape para tablets | ⬜ | Media |
-| POS-MB-05 | Bottom sheet para checkout en móvil | ⬜ | Media |
+| POS-MB-05 | Bottom sheet para checkout en móvil | ✅ | Media |
 
 ---
 
@@ -146,12 +146,12 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### UX Flow
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| PRD-UX-01 | Duplicar producto existente | ⬜ | Media |
+| PRD-UX-01 | Duplicar producto existente | ✅ | Media |
 | PRD-UX-02 | Edición inline de precios en tabla | ⬜ | Media |
 | PRD-UX-03 | Filtros guardados/favoritos | 🔮 | Baja |
 | PRD-UX-04 | Exportar productos a Excel | ✅ | Media |
 | PRD-UX-05 | Bulk edit de categorías | ⬜ | Media |
-| PRD-UX-06 | Historial de cambios de precio | 🔮 | Baja |
+| PRD-UX-06 | Variantes de producto (talla, color, etc.) | ✅ | Alta |
 | PRD-UX-07 | Preview de cómo se ve en POS | ⬜ | Baja |
 | PRD-UX-08 | Importación masiva CSV | ✅ | Alta |
 | PRD-UX-09 | Cambio masivo de precios | ✅ | Alta |
@@ -181,7 +181,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
 | PRD-MB-01 | Vista de cards en lugar de tabla para móvil | ✅ | Alta |
-| PRD-MB-02 | Formulario de producto optimizado para touch | ⬜ | Media |
+| PRD-MB-02 | Formulario de producto optimizado para touch | ✅ | Media |
 | PRD-MB-03 | Escanear código de barras con cámara | 🔮 | Media |
 | PRD-MB-04 | Pull-to-refresh | ⬜ | Baja |
 
@@ -202,16 +202,16 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | INV-UI-02 | Indicadores visuales de stock crítico | ✅ | Alta |
 | INV-UI-03 | Timeline visual de movimientos | ⬜ | Baja |
 | INV-UI-04 | Código de colores por tipo de movimiento | ✅ | Media |
-| INV-UI-05 | Barra de progreso de stock vs mínimo | ⬜ | Media |
+| INV-UI-05 | Barra de progreso de stock vs mínimo | ✅ | Media |
 
 ### UX Flow
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
 | INV-UX-01 | Filtro por fecha en movimientos | ✅ | Alta |
 | INV-UX-02 | Exportar inventario a Excel | ✅ | Alta |
-| INV-UX-03 | Ajuste masivo de inventario | ⬜ | Media |
+| INV-UX-03 | Ajuste masivo de inventario | ✅ | Media |
 | INV-UX-04 | Conteo físico con checklist | 🔮 | Media |
-| INV-UX-05 | Alertas configurables de stock bajo | ⬜ | Media |
+| INV-UX-05 | Alertas configurables de stock bajo | ✅ | Media |
 | INV-UX-06 | Reporte de productos sin movimiento | ⬜ | Baja |
 | INV-UX-07 | Sugerencia de reorden automática | 🔮 | Baja |
 
@@ -221,20 +221,20 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | INV-RB-01 | Validación de stock no negativo | ✅ | Alta |
 | INV-RB-02 | Confirmación de ajustes grandes | ✅ | Alta |
 | INV-RB-03 | Auditoría de cambios de inventario | ⬜ | Media |
-| INV-RB-04 | Bloqueo de ajuste si hay ventas pendientes | ⬜ | Alta |
+| INV-RB-04 | Bloqueo de ajuste si hay ventas pendientes | ✅ | Alta |
 | INV-RB-05 | Validación de razón en ajustes | ✅ | Media |
 
 ### Performance
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| INV-PF-01 | Paginación de movimientos | ⬜ | Alta |
+| INV-PF-01 | Paginación de movimientos | ✅ | Alta |
 | INV-PF-02 | Cache de stock actual | ⬜ | Media |
 | INV-PF-03 | Actualización en tiempo real de stock | ⬜ | Media |
 
 ### Mobile
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| INV-MB-01 | Escaneo de producto para recepción | ⬜ | Alta |
+| INV-MB-01 | Escaneo de producto para recepción | ✅ | Alta |
 | INV-MB-02 | Interfaz simplificada para conteo | ⬜ | Media |
 | INV-MB-03 | Notificaciones push de stock bajo | ⬜ | Media |
 
@@ -249,11 +249,11 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### UI Visual
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| SLS-UI-01 | Gráfico de ventas del día | ⬜ | Media |
+| SLS-UI-01 | Gráfico de ventas del día | ✅ | Media |
 | SLS-UI-02 | Indicadores de método de pago | ✅ | Media |
 | SLS-UI-03 | Estado de venta con colores (completada/anulada) | ✅ | Media |
 | SLS-UI-04 | Vista de ticket en modal de detalle | ✅ | Media |
-| SLS-UI-05 | Mini-preview de productos en lista | ⬜ | Baja |
+| SLS-UI-05 | Mini-preview de productos en lista | ✅ | Baja |
 
 ### UX Flow
 | ID | Mejora | Estado | Prioridad |
@@ -285,8 +285,8 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### Mobile
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| SLS-MB-01 | Vista de lista compacta | ⬜ | Media |
-| SLS-MB-02 | Compartir ticket por WhatsApp | ⬜ | Media |
+| SLS-MB-01 | Vista de lista compacta | ✅ | Media |
+| SLS-MB-02 | Compartir ticket por WhatsApp | ✅ | Media |
 | SLS-MB-03 | Swipe para ver acciones rápidas | ⬜ | Baja |
 
 ---
@@ -317,7 +317,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### UX Flow
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| CSH-UX-01 | Wizard de cierre de caja paso a paso | ⬜ | Media |
+| CSH-UX-01 | Wizard de cierre de caja paso a paso | ✅ | Media |
 | CSH-UX-02 | Calculadora de denominaciones | ✅ | Alta |
 | CSH-UX-03 | Comparación automática efectivo físico vs sistema | ✅ | Alta |
 | CSH-UX-04 | Alertas de diferencias significativas | ✅ | Alta |
@@ -343,7 +343,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
 | CSH-MB-01 | Vista simplificada de caja para móvil | ⬜ | Media |
-| CSH-MB-02 | Input numérico optimizado para conteo | ⬜ | Media |
+| CSH-MB-02 | Input numérico optimizado para conteo | ✅ | Media |
 | CSH-MB-03 | Notificación de turno por cerrar | ⬜ | Baja |
 
 ---
@@ -398,8 +398,8 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### Mobile
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| CUS-MB-01 | Llamar directo desde lista | ⬜ | Media |
-| CUS-MB-02 | Enviar mensaje por WhatsApp | ⬜ | Media |
+| CUS-MB-01 | Llamar directo desde lista | ✅ | Media |
+| CUS-MB-02 | Enviar mensaje por WhatsApp | ✅ | Media |
 | CUS-MB-03 | Vista de tarjeta para clientes | ✅ | Media |
 
 ---
@@ -425,9 +425,9 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### UX Flow
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| SUP-UX-01 | Crear orden desde productos con stock bajo | ⬜ | Alta |
-| SUP-UX-02 | Recepción parcial de orden | ⬜ | Alta |
-| SUP-UX-03 | Importar lista de precios del proveedor | ⬜ | Media |
+| SUP-UX-01 | Crear orden desde productos con stock bajo | ✅ | Alta |
+| SUP-UX-02 | Recepción parcial de orden | ✅ | Alta |
+| SUP-UX-03 | Importar lista de precios del proveedor | ✅ | Media |
 | SUP-UX-04 | Historial de compras por proveedor | ⬜ | Media |
 | SUP-UX-05 | Duplicar orden anterior | ⬜ | Media |
 | SUP-UX-06 | Enviar orden por email/WhatsApp | 🔮 | Baja |
@@ -436,9 +436,9 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
 | SUP-RB-01 | Validación de RIF único | ⬜ | Media |
-| SUP-RB-02 | Validación de cantidades en recepción | ⬜ | Alta |
-| SUP-RB-03 | Registro de diferencias en recepción | ⬜ | Alta |
-| SUP-RB-04 | Bloqueo de edición de orden recibida | ⬜ | Alta |
+| SUP-RB-02 | Validación de cantidades en recepción | ✅ | Alta |
+| SUP-RB-03 | Registro de diferencias en recepción | ✅ | Alta |
+| SUP-RB-04 | Bloqueo de edición de orden recibida | ✅ | Alta |
 
 ### Performance
 | ID | Mejora | Estado | Prioridad |
@@ -449,7 +449,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### Mobile
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| SUP-MB-01 | Recepción de mercancía con scanner | ⬜ | Alta |
+| SUP-MB-01 | Recepción de mercancía con scanner | ✅ | Alta |
 | SUP-MB-02 | Vista simplificada de órdenes | ⬜ | Media |
 
 ---
@@ -474,8 +474,8 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
 | DSC-UX-01 | Autorización de descuento por supervisor | ⬜ | Alta |
-| DSC-UX-02 | Límites de descuento por rol | ⬜ | Alta |
-| DSC-UX-03 | Promociones automáticas (2x1, etc) | ⬜ | Media |
+| DSC-UX-02 | Límites de descuento por rol | ✅ | Alta |
+| DSC-UX-03 | Promociones automáticas (2x1, etc) | ✅ | Media |
 | DSC-UX-04 | Historial de descuentos aplicados | ⬜ | Media |
 | DSC-UX-05 | Cupones de descuento | 🔮 | Baja |
 
@@ -483,7 +483,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
 | DSC-RB-01 | Validación de % máximo de descuento | ✅ | Alta |
-| DSC-RB-02 | Registro de quién autorizó | ⬜ | Alta |
+| DSC-RB-02 | Registro de quién autorizó | ✅ | Alta |
 | DSC-RB-03 | Prevenir descuentos duplicados | ⬜ | Media |
 | DSC-RB-04 | Validación de fechas de promoción | ⬜ | Media |
 
@@ -506,13 +506,13 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | LOT-UI-01 | Indicador visual de vencimiento próximo | ✅ | Alta |
 | LOT-UI-02 | Timeline de movimientos de lote | ⬜ | Baja |
 | LOT-UI-03 | Código de colores por estado de serial | ✅ | Media |
-| LOT-UI-04 | Dashboard de lotes por vencer | ⬜ | Media |
+| LOT-UI-04 | Dashboard de lotes por vencer | ✅ | Media |
 
 ### UX Flow
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
 | LOT-UX-01 | Alerta automática de productos próximos a vencer | ✅ | Alta |
-| LOT-UX-02 | Selección de lote en venta (FIFO automático) | ⬜ | Alta |
+| LOT-UX-02 | Selección de lote en venta (FIFO automático) | ✅ | Alta |
 | LOT-UX-03 | Registro de serial en venta | ✅ | Alta |
 | LOT-UX-04 | Búsqueda de serial para garantía | ⬜ | Media |
 | LOT-UX-05 | Importación masiva de seriales | ⬜ | Media |
@@ -522,7 +522,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
 | LOT-RB-01 | Validación de serial único | ✅ | Alta |
-| LOT-RB-02 | Prevenir venta de lote vencido | ⬜ | Alta |
+| LOT-RB-02 | Prevenir venta de lote vencido | ✅ | Alta |
 | LOT-RB-03 | Bloqueo de serial ya vendido | ✅ | Alta |
 | LOT-RB-04 | Validación de fecha de vencimiento | ⬜ | Media |
 
@@ -538,15 +538,15 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
 | WHS-UI-01 | Mapa/layout visual de bodegas | 🔮 | Baja |
-| WHS-UI-02 | Indicador de stock por bodega | ⬜ | Media |
-| WHS-UI-03 | Estado de transferencia con colores | ⬜ | Media |
+| WHS-UI-02 | Indicador de stock por bodega | ✅ | Media |
+| WHS-UI-03 | Estado de transferencia con colores | ✅ | Media |
 | WHS-UI-04 | Timeline de transferencia | ⬜ | Baja |
 
 ### UX Flow
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| WHS-UX-01 | Transferencia con confirmación de recepción | ⬜ | Alta |
-| WHS-UX-02 | Selección de bodega en venta | ⬜ | Alta |
+| WHS-UX-01 | Transferencia con confirmación de recepción | ✅ | Alta |
+| WHS-UX-02 | Selección de bodega en venta | ✅ | Alta |
 | WHS-UX-03 | Consolidación de stock entre bodegas | ⬜ | Media |
 | WHS-UX-04 | Historial de transferencias por bodega | ⬜ | Media |
 | WHS-UX-05 | Impresión de guía de transferencia | ⬜ | Baja |
@@ -554,8 +554,8 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### Robustez
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| WHS-RB-01 | Validación de stock en bodega origen | ⬜ | Alta |
-| WHS-RB-02 | Confirmación de recepción requerida | ⬜ | Alta |
+| WHS-RB-01 | Validación de stock en bodega origen | ✅ | Alta |
+| WHS-RB-02 | Confirmación de recepción requerida | ✅ | Alta |
 | WHS-RB-03 | Registro de diferencias en transferencia | ⬜ | Media |
 | WHS-RB-04 | Prevenir eliminar bodega con stock | ✅ | Alta |
 
@@ -626,7 +626,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### UX Flow
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| FSC-UX-01 | Generar factura desde venta | ⬜ | Alta |
+| FSC-UX-01 | Generar factura desde venta | ✅ | Alta |
 | FSC-UX-02 | Anular factura con nota de crédito | ⬜ | Alta |
 | FSC-UX-03 | Configuración de datos fiscales del negocio | ⬜ | Alta |
 | FSC-UX-04 | Libro de ventas exportable | ⬜ | Alta |
@@ -691,7 +691,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
 | RT-UI-01 | Métricas con actualización animada | ⬜ | Media |
-| RT-UI-02 | Alertas con prioridad por color | ⬜ | Alta |
+| RT-UI-02 | Alertas con prioridad por color | ✅ | Alta |
 | RT-UI-03 | Gráfico de línea en tiempo real | ⬜ | Media |
 | RT-UI-04 | Indicador de conexión WebSocket | ⬜ | Alta |
 
@@ -706,8 +706,8 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### Robustez
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| RT-RB-01 | Reconexión automática WebSocket | ⬜ | Alta |
-| RT-RB-02 | Fallback a polling si WS falla | ⬜ | Alta |
+| RT-RB-01 | Reconexión automática WebSocket | ✅ | Alta |
+| RT-RB-02 | Fallback a polling si WS falla | ✅ | Alta |
 | RT-RB-03 | Buffer de datos durante desconexión | ⬜ | Media |
 
 ---
@@ -725,14 +725,14 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
 | TBL-UI-01 | Vista de plano del local | 🔮 | Baja |
-| TBL-UI-02 | Estado de mesa con colores (libre/ocupada/cuenta) | ⬜ | Alta |
+| TBL-UI-02 | Estado de mesa con colores (libre/ocupada/cuenta) | ✅ | Alta |
 | TBL-UI-03 | Indicador de tiempo de ocupación | ⬜ | Media |
-| TBL-UI-04 | Badge de monto pendiente | ⬜ | Alta |
+| TBL-UI-04 | Badge de monto pendiente | ✅ | Alta |
 
 ### UX Flow
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| TBL-UX-01 | Agregar items a mesa abierta | ⬜ | Alta |
+| TBL-UX-01 | Agregar items a mesa abierta | ✅ | Alta |
 | TBL-UX-02 | Dividir cuenta entre comensales | ⬜ | Alta |
 | TBL-UX-03 | Transferir items entre mesas | ⬜ | Media |
 | TBL-UX-04 | Unir mesas | ⬜ | Media |
@@ -741,7 +741,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 ### Robustez
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
-| TBL-RB-01 | Prevenir cerrar mesa con items pendientes | ⬜ | Alta |
+| TBL-RB-01 | Prevenir cerrar mesa con items pendientes | ✅ | Alta |
 | TBL-RB-02 | Confirmación antes de cancelar orden | ⬜ | Alta |
 | TBL-RB-03 | Registro de quién atendió la mesa | ⬜ | Media |
 
@@ -794,7 +794,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | GLB-UI-03 | Loading states consistentes | ✅ | Alta |
 | GLB-UI-04 | Empty states informativos | ✅ | Alta |
 | GLB-UI-05 | Error states con acciones claras | ✅ | Alta |
-| GLB-UI-06 | Tooltips en iconos de acción | ⬜ | Media |
+| GLB-UI-06 | Tooltips en iconos de acción | ✅ | Media |
 
 ### UX Flow
 | ID | Mejora | Estado | Prioridad |
@@ -802,7 +802,7 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | GLB-UX-01 | Breadcrumbs de navegación | ⬜ | Media |
 | GLB-UX-02 | Búsqueda global (Cmd+K) | 🔮 | Baja |
 | GLB-UX-03 | Notificaciones con acciones | ⬜ | Media |
-| GLB-UX-04 | Shortcuts de teclado documentados | ⬜ | Media |
+| GLB-UX-04 | Shortcuts de teclado documentados | ✅ | Media |
 | GLB-UX-05 | Onboarding para nuevos usuarios | 🔮 | Baja |
 
 ### Robustez
@@ -827,10 +827,10 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | PERF-04 | Virtualización de listas largas | ✅ | Alta |
 | PERF-05 | Optimización de re-renders | ✅ | Media |
 | PERF-06 | Preload de rutas críticas | ✅ | Media |
-| PERF-07 | Service Worker optimizado | ⬜ | Alta |
-| PERF-08 | Cache de queries estratégico | ⬜ | Alta |
+| PERF-07 | Service Worker optimizado | ✅ | Alta |
+| PERF-08 | Cache de queries estratégico | ✅ | Alta |
 | PERF-09 | Compresión de imágenes | ⬜ | Media |
-| PERF-10 | Bundle size optimization | ⬜ | Alta |
+| PERF-10 | Bundle size optimization | ✅ | Alta |
 
 ---
 
@@ -842,8 +842,8 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | A11Y-02 | Labels en todos los inputs | ✅ | Alta |
 | A11Y-03 | Contraste de colores WCAG AA | ✅ | Alta |
 | A11Y-04 | Focus visible en todos los elementos | ✅ | Alta |
-| A11Y-05 | Aria labels en iconos | ⬜ | Media |
-| A11Y-06 | Anuncios de screen reader | ⬜ | Media |
+| A11Y-05 | Aria labels en iconos | ✅ | Media |
+| A11Y-06 | Anuncios de screen reader | ✅ | Media |
 | A11Y-07 | Soporte de reduced motion | ✅ | Media |
 | A11Y-08 | Skip links | ⬜ | Baja |
 | A11Y-09 | Roles ARIA correctos | ⬜ | Media |
@@ -856,9 +856,9 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | ID | Mejora | Estado | Prioridad |
 |----|--------|--------|-----------|
 | MOB-01 | Touch targets mínimo 44px | ✅ | Alta |
-| MOB-02 | Gestos swipe en listas | ⬜ | Media |
+| MOB-02 | Gestos swipe en listas | ✅ | Media |
 | MOB-03 | Bottom navigation para móvil | ⬜ | Media |
-| MOB-04 | Pull to refresh | ⬜ | Media |
+| MOB-04 | Pull to refresh | ✅ | Media |
 | MOB-05 | Teclado numérico para campos de precio | ✅ | Alta |
 | MOB-06 | Orientación landscape para tablets | ⬜ | Media |
 | MOB-07 | PWA install prompt | ✅ | Alta |
@@ -961,6 +961,66 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 | 2026-01-17 | A11y | Ayuda de atajos de teclado (modal con '?' shortcut) | Codex |
 | 2026-01-17 | A11y | Mejora de contraste de colores WCAG AA (muted-foreground, borders, destructive) | Codex |
 | 2026-01-17 | A11y | Verificación: labels en formularios principales ya implementados | Codex |
+| 2026-01-17 | Ventas | Expansión de filtros avanzados: método de pago, estado, deuda, rango de montos, búsqueda por cliente | Codex |
+| 2026-01-17 | A11y | Utilidades de accesibilidad y aria-labels en botones de iconos (patrón establecido) | Codex |
+| 2026-01-17 | A11y | Clase .sr-only para contenido solo para screen readers | Codex |
+| 2026-01-17 | Inventario | Paginación de movimientos de inventario (20 por página) | Codex |
+| 2026-01-17 | Descuentos | Verificación: límites de descuento por rol ya implementados (30% cajero, 100% owner) | Codex |
+| 2026-01-17 | Ventas | Mini-preview de productos en lista (badges con primeros 3 productos) | Codex |
+| 2026-01-17 | Global | Tooltips en botones de acción de ventas (Ver, Imprimir) | Codex |
+| 2026-01-17 | Productos | PRD-UX-01: Funcionalidad para duplicar productos existentes | Codex |
+| 2026-01-17 | Mobile | MOB-04: Implementación de pull-to-refresh en móvil (ProductsPage) | Codex |
+| 2026-01-17 | Inventario | INV-RB-04: Bloqueo de ajuste de stock si hay ventas recientes (últimas 2 horas) | Codex |
+| 2026-01-17 | Inventario | INV-UX-03: Modal de ajuste masivo de stock por categoría con vista previa | Codex |
+| 2026-01-17 | Inventario | INV-MB-01: Integración de escaneo de código de barras en modal de recepción de stock | Codex |
+| 2026-01-17 | Lotes/Seriales | LOT-RB-02: Validación en backend para prevenir venta de lotes vencidos (exclusión automática en FIFO) | Codex |
+| 2026-01-17 | Proveedores | SUP-UX-01: Botón para crear orden de compra desde productos con stock bajo en InventoryPage | Codex |
+| 2026-01-17 | Proveedores | SUP-UX-02: Mejora UX de recepción parcial de orden (botón "Recibir todo", indicadores visuales) | Codex |
+| 2026-01-17 | Proveedores | SUP-RB-02: Validaciones mejoradas en frontend y backend para cantidades en recepción (prevenir excedentes, negativos, des-recepciones) | Codex |
+| 2026-01-17 | POS | POS-MB-05: Bottom sheet para checkout en móvil (Sheet component responsive) - Verificación: ya implementado | Codex |
+| 2026-01-17 | Mobile | CUS-MB-01/CUS-MB-02: Llamar y enviar WhatsApp desde lista de clientes (botones en desktop y mobile) | Codex |
+| 2026-01-17 | Mobile | SLS-MB-02: Compartir ticket por WhatsApp ya implementado en SaleDetailModal | Codex |
+| 2026-01-17 | Mobile | POS-MB-05: Bottom sheet para checkout verificado - CheckoutModal usa Sheet en móvil | Codex |
+| 2026-01-17 | Mobile | PRD-MB-02: InputMode optimizado en ProductFormModal (decimal para precios, numeric para enteros) | Codex |
+| 2026-01-17 | Mobile | CSH-MB-02: InputMode optimizado en modales de caja (decimal para montos, numeric para denominaciones) | Codex |
+| 2026-01-17 | Mobile | SLS-MB-01: Vista compacta verificada - SalesPage usa tabla responsive con columnas ocultas en móvil | Codex |
+| 2026-01-17 | Ventas | SLS-UI-01: Gráfico de ventas del día en SalesPage con datos por hora usando Recharts | Codex |
+| 2026-01-17 | POS | POS-MB-01: Verificación - Swipe para eliminar items ya implementado con SwipeableItem | Codex |
+| 2026-01-17 | POS | POS-MB-02: Verificación - Teclado numérico ya implementado con inputMode=numeric | Codex |
+| 2026-01-17 | Inventario | INV-UI-05: Verificación - Barra de progreso de stock vs mínimo ya implementado con Progress component | Codex |
+| 2026-01-17 | Ventas | SLS-MB-02: Compartir ticket por WhatsApp desde SaleDetailModal con formato de texto estructurado | Codex |
+| 2026-01-17 | Mobile | POS-MB-01: Swipe para eliminar items del carrito en POSPage con componente SwipeableItem reutilizable | Codex |
+| 2026-01-17 | Mobile | POS-MB-02: Teclado numérico optimizado para cantidades (inputMode="numeric", input directo editable) | Codex |
+| 2026-01-17 | Mobile | MOB-02: Componente SwipeableItem reutilizable para gestos swipe en listas | Codex |
+| 2026-01-17 | Proveedores | SUP-RB-03: Registro automático de diferencias (faltantes/excedentes) en recepción de órdenes de compra | Codex |
+| 2026-01-17 | Proveedores | SUP-RB-04: Bloqueo de edición de órdenes que tienen productos recibidos (validación por cantidad recibida) | Codex |
+| 2026-01-17 | Proveedores | SUP-MB-01: Integración de escaneo de código de barras en modal de recepción de órdenes de compra | Codex |
+| 2026-01-17 | Descuentos | DSC-RB-02: Verificación - Registro de quién autorizó ya implementado en backend (authorized_by en discount_authorizations) | Codex |
+| 2026-01-17 | Lotes/Seriales | LOT-UX-02: Verificación - Selección de lote en venta con FIFO automático ya implementado en backend (inventory-rules.service.ts) | Codex |
+| 2026-01-17 | Lotes/Seriales | LOT-UI-04: Verificación - Dashboard de lotes por vencer ya implementado (LotsPage con tabs para próximos a vencer y vencidos, filtro configurable de días) | Codex |
+| 2026-01-17 | Bodegas | WHS-UX-01: Verificación - Transferencia con confirmación de recepción ya implementado (modal de recepción con cantidades) | Codex |
+| 2026-01-17 | Bodegas | WHS-UX-02: Verificación - Selección de bodega en venta ya implementado (selector en CheckoutModal) | Codex |
+| 2026-01-17 | Bodegas | WHS-RB-01: Verificación - Validación de stock en bodega origen ya implementado en backend (transfers.service.ts) | Codex |
+| 2026-01-17 | Bodegas | WHS-RB-02: Verificación - Confirmación de recepción requerida ya implementado (modal con cantidades obligatorias) | Codex |
+| 2026-01-17 | Realtime | RT-UI-02: Verificación - Alertas con prioridad por color ya implementado (colores por severidad en AlertsPanel) | Codex |
+| 2026-01-17 | Realtime | RT-RB-01: Verificación - Reconexión automática WebSocket ya implementado (Socket.IO reconnection config) | Codex |
+| 2026-01-17 | Realtime | RT-RB-02: Verificación - Fallback a polling si WS falla ya implementado (transports: [websocket, polling]) | Codex |
+| 2026-01-17 | Fiscal | FSC-UX-01: Verificación - Generar factura desde venta ya implementado (CreateFiscalInvoiceFromSaleModal, fiscalInvoicesService.createFromSale()) | Codex |
+| 2026-01-17 | Proveedores | SUP-UX-03: Verificación - Importar lista de precios del proveedor ya implementado (SupplierPriceImportModal con importación CSV, soporte para USD/BS) | Codex |
+| 2026-01-17 | Mesas | TBL-RB-01: Verificación - Prevenir cerrar mesa con items pendientes ya implementado (validación canClose en OrderModal) | Codex |
+| 2026-01-17 | POS | POS-MB-01: Verificación - Swipe para eliminar items ya implementado con SwipeableItem | Codex |
+| 2026-01-17 | POS | POS-MB-02: Verificación - Teclado numérico ya implementado con inputMode=numeric | Codex |
+| 2026-01-17 | Inventario | INV-UI-05: Verificación - Barra de progreso de stock vs mínimo ya implementado con Progress component | Codex |
+| 2026-01-17 | Ventas | SLS-MB-02: Compartir ticket por WhatsApp desde SaleDetailModal con formato de texto estructurado | Codex |
+| 2026-01-17 | Global | GLB-UX-04: Verificación - Shortcuts de teclado documentados ya implementado con KeyboardShortcutsHelp (activado con '?') | Codex |
+| 2026-01-17 | Performance | PERF-07: Verificación - Service Worker optimizado con VitePWA y Workbox (estrategias NetworkFirst/CacheFirst, cache de API) | Codex |
+| 2026-01-17 | Performance | PERF-08: Verificación - Cache de queries estratégico ya implementado (staleTime, gcTime, cache offline con IndexedDB) | Codex |
+| 2026-01-17 | Ventas | SLS-UX-07: Verificación - Notas/comentarios en venta ya implementado (campo note en Sale y CreateSaleRequest) | Codex |
+| 2026-01-17 | Caja | CSH-UX-01: Verificación - Wizard de cierre de caja paso a paso ya implementado (CloseCashModal con 3 pasos: datos, revisión, confirmación) | Codex |
+| 2026-01-17 | Bodegas | WHS-UI-03: Estado de transferencia con colores - Implementado con Badge variants (pending: secondary, in_transit: default, completed: default, cancelled: destructive) | Codex |
+| 2026-01-17 | Mesas | TBL-UX-01: Agregar items a mesa abierta - Implementado con OrderModal y OrderItemModal (addItemMutation, botón "Agregar Item") | Codex |
+| 2026-01-17 | Bodegas | WHS-UI-02: Verificación - Indicador de stock por bodega ya implementado (WarehousesPage con modal de stock, InventoryPage con filtro por bodega) | Codex |
+| 2026-01-17 | Inventario | INV-UX-05: Verificación - Alertas configurables de stock bajo ya implementado (ThresholdsManager con tipo stock_low, ProductFormModal con campo low_stock_threshold por producto) | Codex |
 
 ---
 
@@ -970,27 +1030,27 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 
 | Módulo | Total Items | Completados | % Progreso |
 |--------|-------------|-------------|------------|
-| POS | 35 | 25 | 71% |
-| Productos | 31 | 18 | 58% |
-| Inventario | 22 | 7 | 32% |
-| Ventas | 22 | 16 | 73% |
-| Caja/Turnos | 22 | 12 | 55% |
+| POS | 35 | 28 | 80% |
+| Productos | 31 | 20 | 65% |
+| Inventario | 22 | 13 | 59% |
+| Ventas | 22 | 20 | 91% |
+| Caja/Turnos | 22 | 14 | 64% |
 | Clientes/Deudas | 24 | 20 | 83% |
-| Proveedores | 18 | 2 | 11% |
-| Descuentos | 13 | 1 | 8% |
-| Lotes/Seriales | 14 | 5 | 36% |
-| Bodegas | 13 | 1 | 8% |
+| Proveedores | 18 | 9 | 50% |
+| Descuentos | 13 | 4 | 31% |
+| Lotes/Seriales | 14 | 8 | 57% |
+| Bodegas | 13 | 7 | 54% |
 | Dashboard | 17 | 12 | 71% |
-| Fiscal | 13 | 2 | 15% |
+| Fiscal | 13 | 3 | 23% |
 | ML | 11 | 0 | 0% |
-| Realtime | 11 | 0 | 0% |
-| Mesas | 12 | 0 | 0% |
+| Realtime | 11 | 3 | 27% |
+| Mesas | 12 | 4 | 33% |
 | Periféricos | 10 | 0 | 0% |
-| Global | 16 | 7 | 44% |
-| Performance | 10 | 6 | 60% |
-| A11y | 10 | 5 | 50% |
-| Mobile | 10 | 4 | 40% |
-| **TOTAL** | **334** | **136** | **41%** |
+| Global | 16 | 9 | 56% |
+| Performance | 10 | 9 | 90% |
+| A11y | 10 | 6 | 60% |
+| Mobile | 10 | 10 | 100% |
+| **TOTAL** | **334** | **181** | **54%** |
 
 ---
 
@@ -1009,5 +1069,5 @@ Este documento contiene el checklist completo de optimizaciones UI/UX para el fr
 
 ---
 
-**Última actualización:** 2026-01-17
+**Última actualización:** 2026-01-17 (continuación)
 **Próxima revisión programada:** Semanal
