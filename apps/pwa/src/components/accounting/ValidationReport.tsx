@@ -49,18 +49,25 @@ export default function ValidationReport() {
       if (data.errors.length > 0) {
         const needsManualReview = data.errors.filter((e) => 
           e.error.includes('requiere crear cuenta de ajuste') || 
-          e.error.includes('no tiene líneas')
+          e.error.includes('no tiene líneas') ||
+          e.error.includes('Requiere revisión manual')
         ).length
         
         if (needsManualReview > 0) {
-          toast.warning(
+          toast.error(
             `${needsManualReview} asiento(s) requieren revisión manual. Ver detalles en la consola.`,
-            { duration: 5000 }
+            { 
+              duration: 5000,
+              icon: '⚠️',
+            }
           )
         } else {
-          toast.info(
+          toast(
             `${data.errors.length} asiento(s) fueron balanceados pero requieren verificación. Ver detalles en la consola.`,
-            { duration: 5000 }
+            { 
+              duration: 5000,
+              icon: 'ℹ️',
+            }
           )
         }
         console.warn('Detalles de corrección de asientos:', data.errors)
