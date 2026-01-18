@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import { ChartOfAccount, AccountType } from '../database/entities/chart-of-accounts.entity';
 import { AccountingAccountMapping } from '../database/entities/accounting-account-mapping.entity';
 import { CreateAccountDto } from './dto/create-account.dto';
+import { getChartTemplate, getDefaultMappings, BusinessType } from './templates/chart-templates';
 import { randomUUID } from 'crypto';
 
 @Injectable()
@@ -190,48 +191,15 @@ export class ChartOfAccountsService {
 
   /**
    * Inicializar plan de cuentas básico (para nuevos stores)
+   * Ahora soporta templates por tipo de negocio
    */
   async initializeDefaultChartOfAccounts(
     storeId: string,
     userId: string,
+    businessType: BusinessType = 'general',
   ): Promise<{ accounts_created: number; mappings_created: number }> {
-    const defaultAccounts = [
-      // Activos
-      { code: '1', name: 'ACTIVOS', type: 'asset' as AccountType, level: 1 },
-      { code: '1.01', name: 'Activos Corrientes', type: 'asset' as AccountType, level: 2, parent: '1' },
-      { code: '1.01.01', name: 'Caja', type: 'asset' as AccountType, level: 3, parent: '1.01' },
-      { code: '1.01.02', name: 'Bancos', type: 'asset' as AccountType, level: 3, parent: '1.01' },
-      { code: '1.01.03', name: 'Cuentas por Cobrar', type: 'asset' as AccountType, level: 3, parent: '1.01' },
-      { code: '1.01.04', name: 'IVA Crédito Fiscal', type: 'asset' as AccountType, level: 3, parent: '1.01' },
-      { code: '1.02', name: 'Activos No Corrientes', type: 'asset' as AccountType, level: 2, parent: '1' },
-      { code: '1.02.01', name: 'Inventario', type: 'asset' as AccountType, level: 3, parent: '1.02' },
-      
-      // Pasivos
-      { code: '2', name: 'PASIVOS', type: 'liability' as AccountType, level: 1 },
-      { code: '2.01', name: 'Pasivos Corrientes', type: 'liability' as AccountType, level: 2, parent: '2' },
-      { code: '2.01.01', name: 'Cuentas por Pagar', type: 'liability' as AccountType, level: 3, parent: '2.01' },
-      { code: '2.01.02', name: 'IVA por Pagar', type: 'liability' as AccountType, level: 3, parent: '2.01' },
-      
-      // Patrimonio
-      { code: '3', name: 'PATRIMONIO', type: 'equity' as AccountType, level: 1 },
-      { code: '3.01', name: 'Capital', type: 'equity' as AccountType, level: 2, parent: '3' },
-      
-      // Ingresos
-      { code: '4', name: 'INGRESOS', type: 'revenue' as AccountType, level: 1 },
-      { code: '4.01', name: 'Ventas', type: 'revenue' as AccountType, level: 2, parent: '4' },
-      { code: '4.01.01', name: 'Ventas de Productos', type: 'revenue' as AccountType, level: 3, parent: '4.01' },
-      { code: '4.02', name: 'Otros Ingresos', type: 'revenue' as AccountType, level: 2, parent: '4' },
-      { code: '4.02.01', name: 'Ingresos Varios', type: 'revenue' as AccountType, level: 3, parent: '4.02' },
-      
-      // Gastos
-      { code: '5', name: 'GASTOS', type: 'expense' as AccountType, level: 1 },
-      { code: '5.01', name: 'Costo de Ventas', type: 'expense' as AccountType, level: 2, parent: '5' },
-      { code: '5.01.01', name: 'Costo de Productos Vendidos', type: 'expense' as AccountType, level: 3, parent: '5.01' },
-      { code: '5.02', name: 'Gastos Operativos', type: 'expense' as AccountType, level: 2, parent: '5' },
-      { code: '5.02.01', name: 'Gastos Generales', type: 'expense' as AccountType, level: 3, parent: '5.02' },
-      { code: '5.03', name: 'Compras', type: 'expense' as AccountType, level: 2, parent: '5' },
-      { code: '5.03.01', name: 'Compras de Inventario', type: 'expense' as AccountType, level: 3, parent: '5.03' },
-    ];
+    // Usar template según tipo de negocio
+    const defaultAccounts = getChartTemplate(businessType);
 
     const existingAccounts = await this.accountRepository.find({
       where: { store_id: storeId },
@@ -269,21 +237,8 @@ export class ChartOfAccountsService {
       accountsCreated += 1;
     }
 
-    const defaultMappings = [
-      { transaction_type: 'cash_asset' as const, account_code: '1.01.01' },
-      { transaction_type: 'accounts_receivable' as const, account_code: '1.01.03' },
-      { transaction_type: 'inventory_asset' as const, account_code: '1.02.01' },
-      { transaction_type: 'sale_revenue' as const, account_code: '4.01.01' },
-      { transaction_type: 'sale_cost' as const, account_code: '5.01.01' },
-      { transaction_type: 'sale_tax' as const, account_code: '2.01.02' },
-      { transaction_type: 'purchase_expense' as const, account_code: '5.03.01' },
-      { transaction_type: 'purchase_tax' as const, account_code: '1.01.04' },
-      { transaction_type: 'accounts_payable' as const, account_code: '2.01.01' },
-      { transaction_type: 'expense' as const, account_code: '5.02.01' },
-      { transaction_type: 'income' as const, account_code: '4.02.01' },
-      { transaction_type: 'transfer' as const, account_code: '1.01.02' },
-      { transaction_type: 'adjustment' as const, account_code: '5.02.01' },
-    ];
+    // Obtener mapeos según tipo de negocio
+    const mappingsToCreate = getDefaultMappings(businessType);
 
     const existingMappings = await this.mappingRepository.find({
       where: { store_id: storeId, is_active: true },
@@ -291,7 +246,7 @@ export class ChartOfAccountsService {
     const existingMappingTypes = new Set(existingMappings.map((mapping) => mapping.transaction_type));
     let mappingsCreated = 0;
 
-    for (const mapping of defaultMappings) {
+    for (const mapping of mappingsToCreate) {
       if (existingMappingTypes.has(mapping.transaction_type)) {
         continue;
       }

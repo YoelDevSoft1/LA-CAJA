@@ -27,6 +27,12 @@ import { CreateAccountMappingDto } from './dto/create-account-mapping.dto';
 import { ExportAccountingDto } from './dto/export-accounting.dto';
 import { GetBalanceSheetDto } from './dto/get-balance-sheet.dto';
 import { GetIncomeStatementDto } from './dto/get-income-statement.dto';
+import { GetTrialBalanceDto } from './dto/get-trial-balance.dto';
+import { GetGeneralLedgerDto } from './dto/get-general-ledger.dto';
+import { GetCashFlowDto } from './dto/get-cash-flow.dto';
+import { ClosePeriodDto } from './dto/close-period.dto';
+import { ReopenPeriodDto } from './dto/reopen-period.dto';
+import { ValidateAccountingDto, ReconcileAccountsDto } from './dto/validate-accounting.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AccountingAccountMapping } from '../database/entities/accounting-account-mapping.entity';
@@ -94,11 +100,15 @@ export class AccountingController {
 
   @Post('accounts/initialize')
   @HttpCode(HttpStatus.OK)
-  async initializeChartOfAccounts(@Request() req: any) {
+  async initializeChartOfAccounts(
+    @Request() req: any,
+    @Body() body?: { business_type?: 'retail' | 'services' | 'restaurant' | 'general' },
+  ) {
     const storeId = req.user.store_id;
     const userId = req.user.user_id;
+    const businessType = body?.business_type || 'general';
     const { accounts_created, mappings_created } =
-      await this.chartOfAccountsService.initializeDefaultChartOfAccounts(storeId, userId);
+      await this.chartOfAccountsService.initializeDefaultChartOfAccounts(storeId, userId, businessType);
     return {
       message: 'Plan de cuentas inicializado exitosamente',
       accounts_created,
@@ -298,6 +308,140 @@ export class AccountingController {
       storeId,
       new Date(dto.start_date),
       new Date(dto.end_date),
+    );
+  }
+
+  /**
+   * Trial Balance (Balance de Comprobación)
+   */
+  @Get('reports/trial-balance')
+  async getTrialBalance(
+    @Request() req: any,
+    @Query() dto: GetTrialBalanceDto,
+  ) {
+    const storeId = req.user.store_id;
+    const asOfDate = dto.as_of_date ? new Date(dto.as_of_date) : new Date();
+    const includeZeroBalance = dto.include_zero_balance === true;
+    return this.accountingService.getTrialBalance(storeId, asOfDate, includeZeroBalance);
+  }
+
+  /**
+   * Libro Mayor (General Ledger)
+   */
+  @Get('reports/general-ledger')
+  async getGeneralLedger(
+    @Request() req: any,
+    @Query() dto: GetGeneralLedgerDto,
+  ) {
+    const storeId = req.user.store_id;
+    return this.accountingService.getGeneralLedger(
+      storeId,
+      new Date(dto.start_date),
+      new Date(dto.end_date),
+      dto.account_ids,
+    );
+  }
+
+  /**
+   * Estado de Flujo de Efectivo (Cash Flow Statement)
+   */
+  @Get('reports/cash-flow')
+  async getCashFlow(
+    @Request() req: any,
+    @Query() dto: GetCashFlowDto,
+  ) {
+    const storeId = req.user.store_id;
+    return this.accountingService.getCashFlowStatement(
+      storeId,
+      new Date(dto.start_date),
+      new Date(dto.end_date),
+      dto.method || 'indirect',
+    );
+  }
+
+  /**
+   * Cerrar período contable
+   */
+  @Post('periods/close')
+  @HttpCode(HttpStatus.OK)
+  async closePeriod(
+    @Request() req: any,
+    @Body() dto: ClosePeriodDto,
+  ) {
+    const storeId = req.user.store_id;
+    const userId = req.user.sub;
+    return this.accountingService.closePeriod(
+      storeId,
+      new Date(dto.period_start),
+      new Date(dto.period_end),
+      userId,
+      dto.note,
+    );
+  }
+
+  /**
+   * Reabrir período contable
+   */
+  @Post('periods/:periodCode/reopen')
+  @HttpCode(HttpStatus.OK)
+  async reopenPeriod(
+    @Request() req: any,
+    @Param('periodCode') periodCode: string,
+    @Body() dto: ReopenPeriodDto,
+  ) {
+    const storeId = req.user.store_id;
+    const userId = req.user.sub;
+    return this.accountingService.reopenPeriod(
+      storeId,
+      periodCode,
+      userId,
+      dto.reason,
+    );
+  }
+
+  /**
+   * Obtener períodos contables
+   */
+  @Get('periods')
+  async getPeriods(
+    @Request() req: any,
+    @Query('status') status?: string,
+  ) {
+    const storeId = req.user.store_id;
+    // TODO: Implementar método en servicio para listar períodos
+    // Por ahora retornar lista vacía
+    return [];
+  }
+
+  /**
+   * Validación avanzada de integridad contable
+   */
+  @Get('validate')
+  async validateAccounting(
+    @Request() req: any,
+    @Query() dto: ValidateAccountingDto,
+  ) {
+    const storeId = req.user.store_id;
+    return this.accountingService.validateAccountingIntegrity(
+      storeId,
+      dto.start_date ? new Date(dto.start_date) : undefined,
+      dto.end_date ? new Date(dto.end_date) : undefined,
+    );
+  }
+
+  /**
+   * Reconciliación de cuentas
+   */
+  @Post('reconcile')
+  async reconcileAccounts(
+    @Request() req: any,
+    @Body() dto: ReconcileAccountsDto,
+  ) {
+    const storeId = req.user.store_id;
+    return this.accountingService.reconcileAccounts(
+      storeId,
+      dto.account_ids,
+      dto.as_of_date ? new Date(dto.as_of_date) : new Date(),
     );
   }
 }

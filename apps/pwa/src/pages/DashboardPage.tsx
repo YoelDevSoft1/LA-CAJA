@@ -14,12 +14,16 @@ import {
   Printer,
   FileSpreadsheet,
   AlertCircle,
+  CheckCircle2,
+  XCircle,
+  Settings,
 } from 'lucide-react'
 import { exportDashboardToExcel } from '@/utils/export-excel'
 import toast from 'react-hot-toast'
 import ExpiringLotsAlert from '@/components/lots/ExpiringLotsAlert'
 import PendingOrdersIndicator from '@/components/suppliers/PendingOrdersIndicator'
 import { dashboardService } from '@/services/dashboard.service'
+import { setupService } from '@/services/setup.service'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -39,6 +43,7 @@ import { formatQuantity } from '@/lib/weight'
 import SalesTrendChart from '@/components/dashboard/SalesTrendChart'
 import TopProductsChart from '@/components/dashboard/TopProductsChart'
 import DashboardPrintView from '@/components/dashboard/DashboardPrintView'
+import { useNavigate } from 'react-router-dom'
 
 const formatCurrency = (amount: number, currency: 'BS' | 'USD' = 'BS') => {
   if (currency === 'USD') {
@@ -132,11 +137,20 @@ function KPICard({
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const isOwner = user?.role === 'owner'
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
   const [chartCurrency, setChartCurrency] = useState<'BS' | 'USD'>('BS')
   const printRef = useRef<HTMLDivElement>(null)
+
+  // Validar estado de configuración (solo para owners)
+  const { data: setupStatus } = useQuery({
+    queryKey: ['setup', 'validate'],
+    queryFn: () => setupService.validateSetup(),
+    enabled: isOwner,
+    staleTime: 1000 * 60 * 5, // 5 minutos
+  })
 
   // Obtener KPIs - SOLO si el usuario es owner
   const {
@@ -306,6 +320,67 @@ export default function DashboardPage() {
   return (
     <>
     <div className="container mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-6 print:hidden">
+      {/* Setup Status Banner - Solo para owners */}
+      {isOwner && setupStatus && !setupStatus.is_complete && (
+        <Card className="border-orange-200 bg-orange-50 dark:bg-orange-900/20">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <AlertCircle className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-orange-900 dark:text-orange-100 mb-2">
+                  Configuración Incompleta
+                </h3>
+                <p className="text-sm text-orange-800 dark:text-orange-200 mb-3">
+                  Tu sistema requiere configuración adicional para funcionar correctamente.
+                </p>
+                <div className="space-y-2 mb-4">
+                  <p className="text-xs font-medium text-orange-900 dark:text-orange-100">
+                    Pasos faltantes:
+                  </p>
+                  <ul className="space-y-1">
+                    {setupStatus.missing_steps.map((step) => (
+                      <li key={step} className="flex items-center gap-2 text-xs text-orange-700 dark:text-orange-300">
+                        <XCircle className="w-3 h-3" />
+                        <span className="capitalize">
+                          {step === 'warehouse' && 'Almacén'}
+                          {step === 'price_list' && 'Lista de Precios'}
+                          {step === 'chart_of_accounts' && 'Plan de Cuentas'}
+                          {step === 'invoice_series' && 'Serie de Factura'}
+                          {!['warehouse', 'price_list', 'chart_of_accounts', 'invoice_series'].includes(step) && step}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <Button
+                  onClick={() => navigate('/onboarding')}
+                  size="sm"
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Completar Configuración
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Setup Status Success - Opcional, solo mostrar si todo está completo */}
+      {isOwner && setupStatus && setupStatus.is_complete && (
+        <Card className="border-green-200 bg-green-50 dark:bg-green-900/20 print:hidden">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
+              <p className="text-sm text-green-800 dark:text-green-200">
+                <strong>Configuración completa.</strong> Todos los componentes del sistema están configurados correctamente.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       {/* Header */}
       <div className="space-y-4">
         {/* Título y descripción */}

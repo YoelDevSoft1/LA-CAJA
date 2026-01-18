@@ -17,6 +17,8 @@ import { PurchaseOrder } from '../database/entities/purchase-order.entity';
 import { FiscalInvoice } from '../database/entities/fiscal-invoice.entity';
 import { InventoryMovement } from '../database/entities/inventory-movement.entity';
 import { ProductLot } from '../database/entities/product-lot.entity';
+import { Product } from '../database/entities/product.entity';
+import { AccountingPeriod } from '../database/entities/accounting-period.entity';
 
 @Module({
   imports: [
@@ -34,6 +36,8 @@ import { ProductLot } from '../database/entities/product-lot.entity';
       FiscalInvoice,
       InventoryMovement,
       ProductLot,
+      Product,
+      AccountingPeriod,
     ]),
   ],
   controllers: [AccountingController],

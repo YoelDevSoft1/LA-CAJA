@@ -15,6 +15,9 @@ import ExportFormModal from '@/components/accounting/ExportFormModal'
 import AccountBalanceView from '@/components/accounting/AccountBalanceView'
 import BalanceSheetReport from '@/components/accounting/BalanceSheetReport'
 import IncomeStatementReport from '@/components/accounting/IncomeStatementReport'
+import TrialBalanceReport from '@/components/accounting/TrialBalanceReport'
+import GeneralLedgerReport from '@/components/accounting/GeneralLedgerReport'
+import CashFlowReport from '@/components/accounting/CashFlowReport'
 import { chartOfAccountsService, accountMappingsService } from '@/services/accounting.service'
 import type { AccountingEntry, AccountMapping } from '@/types/accounting.types'
 import { FileText, BookOpen, Download, Settings, TrendingUp, Plus, BarChart3 } from 'lucide-react'
@@ -220,12 +223,24 @@ export default function AccountingPage() {
             <TabsList>
               <TabsTrigger value="balance-sheet">Balance General</TabsTrigger>
               <TabsTrigger value="income-statement">Estado de Resultados</TabsTrigger>
+              <TabsTrigger value="cash-flow">Flujo de Efectivo</TabsTrigger>
+              <TabsTrigger value="trial-balance">Balance de Comprobación</TabsTrigger>
+              <TabsTrigger value="general-ledger">Libro Mayor</TabsTrigger>
             </TabsList>
             <TabsContent value="balance-sheet">
               <BalanceSheetReport />
             </TabsContent>
             <TabsContent value="income-statement">
               <IncomeStatementReport />
+            </TabsContent>
+            <TabsContent value="cash-flow">
+              <CashFlowReport />
+            </TabsContent>
+            <TabsContent value="trial-balance">
+              <TrialBalanceReport />
+            </TabsContent>
+            <TabsContent value="general-ledger">
+              <GeneralLedgerReport />
             </TabsContent>
           </Tabs>
         </TabsContent>

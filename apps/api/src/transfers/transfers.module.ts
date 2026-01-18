@@ -7,11 +7,13 @@ import { TransferItem } from '../database/entities/transfer-item.entity';
 import { Warehouse } from '../database/entities/warehouse.entity';
 import { Product } from '../database/entities/product.entity';
 import { WarehousesModule } from '../warehouses/warehouses.module';
+import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Transfer, TransferItem, Warehouse, Product]),
     WarehousesModule,
+    AccountingModule,
   ],
   controllers: [TransfersController],
   providers: [TransfersService],

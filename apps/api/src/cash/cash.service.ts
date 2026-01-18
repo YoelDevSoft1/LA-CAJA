@@ -13,6 +13,7 @@ import {
 } from '../database/entities/cash-movement.entity';
 import { OpenCashSessionDto } from './dto/open-cash-session.dto';
 import { CloseCashSessionDto } from './dto/close-cash-session.dto';
+import { AccountingService } from '../accounting/accounting.service';
 import { randomUUID } from 'crypto';
 
 @Injectable()
@@ -25,6 +26,7 @@ export class CashService {
     @InjectRepository(CashMovement)
     private cashMovementRepository: Repository<CashMovement>,
     private dataSource: DataSource,
+    private accountingService: AccountingService,
   ) {}
 
   async openSession(
@@ -314,6 +316,23 @@ export class CashService {
         'Error de integridad: Los valores guardados no coinciden. Por favor, contacte al administrador.',
       );
     }
+
+    // Generar asiento contable automático para diferencias (fuera de la transacción)
+    setImmediate(async () => {
+      try {
+        await this.accountingService.generateEntryFromCashClose(storeId, {
+          id: verifySession.id,
+          closed_at: verifySession.closed_at,
+          opening_amount_bs: Number(verifySession.opening_amount_bs),
+          opening_amount_usd: Number(verifySession.opening_amount_usd),
+          expected: verifySession.expected,
+          counted: verifySession.counted,
+        });
+      } catch (error) {
+        // Log error pero no fallar el cierre de sesión
+        console.error(`Error generando asiento contable para cierre de caja ${verifySession.id}`, error);
+      }
+    });
 
     return verifySession;
   }

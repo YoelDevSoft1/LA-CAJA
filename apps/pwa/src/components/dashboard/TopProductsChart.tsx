@@ -11,6 +11,21 @@ import {
 } from 'recharts'
 import { formatQuantity } from '@/lib/weight'
 
+/**
+ * Obtiene el valor de una variable CSS como HSL completo
+ */
+function getCSSVariableAsHSL(variable: string): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const root = document.documentElement
+    const value = getComputedStyle(root).getPropertyValue(variable).trim()
+    if (!value) return null
+    return `hsl(${value})`
+  } catch {
+    return null
+  }
+}
+
 interface TopProductData {
   product_id: string
   product_name: string
@@ -34,19 +49,25 @@ const formatCurrency = (value: number, currency: 'BS' | 'USD') => {
   return `Bs. ${value.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-// Paleta de colores vibrante
-const COLORS = [
-  'hsl(var(--primary))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
-  '#8884d8',
-  '#82ca9d',
-  '#ffc658',
-  '#ff7c43',
-  '#a4de6c',
-]
+/**
+ * Paleta de colores vibrante
+ * Resuelve las variables CSS a valores HSL completos para que funcionen en SVG
+ * Si las variables no se pueden resolver, usa valores por defecto
+ */
+function getColors(): string[] {
+  return [
+    getCSSVariableAsHSL('--primary') ?? 'hsl(240, 6%, 10%)',
+    getCSSVariableAsHSL('--chart-2') ?? 'hsl(173, 80%, 40%)',
+    getCSSVariableAsHSL('--chart-3') ?? 'hsl(262, 83%, 58%)',
+    getCSSVariableAsHSL('--chart-4') ?? 'hsl(350, 89%, 60%)',
+    getCSSVariableAsHSL('--chart-5') ?? 'hsl(38, 92%, 50%)',
+    '#8884d8',
+    '#82ca9d',
+    '#ffc658',
+    '#ff7c43',
+    '#a4de6c',
+  ]
+}
 
 interface CustomTooltipProps {
   active?: boolean
@@ -94,6 +115,8 @@ export default function TopProductsChart({
   currency = 'BS',
   limit = 10,
 }: TopProductsChartProps) {
+  const colors = useMemo(() => getColors(), [])
+  
   const chartData = useMemo(() => {
     return data.slice(0, limit).map((item, index) => ({
       name: item.product_name.length > 20
@@ -161,7 +184,7 @@ export default function TopProductsChart({
             {chartData.map((_, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={COLORS[index % COLORS.length]}
+                fill={colors[index % colors.length]}
               />
             ))}
           </Bar>

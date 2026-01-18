@@ -16,6 +16,9 @@ import type {
   EntryStatus,
   BalanceSheetReport,
   IncomeStatementReport,
+  TrialBalanceReport,
+  GeneralLedgerReport,
+  CashFlowReport,
 } from '@/types/accounting.types'
 
 /**
@@ -259,6 +262,47 @@ export const accountingReportsService = {
     end_date: string
   }): Promise<IncomeStatementReport> {
     const response = await api.get<IncomeStatementReport>('/accounting/reports/income-statement', {
+      params,
+    })
+    return response.data
+  },
+
+  /**
+   * Obtiene el Trial Balance (Balance de Comprobación)
+   */
+  async getTrialBalance(params?: {
+    as_of_date?: string
+    include_zero_balance?: boolean
+  }): Promise<TrialBalanceReport> {
+    const response = await api.get<TrialBalanceReport>('/accounting/reports/trial-balance', {
+      params,
+    })
+    return response.data
+  },
+
+  /**
+   * Obtiene el Libro Mayor (General Ledger)
+   */
+  async getGeneralLedger(params: {
+    start_date: string
+    end_date: string
+    account_ids?: string[]
+  }): Promise<GeneralLedgerReport> {
+    const response = await api.get<GeneralLedgerReport>('/accounting/reports/general-ledger', {
+      params,
+    })
+    return response.data
+  },
+
+  /**
+   * Obtiene el Estado de Flujo de Efectivo
+   */
+  async getCashFlow(params: {
+    start_date: string
+    end_date: string
+    method?: 'direct' | 'indirect'
+  }): Promise<CashFlowReport> {
+    const response = await api.get<CashFlowReport>('/accounting/reports/cash-flow', {
       params,
     })
     return response.data

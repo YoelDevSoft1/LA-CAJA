@@ -15,6 +15,7 @@ import { CreateTransferDto } from './dto/create-transfer.dto';
 import { ShipTransferDto } from './dto/ship-transfer.dto';
 import { ReceiveTransferDto } from './dto/receive-transfer.dto';
 import { WarehousesService } from '../warehouses/warehouses.service';
+import { AccountingService } from '../accounting/accounting.service';
 import { randomUUID } from 'crypto';
 
 /**
@@ -34,6 +35,7 @@ export class TransfersService {
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
     private warehousesService: WarehousesService,
+    private accountingService: AccountingService,
     private dataSource: DataSource,
   ) {}
 
@@ -308,7 +310,30 @@ export class TransfersService {
         transfer.note = (transfer.note ? transfer.note + '\n' : '') + dto.note;
       }
 
-      return manager.save(Transfer, transfer);
+      const savedTransfer = await manager.save(Transfer, transfer);
+
+      // Generar asiento contable automático (fuera de la transacción para evitar dependencias circulares)
+      // Usar setTimeout para ejecutar después de commit
+      setImmediate(async () => {
+        try {
+          await this.accountingService.generateEntryFromTransfer(storeId, {
+            id: savedTransfer.id,
+            transfer_number: savedTransfer.transfer_number,
+            received_at: savedTransfer.received_at,
+            items: savedTransfer.items.map((item) => ({
+              product_id: item.product_id,
+              quantity_received: item.quantity_received || 0,
+            })),
+          });
+        } catch (error) {
+          this.logger.error(
+            `Error generando asiento contable para transferencia ${savedTransfer.id}`,
+            error instanceof Error ? error.stack : String(error),
+          );
+        }
+      });
+
+      return savedTransfer;
     });
   }
 

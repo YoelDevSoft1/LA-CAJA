@@ -12,6 +12,7 @@ import { Customer } from '../database/entities/customer.entity';
 import { Sale } from '../database/entities/sale.entity';
 import { CreateDebtPaymentDto } from './dto/create-debt-payment.dto';
 import { ExchangeService } from '../exchange/exchange.service';
+import { AccountingService } from '../accounting/accounting.service';
 import { randomUUID } from 'crypto';
 
 @Injectable()
@@ -29,6 +30,7 @@ export class DebtsService {
     private saleRepository: Repository<Sale>,
     private dataSource: DataSource,
     private exchangeService: ExchangeService,
+    private accountingService: AccountingService,
   ) {}
 
   async createDebtFromSale(
@@ -287,7 +289,35 @@ export class DebtsService {
           throw new NotFoundException('Error al actualizar la deuda');
         }
 
-        return { debt: updatedDebt, payment: savedPayment };
+        const result = { debt: updatedDebt, payment: savedPayment };
+
+        // Generar asiento contable automático (fuera de la transacción)
+        setImmediate(async () => {
+          try {
+            await this.accountingService.generateEntryFromDebtPayment(
+              storeId,
+              {
+                id: updatedDebt.id,
+                sale_id: updatedDebt.sale_id,
+                customer_id: updatedDebt.customer_id,
+              },
+              {
+                id: savedPayment.id,
+                paid_at: savedPayment.paid_at,
+                amount_bs: Number(savedPayment.amount_bs),
+                amount_usd: Number(savedPayment.amount_usd),
+                method: savedPayment.method,
+              },
+            );
+          } catch (error) {
+            this.logger.error(
+              `Error generando asiento contable para pago de deuda ${savedPayment.id}`,
+              error instanceof Error ? error.stack : String(error),
+            );
+          }
+        });
+
+        return result;
       });
     } catch (error) {
       this.logger.error(`Error al agregar pago a deuda ${debtId}:`, error);

@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, IsNull } from 'typeorm';
+import { Repository, Between, IsNull, In } from 'typeorm';
 import { JournalEntry, JournalEntryType, JournalEntryStatus } from '../database/entities/journal-entry.entity';
 import { JournalEntryLine } from '../database/entities/journal-entry-line.entity';
 import { ChartOfAccount } from '../database/entities/chart-of-accounts.entity';
@@ -19,6 +19,8 @@ import { PurchaseOrder } from '../database/entities/purchase-order.entity';
 import { FiscalInvoice } from '../database/entities/fiscal-invoice.entity';
 import { InventoryMovement } from '../database/entities/inventory-movement.entity';
 import { ProductLot } from '../database/entities/product-lot.entity';
+import { Product } from '../database/entities/product.entity';
+import { AccountingPeriod, AccountingPeriodStatus } from '../database/entities/accounting-period.entity';
 import { randomUUID } from 'crypto';
 
 @Injectable()
@@ -48,6 +50,10 @@ export class AccountingService {
     private inventoryMovementRepository: Repository<InventoryMovement>,
     @InjectRepository(ProductLot)
     private productLotRepository: Repository<ProductLot>,
+    @InjectRepository(Product)
+    private productRepository: Repository<Product>,
+    @InjectRepository(AccountingPeriod)
+    private periodRepository: Repository<AccountingPeriod>,
   ) {}
 
   /**
@@ -86,6 +92,9 @@ export class AccountingService {
     dto: CreateJournalEntryDto,
     userId: string,
   ): Promise<JournalEntry> {
+    // Validar que el período esté abierto
+    await this.validatePeriodOpen(storeId, new Date(dto.entry_date));
+
     // Validar que las líneas estén balanceadas
     const totalDebitBs = dto.lines.reduce((sum, line) => sum + line.debit_amount_bs, 0);
     const totalCreditBs = dto.lines.reduce((sum, line) => sum + line.credit_amount_bs, 0);
@@ -1016,6 +1025,718 @@ export class AccountingService {
   }
 
   /**
+   * Generar asiento contable automático desde una transferencia entre bodegas
+   * Nota: Las transferencias no afectan el valor total del inventario, solo su ubicación.
+   * Este asiento se genera para mantener trazabilidad contable del movimiento.
+   */
+  async generateEntryFromTransfer(
+    storeId: string,
+    transfer: { id: string; transfer_number: string; received_at: Date | null; items: Array<{ product_id: string; quantity_received: number }> },
+  ): Promise<JournalEntry | null> {
+    try {
+      const existingEntry = await this.journalEntryRepository.findOne({
+        where: {
+          store_id: storeId,
+          source_type: 'transfer',
+          source_id: transfer.id,
+        },
+      });
+
+      if (existingEntry) {
+        return existingEntry;
+      }
+
+      // Obtener mapeo de cuenta de inventario
+      const inventoryMapping = await this.getAccountMapping(storeId, 'inventory_asset', null);
+
+      if (!inventoryMapping) {
+        this.logger.warn(`No se encontró mapeo de cuenta de inventario para transferencia ${transfer.id}`);
+        return null;
+      }
+
+      // Para transferencias, el asiento es neutro (débito = crédito) porque solo cambia la ubicación
+      // Esto mantiene la trazabilidad sin afectar el balance total
+      // En sistemas más complejos, se usarían cuentas de sub-inventario por bodega
+      // Por ahora, registramos un asiento de ajuste interno que no afecta el balance
+      const entryDate = transfer.received_at || new Date();
+      const entryNumber = await this.generateEntryNumber(storeId, entryDate);
+
+      // Calcular valor total de la transferencia basado en costos de los productos
+      let totalCostBs = 0;
+      let totalCostUsd = 0;
+
+      for (const item of transfer.items) {
+        const movements = await this.inventoryMovementRepository.find({
+          where: {
+            store_id: storeId,
+            product_id: item.product_id,
+            movement_type: 'received',
+            approved: true,
+          },
+          order: { happened_at: 'DESC' },
+          take: 5,
+        });
+
+        if (movements.length > 0) {
+          const latestMovement = movements[0];
+          const unitCostBs = Number(latestMovement.unit_cost_bs || 0);
+          const unitCostUsd = Number(latestMovement.unit_cost_usd || 0);
+          totalCostBs += unitCostBs * item.quantity_received;
+          totalCostUsd += unitCostUsd * item.quantity_received;
+        }
+      }
+
+      // Si no hay costo calculable, no generar asiento (transferencia sin valor contable)
+      if (totalCostBs === 0 && totalCostUsd === 0) {
+        this.logger.debug(`Transferencia ${transfer.id} no tiene costo calculable, omitiendo asiento contable`);
+        return null;
+      }
+
+      const lines: Array<{
+        account_id: string;
+        account_code: string;
+        account_name: string;
+        debit_amount_bs: number;
+        credit_amount_bs: number;
+        debit_amount_usd: number;
+        credit_amount_usd: number;
+        description?: string;
+      }> = [];
+
+      // En sistemas avanzados, se usarían subcuentas por bodega
+      // Por ahora, usamos la misma cuenta para mantener el balance (asiento de ajuste interno)
+      // Débito: Inventario (para trazabilidad)
+      lines.push({
+        account_id: inventoryMapping.account_id,
+        account_code: inventoryMapping.account_code,
+        account_name: inventoryMapping.account?.account_name || inventoryMapping.account_code,
+        debit_amount_bs: totalCostBs,
+        credit_amount_bs: 0,
+        debit_amount_usd: totalCostUsd,
+        credit_amount_usd: 0,
+        description: `Transferencia ${transfer.transfer_number} - Recepción en destino`,
+      });
+
+      // Crédito: Inventario (mismo saldo, solo para trazabilidad)
+      lines.push({
+        account_id: inventoryMapping.account_id,
+        account_code: inventoryMapping.account_code,
+        account_name: inventoryMapping.account?.account_name || inventoryMapping.account_code,
+        debit_amount_bs: 0,
+        credit_amount_bs: totalCostBs,
+        debit_amount_usd: 0,
+        credit_amount_usd: totalCostUsd,
+        description: `Transferencia ${transfer.transfer_number} - Salida de origen`,
+      });
+
+      // Crear asiento
+      const entry = this.journalEntryRepository.create({
+        id: randomUUID(),
+        store_id: storeId,
+        entry_number: entryNumber,
+        entry_date: entryDate,
+        entry_type: 'adjustment',
+        source_type: 'transfer',
+        source_id: transfer.id,
+        description: `Transferencia entre bodegas ${transfer.transfer_number}`,
+        reference_number: transfer.transfer_number,
+        total_debit_bs: totalCostBs,
+        total_credit_bs: totalCostBs,
+        total_debit_usd: totalCostUsd,
+        total_credit_usd: totalCostUsd,
+        exchange_rate: null,
+        currency: 'MIXED',
+        status: 'posted',
+        is_auto_generated: true,
+        posted_at: new Date(),
+        metadata: { transfer_id: transfer.id },
+      });
+
+      const savedEntry = await this.journalEntryRepository.save(entry);
+
+      // Crear líneas
+      const entryLines = lines.map((line, index) =>
+        this.journalEntryLineRepository.create({
+          id: randomUUID(),
+          entry_id: savedEntry.id,
+          line_number: index + 1,
+          account_id: line.account_id,
+          account_code: line.account_code,
+          account_name: line.account_name,
+          description: line.description,
+          debit_amount_bs: line.debit_amount_bs,
+          credit_amount_bs: line.credit_amount_bs,
+          debit_amount_usd: line.debit_amount_usd,
+          credit_amount_usd: line.credit_amount_usd,
+        }),
+      );
+
+      await this.journalEntryLineRepository.save(entryLines);
+
+      // Actualizar saldos (aunque será neutro ya que débito = crédito)
+      await this.updateAccountBalances(storeId, entryDate, lines);
+
+      return this.journalEntryRepository.findOne({
+        where: { id: savedEntry.id },
+        relations: ['lines'],
+      }) as Promise<JournalEntry>;
+    } catch (error) {
+      this.logger.error(
+        `Error generando asiento desde transferencia ${transfer.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Generar asiento contable automático desde un ajuste de inventario
+   */
+  async generateEntryFromInventoryAdjustment(
+    storeId: string,
+    movement: InventoryMovement,
+  ): Promise<JournalEntry | null> {
+    try {
+      // Solo generar asiento para ajustes aprobados
+      if (!movement.approved || movement.movement_type !== 'adjust') {
+        return null;
+      }
+
+      const existingEntry = await this.journalEntryRepository.findOne({
+        where: {
+          store_id: storeId,
+          source_type: 'inventory_adjustment',
+          source_id: movement.id,
+        },
+      });
+
+      if (existingEntry) {
+        return existingEntry;
+      }
+
+      // Obtener mapeos de cuentas
+      const inventoryMapping = await this.getAccountMapping(storeId, 'inventory_asset', null);
+      const adjustmentMapping = await this.getAccountMapping(storeId, 'adjustment', null);
+
+      if (!inventoryMapping) {
+        this.logger.warn(`No se encontró mapeo de cuenta de inventario para ajuste ${movement.id}`);
+        return null;
+      }
+
+      // Obtener costo del producto para calcular el valor del ajuste
+      const product = await this.productRepository.findOne({
+        where: { id: movement.product_id, store_id: storeId },
+      });
+
+      if (!product) {
+        this.logger.warn(`Producto ${movement.product_id} no encontrado para ajuste ${movement.id}`);
+        return null;
+      }
+
+      // Usar costo del producto o del último movimiento de inventario
+      let unitCostBs = Number(product.cost_bs || 0);
+      let unitCostUsd = Number(product.cost_usd || 0);
+
+      if (unitCostBs === 0 && unitCostUsd === 0) {
+        const recentMovements = await this.inventoryMovementRepository.find({
+          where: {
+            store_id: storeId,
+            product_id: movement.product_id,
+            movement_type: 'received',
+            approved: true,
+          },
+          order: { happened_at: 'DESC' },
+          take: 1,
+        });
+
+        if (recentMovements.length > 0) {
+          unitCostBs = Number(recentMovements[0].unit_cost_bs || 0);
+          unitCostUsd = Number(recentMovements[0].unit_cost_usd || 0);
+        }
+      }
+
+      const qtyDelta = Number(movement.qty_delta);
+      const adjustmentValueBs = Math.abs(unitCostBs * qtyDelta);
+      const adjustmentValueUsd = Math.abs(unitCostUsd * qtyDelta);
+
+      // Si el valor es cero, no generar asiento
+      if (adjustmentValueBs === 0 && adjustmentValueUsd === 0) {
+        this.logger.debug(`Ajuste ${movement.id} no tiene valor contable, omitiendo asiento`);
+        return null;
+      }
+
+      const entryDate = movement.happened_at || new Date();
+      const entryNumber = await this.generateEntryNumber(storeId, entryDate);
+
+      const lines: Array<{
+        account_id: string;
+        account_code: string;
+        account_name: string;
+        debit_amount_bs: number;
+        credit_amount_bs: number;
+        debit_amount_usd: number;
+        credit_amount_usd: number;
+        description?: string;
+      }> = [];
+
+      // Usar cuenta de ajuste si existe, sino usar gastos generales
+      const expenseAccount = adjustmentMapping || await this.getAccountMapping(storeId, 'expense', null);
+
+      if (qtyDelta > 0) {
+        // Ajuste positivo: aumenta inventario
+        // Débito: Inventario
+        lines.push({
+          account_id: inventoryMapping.account_id,
+          account_code: inventoryMapping.account_code,
+          account_name: inventoryMapping.account?.account_name || inventoryMapping.account_code,
+          debit_amount_bs: adjustmentValueBs,
+          credit_amount_bs: 0,
+          debit_amount_usd: adjustmentValueUsd,
+          credit_amount_usd: 0,
+          description: `Ajuste de inventario positivo - ${movement.ref?.reason || 'Ajuste'}`,
+        });
+
+        // Crédito: Gasto/Ajuste (reversión)
+        if (expenseAccount) {
+          lines.push({
+            account_id: expenseAccount.account_id,
+            account_code: expenseAccount.account_code,
+            account_name: expenseAccount.account?.account_name || expenseAccount.account_code,
+            debit_amount_bs: 0,
+            credit_amount_bs: adjustmentValueBs,
+            debit_amount_usd: 0,
+            credit_amount_usd: adjustmentValueUsd,
+            description: `Reversión de gasto por ajuste positivo`,
+          });
+        }
+      } else {
+        // Ajuste negativo: disminuye inventario
+        // Débito: Gasto/Ajuste
+        if (expenseAccount) {
+          lines.push({
+            account_id: expenseAccount.account_id,
+            account_code: expenseAccount.account_code,
+            account_name: expenseAccount.account?.account_name || expenseAccount.account_code,
+            debit_amount_bs: adjustmentValueBs,
+            credit_amount_bs: 0,
+            debit_amount_usd: adjustmentValueUsd,
+            credit_amount_usd: 0,
+            description: `Ajuste de inventario negativo - ${movement.ref?.reason || 'Ajuste'}`,
+          });
+        }
+
+        // Crédito: Inventario
+        lines.push({
+          account_id: inventoryMapping.account_id,
+          account_code: inventoryMapping.account_code,
+          account_name: inventoryMapping.account?.account_name || inventoryMapping.account_code,
+          debit_amount_bs: 0,
+          credit_amount_bs: adjustmentValueBs,
+          debit_amount_usd: 0,
+          credit_amount_usd: adjustmentValueUsd,
+          description: `Reducción de inventario`,
+        });
+      }
+
+      // Crear asiento
+      const entry = this.journalEntryRepository.create({
+        id: randomUUID(),
+        store_id: storeId,
+        entry_number: entryNumber,
+        entry_date: entryDate,
+        entry_type: 'adjustment',
+        source_type: 'inventory_adjustment',
+        source_id: movement.id,
+        description: `Ajuste de inventario - Producto ${product.name}`,
+        reference_number: movement.note || null,
+        total_debit_bs: lines.reduce((sum, l) => sum + l.debit_amount_bs, 0),
+        total_credit_bs: lines.reduce((sum, l) => sum + l.credit_amount_bs, 0),
+        total_debit_usd: lines.reduce((sum, l) => sum + l.debit_amount_usd, 0),
+        total_credit_usd: lines.reduce((sum, l) => sum + l.credit_amount_usd, 0),
+        exchange_rate: null,
+        currency: 'MIXED',
+        status: 'posted',
+        is_auto_generated: true,
+        posted_at: new Date(),
+        metadata: { movement_id: movement.id, reason: movement.ref?.reason },
+      });
+
+      const savedEntry = await this.journalEntryRepository.save(entry);
+
+      // Crear líneas
+      const entryLines = lines.map((line, index) =>
+        this.journalEntryLineRepository.create({
+          id: randomUUID(),
+          entry_id: savedEntry.id,
+          line_number: index + 1,
+          account_id: line.account_id,
+          account_code: line.account_code,
+          account_name: line.account_name,
+          description: line.description,
+          debit_amount_bs: line.debit_amount_bs,
+          credit_amount_bs: line.credit_amount_bs,
+          debit_amount_usd: line.debit_amount_usd,
+          credit_amount_usd: line.credit_amount_usd,
+        }),
+      );
+
+      await this.journalEntryLineRepository.save(entryLines);
+
+      // Actualizar saldos
+      await this.updateAccountBalances(storeId, entryDate, lines);
+
+      return this.journalEntryRepository.findOne({
+        where: { id: savedEntry.id },
+        relations: ['lines'],
+      }) as Promise<JournalEntry>;
+    } catch (error) {
+      this.logger.error(
+        `Error generando asiento desde ajuste de inventario ${movement.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Generar asiento contable automático desde un pago de deuda
+   */
+  async generateEntryFromDebtPayment(
+    storeId: string,
+    debt: { id: string; sale_id: string | null; customer_id: string | null },
+    payment: { id: string; paid_at: Date; amount_bs: number; amount_usd: number; method: string },
+  ): Promise<JournalEntry | null> {
+    try {
+      const existingEntry = await this.journalEntryRepository.findOne({
+        where: {
+          store_id: storeId,
+          source_type: 'debt_payment',
+          source_id: payment.id,
+        },
+      });
+
+      if (existingEntry) {
+        return existingEntry;
+      }
+
+      // Obtener mapeos de cuentas
+      const receivableMapping = await this.getAccountMapping(storeId, 'accounts_receivable', null);
+      const cashMapping = await this.getAccountMapping(storeId, 'cash_asset', { method: payment.method });
+      const bankMapping = await this.getAccountMapping(storeId, 'cash_asset', { method: 'TRANSFER' });
+
+      if (!receivableMapping) {
+        this.logger.warn(`No se encontró mapeo de cuenta por cobrar para pago de deuda ${payment.id}`);
+        return null;
+      }
+
+      // Determinar cuenta de destino según método de pago
+      let assetAccount = cashMapping;
+      if (payment.method === 'TRANSFER' || payment.method === 'PAGO_MOVIL') {
+        assetAccount = bankMapping || cashMapping;
+      }
+
+      if (!assetAccount) {
+        this.logger.warn(`No se encontró mapeo de cuenta de activo para método ${payment.method} en pago ${payment.id}`);
+        return null;
+      }
+
+      const entryDate = payment.paid_at || new Date();
+      const entryNumber = await this.generateEntryNumber(storeId, entryDate);
+
+      const paymentAmountBs = Number(payment.amount_bs);
+      const paymentAmountUsd = Number(payment.amount_usd);
+
+      const lines: Array<{
+        account_id: string;
+        account_code: string;
+        account_name: string;
+        debit_amount_bs: number;
+        credit_amount_bs: number;
+        debit_amount_usd: number;
+        credit_amount_usd: number;
+        description?: string;
+      }> = [];
+
+      // Débito: Caja/Bancos (aumenta activo)
+      lines.push({
+        account_id: assetAccount.account_id,
+        account_code: assetAccount.account_code,
+        account_name: assetAccount.account?.account_name || assetAccount.account_code,
+        debit_amount_bs: paymentAmountBs,
+        credit_amount_bs: 0,
+        debit_amount_usd: paymentAmountUsd,
+        credit_amount_usd: 0,
+        description: `Pago de deuda - ${payment.method}`,
+      });
+
+      // Crédito: Cuentas por Cobrar (disminuye activo)
+      lines.push({
+        account_id: receivableMapping.account_id,
+        account_code: receivableMapping.account_code,
+        account_name: receivableMapping.account?.account_name || receivableMapping.account_code,
+        debit_amount_bs: 0,
+        credit_amount_bs: paymentAmountBs,
+        debit_amount_usd: 0,
+        credit_amount_usd: paymentAmountUsd,
+        description: `Cobro de deuda`,
+      });
+
+      // Crear asiento
+      const entry = this.journalEntryRepository.create({
+        id: randomUUID(),
+        store_id: storeId,
+        entry_number: entryNumber,
+        entry_date: entryDate,
+        entry_type: 'manual',
+        source_type: 'debt_payment',
+        source_id: payment.id,
+        description: `Pago de deuda - Método: ${payment.method}`,
+        reference_number: null,
+        total_debit_bs: paymentAmountBs,
+        total_credit_bs: paymentAmountBs,
+        total_debit_usd: paymentAmountUsd,
+        total_credit_usd: paymentAmountUsd,
+        exchange_rate: paymentAmountUsd > 0 ? paymentAmountBs / paymentAmountUsd : null,
+        currency: 'MIXED',
+        status: 'posted',
+        is_auto_generated: true,
+        posted_at: new Date(),
+        metadata: { debt_id: debt.id, payment_id: payment.id, method: payment.method },
+      });
+
+      const savedEntry = await this.journalEntryRepository.save(entry);
+
+      // Crear líneas
+      const entryLines = lines.map((line, index) =>
+        this.journalEntryLineRepository.create({
+          id: randomUUID(),
+          entry_id: savedEntry.id,
+          line_number: index + 1,
+          account_id: line.account_id,
+          account_code: line.account_code,
+          account_name: line.account_name,
+          description: line.description,
+          debit_amount_bs: line.debit_amount_bs,
+          credit_amount_bs: line.credit_amount_bs,
+          debit_amount_usd: line.debit_amount_usd,
+          credit_amount_usd: line.credit_amount_usd,
+        }),
+      );
+
+      await this.journalEntryLineRepository.save(entryLines);
+
+      // Actualizar saldos
+      await this.updateAccountBalances(storeId, entryDate, lines);
+
+      return this.journalEntryRepository.findOne({
+        where: { id: savedEntry.id },
+        relations: ['lines'],
+      }) as Promise<JournalEntry>;
+    } catch (error) {
+      this.logger.error(
+        `Error generando asiento desde pago de deuda ${payment.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Generar asiento contable automático desde un cierre de caja
+   * Nota: Este asiento registra diferencias de cierre (excedentes/faltas)
+   * El movimiento principal de efectivo ya está registrado en las ventas
+   */
+  async generateEntryFromCashClose(
+    storeId: string,
+    session: {
+      id: string;
+      closed_at: Date | null;
+      opening_amount_bs: number;
+      opening_amount_usd: number;
+      expected: { cash_bs: number; cash_usd: number } | null;
+      counted: { cash_bs: number; cash_usd: number } | null;
+    },
+  ): Promise<JournalEntry | null> {
+    try {
+      if (!session.closed_at || !session.expected || !session.counted) {
+        return null; // Solo generar para sesiones cerradas completamente
+      }
+
+      const existingEntry = await this.journalEntryRepository.findOne({
+        where: {
+          store_id: storeId,
+          source_type: 'cash_close',
+          source_id: session.id,
+        },
+      });
+
+      if (existingEntry) {
+        return existingEntry;
+      }
+
+      const expectedBs = Number(session.expected.cash_bs);
+      const expectedUsd = Number(session.expected.cash_usd);
+      const countedBs = Number(session.counted.cash_bs);
+      const countedUsd = Number(session.counted.cash_usd);
+
+      const differenceBs = countedBs - expectedBs;
+      const differenceUsd = countedUsd - expectedUsd;
+
+      // Si no hay diferencia significativa, no generar asiento
+      if (Math.abs(differenceBs) < 0.01 && Math.abs(differenceUsd) < 0.01) {
+        return null;
+      }
+
+      // Obtener mapeos de cuentas
+      const cashMapping = await this.getAccountMapping(storeId, 'cash_asset', null);
+      const incomeMapping = await this.getAccountMapping(storeId, 'income', null);
+      const expenseMapping = await this.getAccountMapping(storeId, 'expense', null);
+
+      if (!cashMapping) {
+        this.logger.warn(`No se encontró mapeo de cuenta de caja para cierre de sesión ${session.id}`);
+        return null;
+      }
+
+      const entryDate = session.closed_at;
+      const entryNumber = await this.generateEntryNumber(storeId, entryDate);
+
+      const lines: Array<{
+        account_id: string;
+        account_code: string;
+        account_name: string;
+        debit_amount_bs: number;
+        credit_amount_bs: number;
+        debit_amount_usd: number;
+        credit_amount_usd: number;
+        description?: string;
+      }> = [];
+
+      if (differenceBs > 0 || differenceUsd > 0) {
+        // Excedente: aumenta caja, aumenta ingreso
+        // Débito: Caja
+        lines.push({
+          account_id: cashMapping.account_id,
+          account_code: cashMapping.account_code,
+          account_name: cashMapping.account?.account_name || cashMapping.account_code,
+          debit_amount_bs: Math.abs(differenceBs),
+          credit_amount_bs: 0,
+          debit_amount_usd: Math.abs(differenceUsd),
+          credit_amount_usd: 0,
+          description: `Excedente de cierre de caja`,
+        });
+
+        // Crédito: Ingresos no operativos
+        if (incomeMapping) {
+          lines.push({
+            account_id: incomeMapping.account_id,
+            account_code: incomeMapping.account_code,
+            account_name: incomeMapping.account?.account_name || incomeMapping.account_code,
+            debit_amount_bs: 0,
+            credit_amount_bs: Math.abs(differenceBs),
+            debit_amount_usd: 0,
+            credit_amount_usd: Math.abs(differenceUsd),
+            description: `Excedente de cierre de caja`,
+          });
+        }
+      } else {
+        // Falta: disminuye caja, aumenta gasto
+        // Débito: Gasto
+        if (expenseMapping) {
+          lines.push({
+            account_id: expenseMapping.account_id,
+            account_code: expenseMapping.account_code,
+            account_name: expenseMapping.account?.account_name || expenseMapping.account_code,
+            debit_amount_bs: Math.abs(differenceBs),
+            credit_amount_bs: 0,
+            debit_amount_usd: Math.abs(differenceUsd),
+            credit_amount_usd: 0,
+            description: `Falta en cierre de caja`,
+          });
+        }
+
+        // Crédito: Caja
+        lines.push({
+          account_id: cashMapping.account_id,
+          account_code: cashMapping.account_code,
+          account_name: cashMapping.account?.account_name || cashMapping.account_code,
+          debit_amount_bs: 0,
+          credit_amount_bs: Math.abs(differenceBs),
+          debit_amount_usd: 0,
+          credit_amount_usd: Math.abs(differenceUsd),
+          description: `Falta en cierre de caja`,
+        });
+      }
+
+      // Si no hay líneas válidas, no generar asiento
+      if (lines.length === 0) {
+        return null;
+      }
+
+      // Crear asiento
+      const entry = this.journalEntryRepository.create({
+        id: randomUUID(),
+        store_id: storeId,
+        entry_number: entryNumber,
+        entry_date: entryDate,
+        entry_type: 'adjustment',
+        source_type: 'cash_close',
+        source_id: session.id,
+        description: `Cierre de caja - ${differenceBs >= 0 ? 'Excedente' : 'Falta'}`,
+        reference_number: null,
+        total_debit_bs: lines.reduce((sum, l) => sum + l.debit_amount_bs, 0),
+        total_credit_bs: lines.reduce((sum, l) => sum + l.credit_amount_bs, 0),
+        total_debit_usd: lines.reduce((sum, l) => sum + l.debit_amount_usd, 0),
+        total_credit_usd: lines.reduce((sum, l) => sum + l.credit_amount_usd, 0),
+        exchange_rate: null,
+        currency: 'MIXED',
+        status: 'posted',
+        is_auto_generated: true,
+        posted_at: new Date(),
+        metadata: {
+          session_id: session.id,
+          difference_bs: differenceBs,
+          difference_usd: differenceUsd,
+        },
+      });
+
+      const savedEntry = await this.journalEntryRepository.save(entry);
+
+      // Crear líneas
+      const entryLines = lines.map((line, index) =>
+        this.journalEntryLineRepository.create({
+          id: randomUUID(),
+          entry_id: savedEntry.id,
+          line_number: index + 1,
+          account_id: line.account_id,
+          account_code: line.account_code,
+          account_name: line.account_name,
+          description: line.description,
+          debit_amount_bs: line.debit_amount_bs,
+          credit_amount_bs: line.credit_amount_bs,
+          debit_amount_usd: line.debit_amount_usd,
+          credit_amount_usd: line.credit_amount_usd,
+        }),
+      );
+
+      await this.journalEntryLineRepository.save(entryLines);
+
+      // Actualizar saldos
+      await this.updateAccountBalances(storeId, entryDate, lines);
+
+      return this.journalEntryRepository.findOne({
+        where: { id: savedEntry.id },
+        relations: ['lines'],
+      }) as Promise<JournalEntry>;
+    } catch (error) {
+      this.logger.error(
+        `Error generando asiento desde cierre de caja ${session.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      return null;
+    }
+  }
+
+  /**
    * Obtener balance de cuenta
    */
   async getAccountBalance(
@@ -1311,6 +2032,1216 @@ export class AccountingService {
         total_expenses_usd: totalExpensesUsd,
         net_income_bs: netIncomeBs,
         net_income_usd: netIncomeUsd,
+      },
+    };
+  }
+
+  /**
+   * Generar Trial Balance (Balance de Comprobación)
+   */
+  async getTrialBalance(
+    storeId: string,
+    asOfDate: Date = new Date(),
+    includeZeroBalance: boolean = false,
+  ): Promise<{
+    accounts: Array<{
+      account_code: string;
+      account_name: string;
+      account_type: string;
+      debit_balance_bs: number;
+      credit_balance_bs: number;
+      debit_balance_usd: number;
+      credit_balance_usd: number;
+    }>;
+    totals: {
+      total_debits_bs: number;
+      total_credits_bs: number;
+      total_debits_usd: number;
+      total_credits_usd: number;
+      is_balanced: boolean;
+      difference_bs: number;
+      difference_usd: number;
+    };
+    unposted_entries_count: number;
+  }> {
+    // Obtener todas las cuentas activas
+    const accounts = await this.accountRepository
+      .createQueryBuilder('account')
+      .where('account.store_id = :storeId', { storeId })
+      .andWhere('account.is_active = :active', { active: true })
+      .orderBy('account.account_code', 'ASC')
+      .getMany();
+
+    // Obtener todos los asientos posteados hasta la fecha
+    const postedEntries = await this.journalEntryRepository
+      .createQueryBuilder('entry')
+      .where('entry.store_id = :storeId', { storeId })
+      .andWhere('entry.status = :status', { status: 'posted' })
+      .andWhere('entry.entry_date <= :asOfDate', { asOfDate })
+      .getMany();
+
+    // Contar asientos sin postear
+    const unpostedCount = await this.journalEntryRepository.count({
+      where: {
+        store_id: storeId,
+        status: 'draft',
+        entry_date: Between(new Date(0), asOfDate),
+      },
+    });
+
+    const trialBalanceAccounts: Array<{
+      account_code: string;
+      account_name: string;
+      account_type: string;
+      debit_balance_bs: number;
+      credit_balance_bs: number;
+      debit_balance_usd: number;
+      credit_balance_usd: number;
+    }> = [];
+
+    for (const account of accounts) {
+      // Calcular totales de débito y crédito para esta cuenta
+      const lines = await this.journalEntryLineRepository
+        .createQueryBuilder('line')
+        .innerJoin('line.entry', 'entry')
+        .where('entry.store_id = :storeId', { storeId })
+        .andWhere('line.account_id = :accountId', { accountId: account.id })
+        .andWhere('entry.status = :status', { status: 'posted' })
+        .andWhere('entry.entry_date <= :asOfDate', { asOfDate })
+        .select('SUM(line.debit_amount_bs)', 'total_debit_bs')
+        .addSelect('SUM(line.credit_amount_bs)', 'total_credit_bs')
+        .addSelect('SUM(line.debit_amount_usd)', 'total_debit_usd')
+        .addSelect('SUM(line.credit_amount_usd)', 'total_credit_usd')
+        .getRawOne();
+
+      const totalDebitBs = Number(lines?.total_debit_bs || 0);
+      const totalCreditBs = Number(lines?.total_credit_bs || 0);
+      const totalDebitUsd = Number(lines?.total_debit_usd || 0);
+      const totalCreditUsd = Number(lines?.total_credit_usd || 0);
+
+      // Determinar saldo deudor o acreedor según tipo de cuenta
+      let debitBalanceBs = 0;
+      let creditBalanceBs = 0;
+      let debitBalanceUsd = 0;
+      let creditBalanceUsd = 0;
+
+      if (account.account_type === 'asset' || account.account_type === 'expense') {
+        // Activos y gastos: saldo deudor (débito - crédito)
+        const netBalanceBs = totalDebitBs - totalCreditBs;
+        const netBalanceUsd = totalDebitUsd - totalCreditUsd;
+        if (netBalanceBs > 0) {
+          debitBalanceBs = netBalanceBs;
+        } else {
+          creditBalanceBs = Math.abs(netBalanceBs);
+        }
+        if (netBalanceUsd > 0) {
+          debitBalanceUsd = netBalanceUsd;
+        } else {
+          creditBalanceUsd = Math.abs(netBalanceUsd);
+        }
+      } else {
+        // Pasivos, patrimonio e ingresos: saldo acreedor (crédito - débito)
+        const netBalanceBs = totalCreditBs - totalDebitBs;
+        const netBalanceUsd = totalCreditUsd - totalDebitUsd;
+        if (netBalanceBs > 0) {
+          creditBalanceBs = netBalanceBs;
+        } else {
+          debitBalanceBs = Math.abs(netBalanceBs);
+        }
+        if (netBalanceUsd > 0) {
+          creditBalanceUsd = netBalanceUsd;
+        } else {
+          debitBalanceUsd = Math.abs(netBalanceUsd);
+        }
+      }
+
+      // Omitir cuentas con saldo cero si no se incluyen
+      if (!includeZeroBalance) {
+        if (
+          Math.abs(debitBalanceBs) < 0.01 &&
+          Math.abs(creditBalanceBs) < 0.01 &&
+          Math.abs(debitBalanceUsd) < 0.01 &&
+          Math.abs(creditBalanceUsd) < 0.01
+        ) {
+          continue;
+        }
+      }
+
+      trialBalanceAccounts.push({
+        account_code: account.account_code,
+        account_name: account.account_name,
+        account_type: account.account_type,
+        debit_balance_bs: debitBalanceBs,
+        credit_balance_bs: creditBalanceBs,
+        debit_balance_usd: debitBalanceUsd,
+        credit_balance_usd: creditBalanceUsd,
+      });
+    }
+
+    // Calcular totales
+    const totalDebitsBs = trialBalanceAccounts.reduce((sum, a) => sum + a.debit_balance_bs, 0);
+    const totalCreditsBs = trialBalanceAccounts.reduce((sum, a) => sum + a.credit_balance_bs, 0);
+    const totalDebitsUsd = trialBalanceAccounts.reduce((sum, a) => sum + a.debit_balance_usd, 0);
+    const totalCreditsUsd = trialBalanceAccounts.reduce((sum, a) => sum + a.credit_balance_usd, 0);
+
+    const differenceBs = Math.abs(totalDebitsBs - totalCreditsBs);
+    const differenceUsd = Math.abs(totalDebitsUsd - totalCreditsUsd);
+    const isBalanced = differenceBs < 0.01 && differenceUsd < 0.01;
+
+    return {
+      accounts: trialBalanceAccounts,
+      totals: {
+        total_debits_bs: totalDebitsBs,
+        total_credits_bs: totalCreditsBs,
+        total_debits_usd: totalDebitsUsd,
+        total_credits_usd: totalCreditsUsd,
+        is_balanced: isBalanced,
+        difference_bs: differenceBs,
+        difference_usd: differenceUsd,
+      },
+      unposted_entries_count: unpostedCount,
+    };
+  }
+
+  /**
+   * Generar Libro Mayor (General Ledger)
+   */
+  async getGeneralLedger(
+    storeId: string,
+    startDate: Date,
+    endDate: Date,
+    accountIds?: string[],
+  ): Promise<{
+    accounts: Array<{
+      account_id: string;
+      account_code: string;
+      account_name: string;
+      account_type: string;
+      opening_balance_bs: number;
+      opening_balance_usd: number;
+      movements: Array<{
+        entry_id: string;
+        entry_number: string;
+        entry_date: string;
+        description: string;
+        reference_number: string | null;
+        debit_amount_bs: number;
+        credit_amount_bs: number;
+        debit_amount_usd: number;
+        credit_amount_usd: number;
+        running_balance_bs: number;
+        running_balance_usd: number;
+      }>;
+      closing_balance_bs: number;
+      closing_balance_usd: number;
+      total_debits_bs: number;
+      total_credits_bs: number;
+      total_debits_usd: number;
+      total_credits_usd: number;
+    }>;
+  }> {
+    // Obtener cuentas a incluir
+    const accountsQuery = this.accountRepository
+      .createQueryBuilder('account')
+      .where('account.store_id = :storeId', { storeId })
+      .andWhere('account.is_active = :active', { active: true });
+
+    if (accountIds && accountIds.length > 0) {
+      accountsQuery.andWhere('account.id IN (:...accountIds)', { accountIds });
+    }
+
+    const accounts = await accountsQuery.orderBy('account.account_code', 'ASC').getMany();
+
+    const ledgerAccounts: Array<{
+      account_id: string;
+      account_code: string;
+      account_name: string;
+      account_type: string;
+      opening_balance_bs: number;
+      opening_balance_usd: number;
+      movements: Array<{
+        entry_id: string;
+        entry_number: string;
+        entry_date: string;
+        description: string;
+        reference_number: string | null;
+        debit_amount_bs: number;
+        credit_amount_bs: number;
+        debit_amount_usd: number;
+        credit_amount_usd: number;
+        running_balance_bs: number;
+        running_balance_usd: number;
+      }>;
+      closing_balance_bs: number;
+      closing_balance_usd: number;
+      total_debits_bs: number;
+      total_credits_bs: number;
+      total_debits_usd: number;
+      total_credits_usd: number;
+    }> = [];
+
+    for (const account of accounts) {
+      // Calcular saldo inicial (antes del período)
+      const openingBalance = await this.calculateAccountBalance(storeId, account.id, startDate);
+
+      // Obtener movimientos en el período
+      const movementsQuery = this.journalEntryLineRepository
+        .createQueryBuilder('line')
+        .innerJoin('line.entry', 'entry')
+        .where('entry.store_id = :storeId', { storeId })
+        .andWhere('line.account_id = :accountId', { accountId: account.id })
+        .andWhere('entry.status = :status', { status: 'posted' })
+        .andWhere('entry.entry_date >= :startDate', { startDate })
+        .andWhere('entry.entry_date <= :endDate', { endDate })
+        .select([
+          'entry.id',
+          'entry.entry_number',
+          'entry.entry_date',
+          'entry.description',
+          'entry.reference_number',
+          'line.debit_amount_bs',
+          'line.credit_amount_bs',
+          'line.debit_amount_usd',
+          'line.credit_amount_usd',
+        ])
+        .orderBy('entry.entry_date', 'ASC')
+        .addOrderBy('entry.entry_number', 'ASC');
+
+      const lines = await movementsQuery.getRawMany();
+
+      let runningBalanceBs = openingBalance.balance_bs;
+      let runningBalanceUsd = openingBalance.balance_usd;
+      let totalDebitsBs = 0;
+      let totalCreditsBs = 0;
+      let totalDebitsUsd = 0;
+      let totalCreditsUsd = 0;
+
+      const movements = lines.map((line) => {
+        const debitBs = Number(line.line_debit_amount_bs || 0);
+        const creditBs = Number(line.line_credit_amount_bs || 0);
+        const debitUsd = Number(line.line_debit_amount_usd || 0);
+        const creditUsd = Number(line.line_credit_amount_usd || 0);
+
+        totalDebitsBs += debitBs;
+        totalCreditsBs += creditBs;
+        totalDebitsUsd += debitUsd;
+        totalCreditsUsd += creditUsd;
+
+        // Calcular saldo acumulado
+        if (account.account_type === 'asset' || account.account_type === 'expense') {
+          runningBalanceBs = runningBalanceBs + debitBs - creditBs;
+          runningBalanceUsd = runningBalanceUsd + debitUsd - creditUsd;
+        } else {
+          runningBalanceBs = runningBalanceBs + creditBs - debitBs;
+          runningBalanceUsd = runningBalanceUsd + creditUsd - debitUsd;
+        }
+
+        return {
+          entry_id: line.entry_id,
+          entry_number: line.entry_entry_number,
+          entry_date: line.entry_entry_date,
+          description: line.entry_description || '',
+          reference_number: line.entry_reference_number,
+          debit_amount_bs: debitBs,
+          credit_amount_bs: creditBs,
+          debit_amount_usd: debitUsd,
+          credit_amount_usd: creditUsd,
+          running_balance_bs: runningBalanceBs,
+          running_balance_usd: runningBalanceUsd,
+        };
+      });
+
+      // Solo incluir cuentas con movimientos o saldo inicial
+      if (movements.length > 0 || Math.abs(openingBalance.balance_bs) > 0.01 || Math.abs(openingBalance.balance_usd) > 0.01) {
+        ledgerAccounts.push({
+          account_id: account.id,
+          account_code: account.account_code,
+          account_name: account.account_name,
+          account_type: account.account_type,
+          opening_balance_bs: openingBalance.balance_bs,
+          opening_balance_usd: openingBalance.balance_usd,
+          movements,
+          closing_balance_bs: runningBalanceBs,
+          closing_balance_usd: runningBalanceUsd,
+          total_debits_bs: totalDebitsBs,
+          total_credits_bs: totalCreditsBs,
+          total_debits_usd: totalDebitsUsd,
+          total_credits_usd: totalCreditsUsd,
+        });
+      }
+    }
+
+    return {
+      accounts: ledgerAccounts,
+    };
+  }
+
+  /**
+   * Generar Estado de Flujo de Efectivo (Cash Flow Statement)
+   */
+  async getCashFlowStatement(
+    storeId: string,
+    startDate: Date,
+    endDate: Date,
+    method: 'direct' | 'indirect' = 'indirect',
+  ): Promise<{
+    operating_activities: {
+      net_income_bs: number;
+      net_income_usd: number;
+      adjustments: Array<{
+        description: string;
+        amount_bs: number;
+        amount_usd: number;
+      }>;
+      changes_in_working_capital: {
+        accounts_receivable_bs: number;
+        accounts_receivable_usd: number;
+        accounts_payable_bs: number;
+        accounts_payable_usd: number;
+        inventory_bs: number;
+        inventory_usd: number;
+      };
+      net_cash_from_operations_bs: number;
+      net_cash_from_operations_usd: number;
+    };
+    investing_activities: Array<{
+      description: string;
+      amount_bs: number;
+      amount_usd: number;
+    }>;
+    financing_activities: Array<{
+      description: string;
+      amount_bs: number;
+      amount_usd: number;
+    }>;
+    net_change_in_cash_bs: number;
+    net_change_in_cash_usd: number;
+    cash_at_beginning_bs: number;
+    cash_at_beginning_usd: number;
+    cash_at_end_bs: number;
+    cash_at_end_usd: number;
+  }> {
+    // Obtener resultado neto del Estado de Resultados
+    const incomeStatement = await this.getIncomeStatement(storeId, startDate, endDate);
+    const netIncomeBs = incomeStatement.totals.net_income_bs;
+    const netIncomeUsd = incomeStatement.totals.net_income_usd;
+
+    // Calcular saldos de cuentas clave al inicio y fin del período
+    const cashAccounts = await this.accountRepository.find({
+      where: {
+        store_id: storeId,
+        is_active: true,
+        account_code: In(['1.01.01', '1.01.02']), // Caja y Bancos
+      },
+    });
+
+    const receivableAccount = await this.accountRepository.findOne({
+      where: {
+        store_id: storeId,
+        is_active: true,
+        account_code: '1.01.03', // Cuentas por Cobrar
+      },
+    });
+
+    const payableAccount = await this.accountRepository.findOne({
+      where: {
+        store_id: storeId,
+        is_active: true,
+        account_code: '2.01.01', // Cuentas por Pagar
+      },
+    });
+
+    const inventoryAccount = await this.accountRepository.findOne({
+      where: {
+        store_id: storeId,
+        is_active: true,
+        account_code: '1.02.01', // Inventario
+      },
+    });
+
+    // Calcular saldos al inicio del período
+    let cashAtBeginningBs = 0;
+    let cashAtBeginningUsd = 0;
+    for (const account of cashAccounts) {
+      const balance = await this.calculateAccountBalance(storeId, account.id, startDate);
+      cashAtBeginningBs += balance.balance_bs;
+      cashAtBeginningUsd += balance.balance_usd;
+    }
+
+    // Calcular saldos al fin del período
+    let cashAtEndBs = 0;
+    let cashAtEndUsd = 0;
+    for (const account of cashAccounts) {
+      const balance = await this.calculateAccountBalance(storeId, account.id, endDate);
+      cashAtEndBs += balance.balance_bs;
+      cashAtEndUsd += balance.balance_usd;
+    }
+
+    // Calcular cambios en capital de trabajo
+    let receivableChangeBs = 0;
+    let receivableChangeUsd = 0;
+    let payableChangeBs = 0;
+    let payableChangeUsd = 0;
+    let inventoryChangeBs = 0;
+    let inventoryChangeUsd = 0;
+
+    if (receivableAccount) {
+      const balanceStart = await this.calculateAccountBalance(storeId, receivableAccount.id, startDate);
+      const balanceEnd = await this.calculateAccountBalance(storeId, receivableAccount.id, endDate);
+      receivableChangeBs = balanceEnd.balance_bs - balanceStart.balance_bs;
+      receivableChangeUsd = balanceEnd.balance_usd - balanceStart.balance_usd;
+    }
+
+    if (payableAccount) {
+      const balanceStart = await this.calculateAccountBalance(storeId, payableAccount.id, startDate);
+      const balanceEnd = await this.calculateAccountBalance(storeId, payableAccount.id, endDate);
+      payableChangeBs = balanceEnd.balance_bs - balanceStart.balance_bs;
+      payableChangeUsd = balanceEnd.balance_usd - balanceStart.balance_usd;
+    }
+
+    if (inventoryAccount) {
+      const balanceStart = await this.calculateAccountBalance(storeId, inventoryAccount.id, startDate);
+      const balanceEnd = await this.calculateAccountBalance(storeId, inventoryAccount.id, endDate);
+      inventoryChangeBs = balanceEnd.balance_bs - balanceStart.balance_bs;
+      inventoryChangeUsd = balanceEnd.balance_usd - balanceStart.balance_usd;
+    }
+
+    // Ajustes típicos (depreciación, etc.) - por ahora vacío, se puede expandir
+    const adjustments: Array<{ description: string; amount_bs: number; amount_usd: number }> = [];
+
+    // Calcular flujo de efectivo de operaciones (método indirecto)
+    // Net Income + Depreciation - Changes in Working Capital
+    const netCashFromOperationsBs =
+      netIncomeBs +
+      adjustments.reduce((sum, adj) => sum + adj.amount_bs, 0) -
+      receivableChangeBs +
+      payableChangeBs -
+      inventoryChangeBs;
+
+    const netCashFromOperationsUsd =
+      netIncomeUsd +
+      adjustments.reduce((sum, adj) => sum + adj.amount_usd, 0) -
+      receivableChangeUsd +
+      payableChangeUsd -
+      inventoryChangeUsd;
+
+    // Actividades de inversión (compras de activos, etc.)
+    // Por ahora vacío, se puede expandir para rastrear compras de activos fijos
+    const investingActivities: Array<{ description: string; amount_bs: number; amount_usd: number }> = [];
+
+    // Actividades de financiamiento (préstamos, capital, etc.)
+    // Por ahora vacío, se puede expandir
+    const financingActivities: Array<{ description: string; amount_bs: number; amount_usd: number }> = [];
+
+    const netCashFromInvestingBs = -investingActivities.reduce((sum, inv) => sum + Math.abs(inv.amount_bs), 0);
+    const netCashFromInvestingUsd = -investingActivities.reduce((sum, inv) => sum + Math.abs(inv.amount_usd), 0);
+
+    const netCashFromFinancingBs = financingActivities.reduce((sum, fin) => sum + fin.amount_bs, 0);
+    const netCashFromFinancingUsd = financingActivities.reduce((sum, fin) => sum + fin.amount_usd, 0);
+
+    const netChangeInCashBs = netCashFromOperationsBs + netCashFromInvestingBs + netCashFromFinancingBs;
+    const netChangeInCashUsd = netCashFromOperationsUsd + netCashFromInvestingUsd + netCashFromFinancingUsd;
+
+    return {
+      operating_activities: {
+        net_income_bs: netIncomeBs,
+        net_income_usd: netIncomeUsd,
+        adjustments,
+        changes_in_working_capital: {
+          accounts_receivable_bs: -receivableChangeBs,
+          accounts_receivable_usd: -receivableChangeUsd,
+          accounts_payable_bs: payableChangeBs,
+          accounts_payable_usd: payableChangeUsd,
+          inventory_bs: -inventoryChangeBs,
+          inventory_usd: -inventoryChangeUsd,
+        },
+        net_cash_from_operations_bs: netCashFromOperationsBs,
+        net_cash_from_operations_usd: netCashFromOperationsUsd,
+      },
+      investing_activities: investingActivities,
+      financing_activities: financingActivities,
+      net_change_in_cash_bs: netChangeInCashBs,
+      net_change_in_cash_usd: netChangeInCashUsd,
+      cash_at_beginning_bs: cashAtBeginningBs,
+      cash_at_beginning_usd: cashAtBeginningUsd,
+      cash_at_end_bs: cashAtEndBs,
+      cash_at_end_usd: cashAtEndUsd,
+    };
+  }
+
+  /**
+   * Obtener o crear un período contable
+   */
+  private async getOrCreatePeriod(
+    storeId: string,
+    periodStart: Date,
+    periodEnd: Date,
+  ): Promise<AccountingPeriod> {
+    const year = periodStart.getFullYear();
+    const month = periodStart.getMonth() + 1;
+    const periodCode = `${year}-${String(month).padStart(2, '0')}`;
+
+    let period = await this.periodRepository.findOne({
+      where: { store_id: storeId, period_code: periodCode },
+    });
+
+    if (!period) {
+      period = this.periodRepository.create({
+        id: randomUUID(),
+        store_id: storeId,
+        period_code: periodCode,
+        period_start: periodStart,
+        period_end: periodEnd,
+        status: AccountingPeriodStatus.OPEN,
+      });
+      await this.periodRepository.save(period);
+    }
+
+    return period;
+  }
+
+  /**
+   * Validar que un período esté abierto para permitir creación de asientos
+   */
+  async validatePeriodOpen(storeId: string, entryDate: Date): Promise<void> {
+    const year = entryDate.getFullYear();
+    const month = entryDate.getMonth() + 1;
+    const periodCode = `${year}-${String(month).padStart(2, '0')}`;
+
+    const period = await this.periodRepository.findOne({
+      where: { store_id: storeId, period_code: periodCode },
+    });
+
+    if (period && period.status !== AccountingPeriodStatus.OPEN) {
+      throw new BadRequestException(
+        `El período contable ${periodCode} está cerrado. No se pueden crear asientos en períodos cerrados.`,
+      );
+    }
+  }
+
+  /**
+   * Cerrar un período contable (genera asientos de cierre)
+   */
+  async closePeriod(
+    storeId: string,
+    periodStart: Date,
+    periodEnd: Date,
+    userId: string,
+    note?: string,
+  ): Promise<{ period: AccountingPeriod; closingEntry: JournalEntry }> {
+    const period = await this.getOrCreatePeriod(storeId, periodStart, periodEnd);
+
+    if (period.status === AccountingPeriodStatus.CLOSED || period.status === AccountingPeriodStatus.LOCKED) {
+      throw new BadRequestException(`El período ${period.period_code} ya está cerrado`);
+    }
+
+    // Obtener Estado de Resultados del período
+    const incomeStatement = await this.getIncomeStatement(storeId, periodStart, periodEnd);
+    const netIncomeBs = incomeStatement.totals.net_income_bs;
+    const netIncomeUsd = incomeStatement.totals.net_income_usd;
+
+    // Si no hay ingreso neto, no generar asiento de cierre
+    if (Math.abs(netIncomeBs) < 0.01 && Math.abs(netIncomeUsd) < 0.01) {
+      period.status = AccountingPeriodStatus.CLOSED;
+      period.closed_at = new Date();
+      period.closed_by = userId;
+      period.closing_note = note || null;
+      await this.periodRepository.save(period);
+
+      // Retornar sin asiento de cierre
+      return {
+        period,
+        closingEntry: null as any, // No hay asiento porque no hay utilidad
+      };
+    }
+
+    // Obtener cuentas de ingresos y gastos
+    const revenueAccounts = await this.accountRepository.find({
+      where: {
+        store_id: storeId,
+        account_type: 'revenue',
+        is_active: true,
+      },
+    });
+
+    const expenseAccounts = await this.accountRepository.find({
+      where: {
+        store_id: storeId,
+        account_type: 'expense',
+        is_active: true,
+      },
+    });
+
+    // Buscar cuenta de ganancias retenidas (3.02.01) o capital (3.01.01) como fallback
+    let equityAccount = await this.accountRepository.findOne({
+      where: {
+        store_id: storeId,
+        account_type: 'equity',
+        account_code: '3.02.01', // Utilidades Acumuladas (Ganancias Retenidas)
+        is_active: true,
+      },
+    });
+
+    if (!equityAccount) {
+      // Buscar cualquier cuenta de Ganancias Retenidas (3.02)
+      equityAccount = await this.accountRepository.findOne({
+        where: {
+          store_id: storeId,
+          account_type: 'equity',
+          account_code: '3.02',
+          is_active: true,
+        },
+      });
+    }
+
+    if (!equityAccount) {
+      // Fallback: usar Capital Social (3.01.01)
+      equityAccount = await this.accountRepository.findOne({
+        where: {
+          store_id: storeId,
+          account_type: 'equity',
+          account_code: '3.01.01',
+          is_active: true,
+        },
+      });
+    }
+
+    if (!equityAccount) {
+      // Último fallback: cualquier cuenta de capital (3.01)
+      equityAccount = await this.accountRepository.findOne({
+        where: {
+          store_id: storeId,
+          account_type: 'equity',
+          account_code: '3.01',
+          is_active: true,
+        },
+      });
+    }
+
+    if (!equityAccount) {
+      throw new NotFoundException('No se encontró cuenta de capital o ganancias retenidas para el cierre');
+    }
+
+    const entryDate = periodEnd;
+    const entryNumber = await this.generateEntryNumber(storeId, entryDate);
+
+    const lines: Array<{
+      account_id: string;
+      account_code: string;
+      account_name: string;
+      debit_amount_bs: number;
+      credit_amount_bs: number;
+      debit_amount_usd: number;
+      credit_amount_usd: number;
+      description?: string;
+    }> = [];
+
+    // Cerrar ingresos: Débito a Ingresos, Crédito a Ganancias Retenidas
+    for (const account of revenueAccounts) {
+      const balance = await this.calculateAccountBalance(storeId, account.id, periodEnd);
+      const revenueAmountBs = balance.balance_bs;
+      const revenueAmountUsd = balance.balance_usd;
+
+      if (Math.abs(revenueAmountBs) < 0.01 && Math.abs(revenueAmountUsd) < 0.01) {
+        continue;
+      }
+
+      // Débito: Ingreso (para cerrarlo)
+      lines.push({
+        account_id: account.id,
+        account_code: account.account_code,
+        account_name: account.account_name,
+        debit_amount_bs: Math.abs(revenueAmountBs),
+        credit_amount_bs: 0,
+        debit_amount_usd: Math.abs(revenueAmountUsd),
+        credit_amount_usd: 0,
+        description: `Cierre de período - ${account.account_name}`,
+      });
+
+      // Crédito: Ganancias Retenidas
+      if (equityAccount) {
+        lines.push({
+          account_id: equityAccount.id,
+          account_code: equityAccount.account_code,
+          account_name: equityAccount.account_name,
+          debit_amount_bs: 0,
+          credit_amount_bs: Math.abs(revenueAmountBs),
+          debit_amount_usd: 0,
+          credit_amount_usd: Math.abs(revenueAmountUsd),
+          description: `Transferencia de ingresos - ${account.account_name}`,
+        });
+      }
+    }
+
+    // Cerrar gastos: Crédito a Gasto, Débito a Ganancias Retenidas
+    for (const account of expenseAccounts) {
+      const balance = await this.calculateAccountBalance(storeId, account.id, periodEnd);
+      const expenseAmountBs = Math.abs(balance.balance_bs);
+      const expenseAmountUsd = Math.abs(balance.balance_usd);
+
+      if (Math.abs(expenseAmountBs) < 0.01 && Math.abs(expenseAmountUsd) < 0.01) {
+        continue;
+      }
+
+      // Crédito: Gasto (para cerrarlo)
+      lines.push({
+        account_id: account.id,
+        account_code: account.account_code,
+        account_name: account.account_name,
+        debit_amount_bs: 0,
+        credit_amount_bs: expenseAmountBs,
+        debit_amount_usd: 0,
+        credit_amount_usd: expenseAmountUsd,
+        description: `Cierre de período - ${account.account_name}`,
+      });
+
+      // Débito: Ganancias Retenidas
+      if (equityAccount) {
+        lines.push({
+          account_id: equityAccount.id,
+          account_code: equityAccount.account_code,
+          account_name: equityAccount.account_name,
+          debit_amount_bs: expenseAmountBs,
+          credit_amount_bs: 0,
+          debit_amount_usd: expenseAmountUsd,
+          credit_amount_usd: 0,
+          description: `Transferencia de gastos - ${account.account_name}`,
+        });
+      }
+    }
+
+    // Crear asiento de cierre
+    const closingEntry = this.journalEntryRepository.create({
+      id: randomUUID(),
+      store_id: storeId,
+      entry_number: entryNumber,
+      entry_date: entryDate,
+      entry_type: 'manual',
+      source_type: 'period_close',
+      source_id: period.id,
+      description: `Cierre de período ${period.period_code}`,
+      reference_number: null,
+      total_debit_bs: lines.reduce((sum, l) => sum + l.debit_amount_bs, 0),
+      total_credit_bs: lines.reduce((sum, l) => sum + l.credit_amount_bs, 0),
+      total_debit_usd: lines.reduce((sum, l) => sum + l.debit_amount_usd, 0),
+      total_credit_usd: lines.reduce((sum, l) => sum + l.credit_amount_usd, 0),
+      exchange_rate: null,
+      currency: 'MIXED',
+      status: 'posted',
+      is_auto_generated: true,
+      posted_at: new Date(),
+      posted_by: userId,
+      metadata: { period_id: period.id, period_code: period.period_code },
+    });
+
+    const savedEntry = await this.journalEntryRepository.save(closingEntry);
+
+    // Crear líneas
+    const entryLines = lines.map((line, index) =>
+      this.journalEntryLineRepository.create({
+        id: randomUUID(),
+        entry_id: savedEntry.id,
+        line_number: index + 1,
+        account_id: line.account_id,
+        account_code: line.account_code,
+        account_name: line.account_name,
+        description: line.description,
+        debit_amount_bs: line.debit_amount_bs,
+        credit_amount_bs: line.credit_amount_bs,
+        debit_amount_usd: line.debit_amount_usd,
+        credit_amount_usd: line.credit_amount_usd,
+      }),
+    );
+
+    await this.journalEntryLineRepository.save(entryLines);
+
+    // Actualizar saldos
+    await this.updateAccountBalances(storeId, entryDate, lines);
+
+    // Actualizar período
+    period.status = AccountingPeriodStatus.CLOSED;
+    period.closed_at = new Date();
+    period.closed_by = userId;
+    period.closing_entry_id = savedEntry.id;
+    period.closing_note = note || null;
+    await this.periodRepository.save(period);
+
+    const entryWithLines = await this.journalEntryRepository.findOne({
+      where: { id: savedEntry.id },
+      relations: ['lines'],
+    });
+
+    return {
+      period,
+      closingEntry: entryWithLines as JournalEntry,
+    };
+  }
+
+  /**
+   * Reabrir un período cerrado
+   */
+  async reopenPeriod(
+    storeId: string,
+    periodCode: string,
+    userId: string,
+    reason: string,
+  ): Promise<AccountingPeriod> {
+    const period = await this.periodRepository.findOne({
+      where: { store_id: storeId, period_code: periodCode },
+    });
+
+    if (!period) {
+      throw new NotFoundException(`Período ${periodCode} no encontrado`);
+    }
+
+    if (period.status === AccountingPeriodStatus.LOCKED) {
+      throw new BadRequestException(`El período ${periodCode} está bloqueado y no se puede reabrir`);
+    }
+
+    if (period.status === AccountingPeriodStatus.OPEN) {
+      throw new BadRequestException(`El período ${periodCode} ya está abierto`);
+    }
+
+    // Revertir asiento de cierre si existe
+    if (period.closing_entry_id) {
+      const closingEntry = await this.journalEntryRepository.findOne({
+        where: { id: period.closing_entry_id },
+      });
+
+      if (closingEntry && closingEntry.status === 'posted') {
+        closingEntry.status = 'cancelled';
+        closingEntry.cancelled_at = new Date();
+        closingEntry.cancelled_by = userId;
+        closingEntry.cancellation_reason = `Período reabierto: ${reason}`;
+        await this.journalEntryRepository.save(closingEntry);
+      }
+    }
+
+    period.status = AccountingPeriodStatus.OPEN;
+    period.closed_at = null;
+    period.closing_entry_id = null;
+    period.closing_note = `${period.closing_note || ''}\n[Reabierto: ${new Date().toISOString()}] Razón: ${reason}`;
+    await this.periodRepository.save(period);
+
+    return period;
+  }
+
+  /**
+   * Validaciones avanzadas contables
+   */
+  async validateAccountingIntegrity(
+    storeId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<{
+    is_valid: boolean;
+    errors: Array<{
+      type: string;
+      severity: 'error' | 'warning';
+      message: string;
+      details?: any;
+    }>;
+    warnings: Array<{
+      type: string;
+      message: string;
+      details?: any;
+    }>;
+  }> {
+    const errors: Array<{ type: string; severity: 'error' | 'warning'; message: string; details?: any }> = [];
+    const warnings: Array<{ type: string; message: string; details?: any }> = [];
+
+    const filterDate = startDate && endDate
+      ? Between(startDate, endDate)
+      : undefined;
+
+    // 1. Validar que todos los asientos estén balanceados
+    const unbalancedEntries = await this.journalEntryRepository
+      .createQueryBuilder('entry')
+      .where('entry.store_id = :storeId', { storeId })
+      .andWhere('entry.status = :status', { status: 'posted' })
+      .andWhere(
+        '(ABS(entry.total_debit_bs - entry.total_credit_bs) > 0.01 OR ABS(entry.total_debit_usd - entry.total_credit_usd) > 0.01)',
+      )
+      .getMany();
+
+    if (unbalancedEntries.length > 0) {
+      errors.push({
+        type: 'unbalanced_entries',
+        severity: 'error',
+        message: `Se encontraron ${unbalancedEntries.length} asientos desbalanceados`,
+        details: unbalancedEntries.map((e) => ({
+          entry_id: e.id,
+          entry_number: e.entry_number,
+          difference_bs: e.total_debit_bs - e.total_credit_bs,
+          difference_usd: e.total_debit_usd - e.total_credit_usd,
+        })),
+      });
+    }
+
+    // 2. Validar que no haya asientos posteados en períodos cerrados
+    const closedPeriods = await this.periodRepository.find({
+      where: {
+        store_id: storeId,
+        status: AccountingPeriodStatus.CLOSED,
+      },
+    });
+
+    if (closedPeriods.length > 0) {
+      for (const period of closedPeriods) {
+        const entriesInClosedPeriod = await this.journalEntryRepository.count({
+          where: {
+            store_id: storeId,
+            entry_date: Between(period.period_start, period.period_end),
+            status: 'posted',
+          },
+        });
+
+        if (entriesInClosedPeriod > 0) {
+          warnings.push({
+            type: 'entries_in_closed_period',
+            message: `Hay asientos posteados en el período cerrado ${period.period_code}`,
+            details: {
+              period_code: period.period_code,
+              entries_count: entriesInClosedPeriod,
+            },
+          });
+        }
+      }
+    }
+
+    // 3. Validar que los saldos de cuentas coincidan con los movimientos
+    const allAccounts = await this.accountRepository.find({
+      where: { store_id: storeId, is_active: true },
+    });
+
+    const accountBalanceMismatches: Array<{
+      account_code: string;
+      account_name: string;
+      expected_balance_bs: number;
+      calculated_balance_bs: number;
+      difference_bs: number;
+    }> = [];
+
+    for (const account of allAccounts) {
+      const balance = await this.balanceRepository.findOne({
+        where: {
+          store_id: storeId,
+          account_id: account.id,
+        },
+        order: { period_end: 'DESC' },
+      });
+
+      if (balance) {
+        const calculatedBalance = await this.calculateAccountBalance(
+          storeId,
+          account.id,
+          balance.period_end,
+        );
+
+        const expectedBalanceBs =
+          account.account_type === 'asset' || account.account_type === 'expense'
+            ? balance.closing_balance_debit_bs - balance.closing_balance_credit_bs
+            : balance.closing_balance_credit_bs - balance.closing_balance_debit_bs;
+
+        const calculatedBalanceBs = calculatedBalance.balance_bs;
+        const difference = Math.abs(expectedBalanceBs - calculatedBalanceBs);
+
+        if (difference > 0.01) {
+          accountBalanceMismatches.push({
+            account_code: account.account_code,
+            account_name: account.account_name,
+            expected_balance_bs: expectedBalanceBs,
+            calculated_balance_bs: calculatedBalanceBs,
+            difference_bs: difference,
+          });
+        }
+      }
+    }
+
+    if (accountBalanceMismatches.length > 0) {
+      errors.push({
+        type: 'balance_mismatch',
+        severity: 'error',
+        message: `Se encontraron ${accountBalanceMismatches.length} cuentas con saldos inconsistentes`,
+        details: accountBalanceMismatches,
+      });
+    }
+
+    // 4. Validar que no haya asientos sin líneas
+    const entriesWithoutLines = await this.journalEntryRepository
+      .createQueryBuilder('entry')
+      .leftJoin('entry.lines', 'line')
+      .where('entry.store_id = :storeId', { storeId })
+      .andWhere('line.id IS NULL')
+      .getMany();
+
+    if (entriesWithoutLines.length > 0) {
+      errors.push({
+        type: 'entries_without_lines',
+        severity: 'error',
+        message: `Se encontraron ${entriesWithoutLines.length} asientos sin líneas`,
+        details: entriesWithoutLines.map((e) => ({
+          entry_id: e.id,
+          entry_number: e.entry_number,
+        })),
+      });
+    }
+
+    // 5. Validar que los totales del asiento coincidan con las líneas
+    const entriesWithInconsistentTotals: Array<{
+      entry_id: string;
+      entry_number: string;
+      entry_total_debit_bs: number;
+      lines_total_debit_bs: number;
+      difference_bs: number;
+    }> = [];
+
+    const allPostedEntries = await this.journalEntryRepository.find({
+      where: {
+        store_id: storeId,
+        status: 'posted',
+      },
+      relations: ['lines'],
+    });
+
+    for (const entry of allPostedEntries) {
+      const linesTotalDebitBs = entry.lines.reduce((sum, line) => sum + line.debit_amount_bs, 0);
+      const linesTotalCreditBs = entry.lines.reduce((sum, line) => sum + line.credit_amount_bs, 0);
+
+      if (
+        Math.abs(entry.total_debit_bs - linesTotalDebitBs) > 0.01 ||
+        Math.abs(entry.total_credit_bs - linesTotalCreditBs) > 0.01
+      ) {
+        entriesWithInconsistentTotals.push({
+          entry_id: entry.id,
+          entry_number: entry.entry_number,
+          entry_total_debit_bs: entry.total_debit_bs,
+          lines_total_debit_bs: linesTotalDebitBs,
+          difference_bs: entry.total_debit_bs - linesTotalDebitBs,
+        });
+      }
+    }
+
+    if (entriesWithInconsistentTotals.length > 0) {
+      errors.push({
+        type: 'inconsistent_entry_totals',
+        severity: 'error',
+        message: `Se encontraron ${entriesWithInconsistentTotals.length} asientos con totales inconsistentes`,
+        details: entriesWithInconsistentTotals,
+      });
+    }
+
+    return {
+      is_valid: errors.filter((e) => e.severity === 'error').length === 0,
+      errors,
+      warnings,
+    };
+  }
+
+  /**
+   * Reconciliación contable - Comparar saldos de cuentas con movimientos esperados
+   */
+  async reconcileAccounts(
+    storeId: string,
+    accountIds?: string[],
+    asOfDate: Date = new Date(),
+  ): Promise<{
+    reconciled: number;
+    discrepancies: Array<{
+      account_id: string;
+      account_code: string;
+      account_name: string;
+      expected_balance_bs: number;
+      actual_balance_bs: number;
+      difference_bs: number;
+      expected_balance_usd: number;
+      actual_balance_usd: number;
+      difference_usd: number;
+    }>;
+    summary: {
+      total_accounts: number;
+      reconciled_accounts: number;
+      accounts_with_discrepancies: number;
+    };
+  }> {
+    const accountsToReconcile = accountIds
+      ? await this.accountRepository.find({
+          where: accountIds.map((id) => ({ id, store_id: storeId })),
+        })
+      : await this.accountRepository.find({
+          where: { store_id: storeId, is_active: true },
+        });
+
+    const discrepancies: Array<{
+      account_id: string;
+      account_code: string;
+      account_name: string;
+      expected_balance_bs: number;
+      actual_balance_bs: number;
+      difference_bs: number;
+      expected_balance_usd: number;
+      actual_balance_usd: number;
+      difference_usd: number;
+    }> = [];
+
+    let reconciledCount = 0;
+
+    for (const account of accountsToReconcile) {
+      // Calcular saldo esperado desde los movimientos
+      const calculatedBalance = await this.calculateAccountBalance(storeId, account.id, asOfDate);
+
+      // Obtener saldo registrado en AccountBalance
+      const balance = await this.balanceRepository.findOne({
+        where: {
+          store_id: storeId,
+          account_id: account.id,
+        },
+        order: { period_end: 'DESC' },
+      });
+
+      let expectedBalanceBs = 0;
+      let expectedBalanceUsd = 0;
+
+      if (balance) {
+        expectedBalanceBs =
+          account.account_type === 'asset' || account.account_type === 'expense'
+            ? balance.closing_balance_debit_bs - balance.closing_balance_credit_bs
+            : balance.closing_balance_credit_bs - balance.closing_balance_debit_bs;
+
+        expectedBalanceUsd =
+          account.account_type === 'asset' || account.account_type === 'expense'
+            ? balance.closing_balance_debit_usd - balance.closing_balance_credit_usd
+            : balance.closing_balance_credit_usd - balance.closing_balance_debit_usd;
+      }
+
+      const differenceBs = Math.abs(expectedBalanceBs - calculatedBalance.balance_bs);
+      const differenceUsd = Math.abs(expectedBalanceUsd - calculatedBalance.balance_usd);
+
+      // Tolerancia de 0.01 para diferencias por redondeo
+      if (differenceBs > 0.01 || differenceUsd > 0.01) {
+        discrepancies.push({
+          account_id: account.id,
+          account_code: account.account_code,
+          account_name: account.account_name,
+          expected_balance_bs: expectedBalanceBs,
+          actual_balance_bs: calculatedBalance.balance_bs,
+          difference_bs: expectedBalanceBs - calculatedBalance.balance_bs,
+          expected_balance_usd: expectedBalanceUsd,
+          actual_balance_usd: calculatedBalance.balance_usd,
+          difference_usd: expectedBalanceUsd - calculatedBalance.balance_usd,
+        });
+      } else {
+        reconciledCount++;
+      }
+    }
+
+    return {
+      reconciled: reconciledCount,
+      discrepancies,
+      summary: {
+        total_accounts: accountsToReconcile.length,
+        reconciled_accounts: reconciledCount,
+        accounts_with_discrepancies: discrepancies.length,
       },
     };
   }

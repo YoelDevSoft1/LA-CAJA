@@ -12,6 +12,7 @@ import { WarehouseStock } from '../database/entities/warehouse-stock.entity';
 import { StockReceivedDto } from './dto/stock-received.dto';
 import { StockAdjustedDto } from './dto/stock-adjusted.dto';
 import { WarehousesService } from '../warehouses/warehouses.service';
+import { AccountingService } from '../accounting/accounting.service';
 import { randomUUID } from 'crypto';
 import { GetStockStatusDto } from './dto/get-stock-status.dto';
 
@@ -105,6 +106,7 @@ export class InventoryService {
     @InjectRepository(WarehouseStock)
     private warehouseStockRepository: Repository<WarehouseStock>,
     private warehousesService: WarehousesService,
+    private accountingService: AccountingService,
   ) {}
 
   async stockReceived(
@@ -319,6 +321,23 @@ export class InventoryService {
         storeId,
       );
     }
+
+    // Generar asiento contable automático (después de guardar el movimiento)
+    setImmediate(async () => {
+      try {
+        // Recargar el movimiento con relaciones si es necesario
+        const movementWithRelations = await this.movementRepository.findOne({
+          where: { id: savedMovement.id },
+          relations: ['product'],
+        });
+        if (movementWithRelations) {
+          await this.accountingService.generateEntryFromInventoryAdjustment(storeId, movementWithRelations);
+        }
+      } catch (error) {
+        // Log error pero no fallar el ajuste de inventario
+        console.error(`Error generando asiento contable para ajuste ${savedMovement.id}`, error);
+      }
+    });
 
     return savedMovement;
   }

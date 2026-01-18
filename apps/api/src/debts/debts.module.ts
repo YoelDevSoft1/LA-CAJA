@@ -7,11 +7,13 @@ import { DebtPayment } from '../database/entities/debt-payment.entity';
 import { Customer } from '../database/entities/customer.entity';
 import { Sale } from '../database/entities/sale.entity';
 import { ExchangeModule } from '../exchange/exchange.module';
+import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Debt, DebtPayment, Customer, Sale]),
     ExchangeModule,
+    AccountingModule,
   ],
   controllers: [DebtsController],
   providers: [DebtsService],

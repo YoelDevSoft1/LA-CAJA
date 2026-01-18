@@ -274,3 +274,103 @@ export interface IncomeStatementReport {
     net_income_usd: number
   }
 }
+
+export interface TrialBalanceAccount {
+  account_code: string
+  account_name: string
+  account_type: string
+  debit_balance_bs: number
+  credit_balance_bs: number
+  debit_balance_usd: number
+  credit_balance_usd: number
+}
+
+export interface TrialBalanceReport {
+  accounts: TrialBalanceAccount[]
+  totals: {
+    total_debits_bs: number
+    total_credits_bs: number
+    total_debits_usd: number
+    total_credits_usd: number
+    is_balanced: boolean
+    difference_bs: number
+    difference_usd: number
+  }
+  unposted_entries_count: number
+}
+
+export interface GeneralLedgerMovement {
+  entry_id: string
+  entry_number: string
+  entry_date: string
+  description: string
+  reference_number: string | null
+  debit_amount_bs: number
+  credit_amount_bs: number
+  debit_amount_usd: number
+  credit_amount_usd: number
+  running_balance_bs: number
+  running_balance_usd: number
+}
+
+export interface GeneralLedgerAccount {
+  account_id: string
+  account_code: string
+  account_name: string
+  account_type: string
+  opening_balance_bs: number
+  opening_balance_usd: number
+  movements: GeneralLedgerMovement[]
+  closing_balance_bs: number
+  closing_balance_usd: number
+  total_debits_bs: number
+  total_credits_bs: number
+  total_debits_usd: number
+  total_credits_usd: number
+}
+
+export interface GeneralLedgerReport {
+  accounts: GeneralLedgerAccount[]
+}
+
+export interface CashFlowAdjustment {
+  description: string
+  amount_bs: number
+  amount_usd: number
+}
+
+export interface CashFlowWorkingCapital {
+  accounts_receivable_bs: number
+  accounts_receivable_usd: number
+  accounts_payable_bs: number
+  accounts_payable_usd: number
+  inventory_bs: number
+  inventory_usd: number
+}
+
+export interface CashFlowOperatingActivities {
+  net_income_bs: number
+  net_income_usd: number
+  adjustments: CashFlowAdjustment[]
+  changes_in_working_capital: CashFlowWorkingCapital
+  net_cash_from_operations_bs: number
+  net_cash_from_operations_usd: number
+}
+
+export interface CashFlowActivity {
+  description: string
+  amount_bs: number
+  amount_usd: number
+}
+
+export interface CashFlowReport {
+  operating_activities: CashFlowOperatingActivities
+  investing_activities: CashFlowActivity[]
+  financing_activities: CashFlowActivity[]
+  net_change_in_cash_bs: number
+  net_change_in_cash_usd: number
+  cash_at_beginning_bs: number
+  cash_at_beginning_usd: number
+  cash_at_end_bs: number
+  cash_at_end_usd: number
+}

@@ -11,6 +11,7 @@ import { authService, type LoginResponse } from '@/services/auth.service'
 import { useQueryClient } from '@tanstack/react-query'
 import { prefetchAllData } from '@/services/prefetch.service'
 import { syncService } from '@/services/sync.service'
+import { setupService } from '@/services/setup.service'
 import { getDefaultRoute } from '@/lib/permissions'
 import { Loader2, Lock, ChevronRight, Store, User, KeyRound, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -103,6 +104,21 @@ export default function LoginPage() {
         console.log('[Prefetch] Cacheo completo')
       } catch (error) {
         console.warn('[Prefetch] Error al prefetch:', error)
+      }
+
+      // Verificar estado de configuración si es owner
+      if (response.role === 'owner') {
+        try {
+          const setupStatus = await setupService.validateSetup()
+          if (!setupStatus.is_complete) {
+            console.log('[Login] Setup incompleto, redirigiendo a onboarding')
+            navigate('/onboarding')
+            return
+          }
+        } catch (error) {
+          console.warn('[Login] Error al validar setup:', error)
+          // Continuar al dashboard si falla la validación
+        }
       }
 
       const firstName = response.full_name?.split(' ')[0] || 'Usuario'

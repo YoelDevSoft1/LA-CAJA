@@ -5,9 +5,13 @@ import { CashService } from './cash.service';
 import { CashSession } from '../database/entities/cash-session.entity';
 import { Sale } from '../database/entities/sale.entity';
 import { CashMovement } from '../database/entities/cash-movement.entity';
+import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([CashSession, Sale, CashMovement])],
+  imports: [
+    TypeOrmModule.forFeature([CashSession, Sale, CashMovement]),
+    AccountingModule,
+  ],
   controllers: [CashController],
   providers: [CashService],
   exports: [CashService],
