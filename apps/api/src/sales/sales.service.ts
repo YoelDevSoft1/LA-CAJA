@@ -696,9 +696,16 @@ export class SalesService {
         discountUsd += promotionDiscountUsd;
       }
 
-      // Calcular totales
-      const totalBs = subtotalBs - discountBs;
-      const totalUsd = subtotalUsd - discountUsd;
+      // Calcular totales - redondear a 2 decimales para consistencia contable
+      const roundTwo = (value: number) => Math.round(value * 100) / 100;
+      const totalBs = roundTwo(subtotalBs - discountBs);
+      const totalUsd = roundTwo(subtotalUsd - discountUsd);
+
+      // Redondear subtotales y descuentos antes de guardar
+      const roundedSubtotalBs = roundTwo(subtotalBs);
+      const roundedSubtotalUsd = roundTwo(subtotalUsd);
+      const roundedDiscountBs = roundTwo(discountBs);
+      const roundedDiscountUsd = roundTwo(discountUsd);
 
       // Validar descuentos si hay alguno
       if (discountBs > 0 || discountUsd > 0) {
@@ -804,10 +811,10 @@ export class SalesService {
         exchange_rate: dto.exchange_rate,
         currency: dto.currency,
         totals: {
-          subtotal_bs: subtotalBs,
-          subtotal_usd: subtotalUsd,
-          discount_bs: discountBs,
-          discount_usd: discountUsd,
+          subtotal_bs: roundedSubtotalBs,
+          subtotal_usd: roundedSubtotalUsd,
+          discount_bs: roundedDiscountBs,
+          discount_usd: roundedDiscountUsd,
           total_bs: totalBs,
           total_usd: totalUsd,
         },

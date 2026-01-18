@@ -298,8 +298,10 @@ export class AccountingService {
         description?: string;
       }> = [];
 
-      const totalBs = sale.totals.total_bs;
-      const totalUsd = sale.totals.total_usd;
+      // Redondear todos los valores a 2 decimales para consistencia contable
+      const roundTwo = (value: number) => Math.round(value * 100) / 100;
+      const totalBs = roundTwo(sale.totals.total_bs);
+      const totalUsd = roundTwo(sale.totals.total_usd);
 
       // Calcular costo real desde sale_items
       const saleItems = await this.saleItemRepository.find({
@@ -307,10 +309,12 @@ export class AccountingService {
         relations: ['lot', 'product'],
       });
 
-      const { costBs, costUsd } = await this.calculateSaleCosts(
+      const { costBs: rawCostBs, costUsd: rawCostUsd } = await this.calculateSaleCosts(
         storeId,
         saleItems,
       );
+      const costBs = roundTwo(rawCostBs);
+      const costUsd = roundTwo(rawCostUsd);
 
       // Si es FIAO, usar cuenta por cobrar
       if (sale.payment.method === 'FIAO') {
@@ -394,10 +398,10 @@ export class AccountingService {
         source_id: sale.id,
         description: `Venta ${sale.invoice_full_number || sale.id}`,
         reference_number: sale.invoice_full_number || sale.id,
-        total_debit_bs: lines.reduce((sum, l) => sum + l.debit_amount_bs, 0),
-        total_credit_bs: lines.reduce((sum, l) => sum + l.credit_amount_bs, 0),
-        total_debit_usd: lines.reduce((sum, l) => sum + l.debit_amount_usd, 0),
-        total_credit_usd: lines.reduce((sum, l) => sum + l.credit_amount_usd, 0),
+        total_debit_bs: roundTwo(lines.reduce((sum, l) => sum + l.debit_amount_bs, 0)),
+        total_credit_bs: roundTwo(lines.reduce((sum, l) => sum + l.credit_amount_bs, 0)),
+        total_debit_usd: roundTwo(lines.reduce((sum, l) => sum + l.debit_amount_usd, 0)),
+        total_credit_usd: roundTwo(lines.reduce((sum, l) => sum + l.credit_amount_usd, 0)),
         exchange_rate: sale.exchange_rate,
         currency: sale.currency,
         status: 'posted', // Auto-postear asientos generados
