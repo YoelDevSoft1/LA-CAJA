@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { Loader2, CheckCircle2, Store, Building2, FileText, Package, Check } from 'lucide-react'
@@ -23,7 +23,7 @@ const onboardingSchema = z.object({
   address: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
-  currency: z.enum(['BS', 'USD', 'MIXED']).default('MIXED'),
+  currency: z.enum(['BS', 'USD', 'MIXED']),
 })
 
 type OnboardingForm = z.infer<typeof onboardingSchema>
