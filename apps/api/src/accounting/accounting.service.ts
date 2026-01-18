@@ -2950,9 +2950,10 @@ export class AccountingService {
     const errors: Array<{ type: string; severity: 'error' | 'warning'; message: string; details?: any }> = [];
     const warnings: Array<{ type: string; message: string; details?: any }> = [];
 
-    const filterDate = startDate && endDate
-      ? Between(startDate, endDate)
-      : undefined;
+    try {
+      const filterDate = startDate && endDate
+        ? Between(startDate, endDate)
+        : undefined;
 
     // 1. Validar que todos los asientos estén balanceados
     const unbalancedEntries = await this.journalEntryRepository
@@ -3023,38 +3024,44 @@ export class AccountingService {
     }> = [];
 
     for (const account of allAccounts) {
-      const balance = await this.balanceRepository.findOne({
-        where: {
-          store_id: storeId,
-          account_id: account.id,
-        },
-        order: { period_end: 'DESC' },
-      });
+      try {
+        const balance = await this.balanceRepository.findOne({
+          where: {
+            store_id: storeId,
+            account_id: account.id,
+          },
+          order: { period_end: 'DESC' },
+        });
 
-      if (balance) {
-        const calculatedBalance = await this.calculateAccountBalance(
-          storeId,
-          account.id,
-          balance.period_end,
-        );
+        if (balance && balance.period_end) {
+          const calculatedBalance = await this.calculateAccountBalance(
+            storeId,
+            account.id,
+            balance.period_end,
+          );
 
-        const expectedBalanceBs =
-          account.account_type === 'asset' || account.account_type === 'expense'
-            ? balance.closing_balance_debit_bs - balance.closing_balance_credit_bs
-            : balance.closing_balance_credit_bs - balance.closing_balance_debit_bs;
+          const expectedBalanceBs =
+            account.account_type === 'asset' || account.account_type === 'expense'
+              ? Number(balance.closing_balance_debit_bs || 0) - Number(balance.closing_balance_credit_bs || 0)
+              : Number(balance.closing_balance_credit_bs || 0) - Number(balance.closing_balance_debit_bs || 0);
 
-        const calculatedBalanceBs = calculatedBalance.balance_bs;
-        const difference = Math.abs(expectedBalanceBs - calculatedBalanceBs);
+          const calculatedBalanceBs = calculatedBalance.balance_bs;
+          const difference = Math.abs(expectedBalanceBs - calculatedBalanceBs);
 
-        if (difference > 0.01) {
-          accountBalanceMismatches.push({
-            account_code: account.account_code,
-            account_name: account.account_name,
-            expected_balance_bs: expectedBalanceBs,
-            calculated_balance_bs: calculatedBalanceBs,
-            difference_bs: difference,
-          });
+          if (difference > 0.01) {
+            accountBalanceMismatches.push({
+              account_code: account.account_code,
+              account_name: account.account_name,
+              expected_balance_bs: expectedBalanceBs,
+              calculated_balance_bs: calculatedBalanceBs,
+              difference_bs: difference,
+            });
+          }
         }
+      } catch (error) {
+        // Si hay error calculando el balance de una cuenta, solo registrar como warning
+        // No detener la validación completa
+        this.logger.warn(`Error validando balance de cuenta ${account.account_code}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -3105,20 +3112,27 @@ export class AccountingService {
     });
 
     for (const entry of allPostedEntries) {
-      const linesTotalDebitBs = entry.lines.reduce((sum, line) => sum + line.debit_amount_bs, 0);
-      const linesTotalCreditBs = entry.lines.reduce((sum, line) => sum + line.credit_amount_bs, 0);
+      try {
+        const linesTotalDebitBs = (entry.lines || []).reduce((sum, line) => sum + Number(line.debit_amount_bs || 0), 0);
+        const linesTotalCreditBs = (entry.lines || []).reduce((sum, line) => sum + Number(line.credit_amount_bs || 0), 0);
 
-      if (
-        Math.abs(entry.total_debit_bs - linesTotalDebitBs) > 0.01 ||
-        Math.abs(entry.total_credit_bs - linesTotalCreditBs) > 0.01
-      ) {
-        entriesWithInconsistentTotals.push({
-          entry_id: entry.id,
-          entry_number: entry.entry_number,
-          entry_total_debit_bs: entry.total_debit_bs,
-          lines_total_debit_bs: linesTotalDebitBs,
-          difference_bs: entry.total_debit_bs - linesTotalDebitBs,
-        });
+        const entryTotalDebitBs = Number(entry.total_debit_bs || 0);
+        const entryTotalCreditBs = Number(entry.total_credit_bs || 0);
+
+        if (
+          Math.abs(entryTotalDebitBs - linesTotalDebitBs) > 0.01 ||
+          Math.abs(entryTotalCreditBs - linesTotalCreditBs) > 0.01
+        ) {
+          entriesWithInconsistentTotals.push({
+            entry_id: entry.id,
+            entry_number: entry.entry_number,
+            entry_total_debit_bs: entryTotalDebitBs,
+            lines_total_debit_bs: linesTotalDebitBs,
+            difference_bs: entryTotalDebitBs - linesTotalDebitBs,
+          });
+        }
+      } catch (error) {
+        this.logger.warn(`Error validando totales del asiento ${entry.entry_number}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -3131,11 +3145,25 @@ export class AccountingService {
       });
     }
 
-    return {
-      is_valid: errors.filter((e) => e.severity === 'error').length === 0,
-      errors,
-      warnings,
-    };
+      return {
+        is_valid: errors.filter((e) => e.severity === 'error').length === 0,
+        errors,
+        warnings,
+      };
+    } catch (error) {
+      this.logger.error(`Error en validateAccountingIntegrity: ${error instanceof Error ? error.stack : String(error)}`);
+      errors.push({
+        type: 'validation_error',
+        severity: 'error',
+        message: `Error al ejecutar validación: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+        details: { error: error instanceof Error ? error.message : String(error) },
+      });
+      return {
+        is_valid: false,
+        errors,
+        warnings,
+      };
+    }
   }
 
   /**
@@ -3187,51 +3215,56 @@ export class AccountingService {
     let reconciledCount = 0;
 
     for (const account of accountsToReconcile) {
-      // Calcular saldo esperado desde los movimientos
-      const calculatedBalance = await this.calculateAccountBalance(storeId, account.id, asOfDate);
+      try {
+        // Calcular saldo esperado desde los movimientos
+        const calculatedBalance = await this.calculateAccountBalance(storeId, account.id, asOfDate);
 
-      // Obtener saldo registrado en AccountBalance
-      const balance = await this.balanceRepository.findOne({
-        where: {
-          store_id: storeId,
-          account_id: account.id,
-        },
-        order: { period_end: 'DESC' },
-      });
-
-      let expectedBalanceBs = 0;
-      let expectedBalanceUsd = 0;
-
-      if (balance) {
-        expectedBalanceBs =
-          account.account_type === 'asset' || account.account_type === 'expense'
-            ? balance.closing_balance_debit_bs - balance.closing_balance_credit_bs
-            : balance.closing_balance_credit_bs - balance.closing_balance_debit_bs;
-
-        expectedBalanceUsd =
-          account.account_type === 'asset' || account.account_type === 'expense'
-            ? balance.closing_balance_debit_usd - balance.closing_balance_credit_usd
-            : balance.closing_balance_credit_usd - balance.closing_balance_debit_usd;
-      }
-
-      const differenceBs = Math.abs(expectedBalanceBs - calculatedBalance.balance_bs);
-      const differenceUsd = Math.abs(expectedBalanceUsd - calculatedBalance.balance_usd);
-
-      // Tolerancia de 0.01 para diferencias por redondeo
-      if (differenceBs > 0.01 || differenceUsd > 0.01) {
-        discrepancies.push({
-          account_id: account.id,
-          account_code: account.account_code,
-          account_name: account.account_name,
-          expected_balance_bs: expectedBalanceBs,
-          actual_balance_bs: calculatedBalance.balance_bs,
-          difference_bs: expectedBalanceBs - calculatedBalance.balance_bs,
-          expected_balance_usd: expectedBalanceUsd,
-          actual_balance_usd: calculatedBalance.balance_usd,
-          difference_usd: expectedBalanceUsd - calculatedBalance.balance_usd,
+        // Obtener saldo registrado en AccountBalance
+        const balance = await this.balanceRepository.findOne({
+          where: {
+            store_id: storeId,
+            account_id: account.id,
+          },
+          order: { period_end: 'DESC' },
         });
-      } else {
-        reconciledCount++;
+
+        let expectedBalanceBs = 0;
+        let expectedBalanceUsd = 0;
+
+        if (balance) {
+          expectedBalanceBs =
+            account.account_type === 'asset' || account.account_type === 'expense'
+              ? Number(balance.closing_balance_debit_bs || 0) - Number(balance.closing_balance_credit_bs || 0)
+              : Number(balance.closing_balance_credit_bs || 0) - Number(balance.closing_balance_debit_bs || 0);
+
+          expectedBalanceUsd =
+            account.account_type === 'asset' || account.account_type === 'expense'
+              ? Number(balance.closing_balance_debit_usd || 0) - Number(balance.closing_balance_credit_usd || 0)
+              : Number(balance.closing_balance_credit_usd || 0) - Number(balance.closing_balance_debit_usd || 0);
+        }
+
+        const differenceBs = Math.abs(expectedBalanceBs - calculatedBalance.balance_bs);
+        const differenceUsd = Math.abs(expectedBalanceUsd - calculatedBalance.balance_usd);
+
+        // Tolerancia de 0.01 para diferencias por redondeo
+        if (differenceBs > 0.01 || differenceUsd > 0.01) {
+          discrepancies.push({
+            account_id: account.id,
+            account_code: account.account_code,
+            account_name: account.account_name,
+            expected_balance_bs: expectedBalanceBs,
+            actual_balance_bs: calculatedBalance.balance_bs,
+            difference_bs: expectedBalanceBs - calculatedBalance.balance_bs,
+            expected_balance_usd: expectedBalanceUsd,
+            actual_balance_usd: calculatedBalance.balance_usd,
+            difference_usd: expectedBalanceUsd - calculatedBalance.balance_usd,
+          });
+        } else {
+          reconciledCount++;
+        }
+      } catch (error) {
+        this.logger.warn(`Error reconciliando cuenta ${account.account_code}: ${error instanceof Error ? error.message : String(error)}`);
+        // Continuar con la siguiente cuenta en lugar de fallar completamente
       }
     }
 
