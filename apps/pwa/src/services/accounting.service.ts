@@ -338,4 +338,28 @@ export const accountingValidationService = {
     const response = await api.post<AccountingReconciliationResult>('/accounting/reconcile', params || {})
     return response.data
   },
+
+  /**
+   * Recalcula y corrige totales de asientos desbalanceados
+   */
+  async recalculateEntryTotals(params?: {
+    entry_ids?: string[]
+  }): Promise<{
+    corrected: number
+    errors: Array<{
+      entry_id: string
+      entry_number: string
+      error: string
+    }>
+  }> {
+    const response = await api.post<{
+      corrected: number
+      errors: Array<{
+        entry_id: string
+        entry_number: string
+        error: string
+      }>
+    }>('/accounting/recalculate-totals', params || {})
+    return response.data
+  },
 }

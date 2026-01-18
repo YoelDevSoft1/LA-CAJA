@@ -3278,4 +3278,121 @@ export class AccountingService {
       },
     };
   }
+
+  /**
+   * Recalcular y corregir totales de asientos desbalanceados
+   * Esto corrige errores de redondeo que pueden ocurrir al calcular totales
+   */
+  async recalculateEntryTotals(
+    storeId: string,
+    entryIds?: string[],
+  ): Promise<{
+    corrected: number;
+    errors: Array<{
+      entry_id: string;
+      entry_number: string;
+      error: string;
+    }>;
+  }> {
+    const errors: Array<{ entry_id: string; entry_number: string; error: string }> = [];
+    let corrected = 0;
+
+    // Función auxiliar para redondear a 2 decimales
+    const roundTo2Decimals = (value: number): number => {
+      return Math.round(value * 100) / 100;
+    };
+
+    // Buscar asientos desbalanceados
+    let query = this.journalEntryRepository
+      .createQueryBuilder('entry')
+      .where('entry.store_id = :storeId', { storeId })
+      .andWhere('entry.status = :status', { status: 'posted' })
+      .andWhere(
+        '(ABS(entry.total_debit_bs - entry.total_credit_bs) > 0.01 OR ABS(entry.total_debit_usd - entry.total_credit_usd) > 0.01)',
+      );
+
+    if (entryIds && entryIds.length > 0) {
+      query = query.andWhere('entry.id IN (:...entryIds)', { entryIds });
+    }
+
+    const unbalancedEntries = await query.getMany();
+
+    for (const entry of unbalancedEntries) {
+      try {
+        // Obtener todas las líneas del asiento
+        const lines = await this.journalEntryLineRepository.find({
+          where: { entry_id: entry.id },
+        });
+
+        if (lines.length === 0) {
+          errors.push({
+            entry_id: entry.id,
+            entry_number: entry.entry_number,
+            error: 'El asiento no tiene líneas',
+          });
+          continue;
+        }
+
+        // Recalcular totales desde las líneas
+        const calculatedDebitBs = roundTo2Decimals(
+          lines.reduce((sum, line) => sum + Number(line.debit_amount_bs || 0), 0),
+        );
+        const calculatedCreditBs = roundTo2Decimals(
+          lines.reduce((sum, line) => sum + Number(line.credit_amount_bs || 0), 0),
+        );
+        const calculatedDebitUsd = roundTo2Decimals(
+          lines.reduce((sum, line) => sum + Number(line.debit_amount_usd || 0), 0),
+        );
+        const calculatedCreditUsd = roundTo2Decimals(
+          lines.reduce((sum, line) => sum + Number(line.credit_amount_usd || 0), 0),
+        );
+
+        // Verificar si hay diferencias significativas
+        const diffBs = Math.abs(calculatedDebitBs - calculatedCreditBs);
+        const diffUsd = Math.abs(calculatedDebitUsd - calculatedCreditUsd);
+
+        // Si la diferencia es mayor a 0.01, no es un error de redondeo, es un error real
+        if (diffBs > 0.01 || diffUsd > 0.01) {
+          errors.push({
+            entry_id: entry.id,
+            entry_number: entry.entry_number,
+            error: `El asiento realmente está desbalanceado: BS diff=${diffBs.toFixed(2)}, USD diff=${diffUsd.toFixed(2)}`,
+          });
+          continue;
+        }
+
+        // Si los totales guardados difieren de los calculados, actualizar
+        const currentDiffBs = Math.abs(entry.total_debit_bs - entry.total_credit_bs);
+        const currentDiffUsd = Math.abs(entry.total_debit_usd - entry.total_credit_usd);
+
+        if (currentDiffBs > 0.01 || currentDiffUsd > 0.01) {
+          // Ajustar los totales para que estén balanceados
+          // Si hay una pequeña diferencia, ajustar el total de crédito para que coincida con el débito
+          const adjustedCreditBs = calculatedDebitBs;
+          const adjustedCreditUsd = calculatedDebitUsd;
+
+          await this.journalEntryRepository.update(entry.id, {
+            total_debit_bs: calculatedDebitBs,
+            total_credit_bs: adjustedCreditBs,
+            total_debit_usd: calculatedDebitUsd,
+            total_credit_usd: adjustedCreditUsd,
+          });
+
+          corrected++;
+          this.logger.log(
+            `Corregido asiento ${entry.entry_number}: BS ${entry.total_debit_bs}-${entry.total_credit_bs} -> ${calculatedDebitBs}-${adjustedCreditBs}, USD ${entry.total_debit_usd}-${entry.total_credit_usd} -> ${calculatedDebitUsd}-${adjustedCreditUsd}`,
+          );
+        }
+      } catch (error) {
+        errors.push({
+          entry_id: entry.id,
+          entry_number: entry.entry_number,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        this.logger.error(`Error corrigiendo asiento ${entry.entry_number}: ${error}`);
+      }
+    }
+
+    return { corrected, errors };
+  }
 }

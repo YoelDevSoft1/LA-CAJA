@@ -60,14 +60,14 @@ export default function TrialBalanceReport() {
           <CardTitle>Balance de Comprobación (Trial Balance)</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div className="space-y-2">
               <Label>Fecha de Corte</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className={cn('w-[240px] justify-start text-left font-normal', !asOfDate && 'text-muted-foreground')}
+                    className={cn('w-full justify-start text-left font-normal', !asOfDate && 'text-muted-foreground')}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {asOfDate ? format(asOfDate, 'dd/MM/yyyy') : 'Seleccionar fecha'}
@@ -88,7 +88,7 @@ export default function TrialBalanceReport() {
                 Incluir cuentas con saldo cero
               </Label>
             </div>
-            <Button onClick={handleExport} variant="outline">
+            <Button onClick={handleExport} variant="outline" className="w-full md:w-auto">
               <Download className="w-4 h-4 mr-2" />
               Exportar
             </Button>

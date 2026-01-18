@@ -444,4 +444,20 @@ export class AccountingController {
       dto.as_of_date ? new Date(dto.as_of_date) : new Date(),
     );
   }
+
+  /**
+   * Recalcular y corregir totales de asientos desbalanceados
+   */
+  @Post('recalculate-totals')
+  @HttpCode(HttpStatus.OK)
+  async recalculateEntryTotals(
+    @Request() req: any,
+    @Body() body?: { entry_ids?: string[] },
+  ) {
+    const storeId = req.user.store_id;
+    return this.accountingService.recalculateEntryTotals(
+      storeId,
+      body?.entry_ids,
+    );
+  }
 }

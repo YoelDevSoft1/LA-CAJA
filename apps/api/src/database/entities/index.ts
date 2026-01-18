@@ -108,6 +108,7 @@ export { AccountingAccountMapping } from './accounting-account-mapping.entity';
 export { AccountBalance } from './account-balance.entity';
 export { AccountingExport } from './accounting-export.entity';
 export { AccountingERPSync } from './accounting-erp-sync.entity';
+export { AccountingPeriod, AccountingPeriodStatus } from './accounting-period.entity';
 
 // Export all entities as an array for TypeORM configuration
 import { Store } from './store.entity';
@@ -188,6 +189,7 @@ import { AccountingAccountMapping } from './accounting-account-mapping.entity';
 import { AccountBalance } from './account-balance.entity';
 import { AccountingExport } from './accounting-export.entity';
 import { AccountingERPSync } from './accounting-erp-sync.entity';
+import { AccountingPeriod } from './accounting-period.entity';
 import { Event } from './event.entity';
 import { SecurityAuditLog } from './security-audit-log.entity';
 import { RefreshToken } from './refresh-token.entity';
@@ -276,6 +278,7 @@ export const ALL_ENTITIES = [
   AccountBalance,
   AccountingExport,
   AccountingERPSync,
+  AccountingPeriod,
   Event,
   SecurityAuditLog,
   RefreshToken,

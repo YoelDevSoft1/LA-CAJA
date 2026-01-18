@@ -10,8 +10,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { accountingValidationService } from '@/services/accounting.service'
-import { Calendar as CalendarIcon, ShieldCheck, AlertTriangle, ChevronDown, Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { Calendar as CalendarIcon, ShieldCheck, AlertTriangle, ChevronDown, Loader2, CheckCircle2, XCircle, Wrench } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import toast from 'react-hot-toast'
 
 /**
  * Componente para mostrar reporte de validación contable
@@ -29,9 +30,48 @@ export default function ValidationReport() {
       }),
   })
 
+  const recalculateMutation = useMutation({
+    mutationFn: (entryIds?: string[]) =>
+      accountingValidationService.recalculateEntryTotals({
+        entry_ids: entryIds,
+      }),
+    onSuccess: (data) => {
+      if (data.corrected > 0) {
+        toast.success(`Se corrigieron ${data.corrected} asiento(s) desbalanceado(s)`)
+        // Refrescar la validación después de corregir
+        validationMutation.mutate()
+      }
+      if (data.errors.length > 0) {
+        toast.error(`No se pudieron corregir ${data.errors.length} asiento(s). Ver detalles en la consola.`)
+        console.error('Errores al corregir asientos:', data.errors)
+      }
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Error al corregir asientos desbalanceados'
+      toast.error(message)
+    },
+  })
+
   const handleValidate = () => {
     validationMutation.mutate()
   }
+
+  const handleRecalculateTotals = () => {
+    // Extraer IDs de asientos desbalanceados si están disponibles
+    const unbalancedError = validationMutation.data?.errors.find(
+      (e) => e.type === 'unbalanced_entries'
+    )
+    const entryIds = unbalancedError?.details
+      ?.filter((detail: any) => detail.entry_id)
+      .map((detail: any) => detail.entry_id)
+
+    recalculateMutation.mutate(entryIds)
+  }
+
+  // Verificar si hay asientos desbalanceados
+  const hasUnbalancedEntries = validationMutation.data?.errors.some(
+    (e) => e.type === 'unbalanced_entries'
+  )
 
   const toggleErrorExpand = (errorType: string) => {
     const newExpanded = new Set(expandedErrors)
@@ -53,14 +93,14 @@ export default function ValidationReport() {
           <CardTitle>Validación de Integridad Contable</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div className="space-y-2">
               <Label>Fecha Inicio (Opcional)</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className={cn('w-[240px] justify-start text-left font-normal', !startDate && 'text-muted-foreground')}
+                    className={cn('w-full justify-start text-left font-normal', !startDate && 'text-muted-foreground')}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {startDate ? format(startDate, 'dd/MM/yyyy') : 'Seleccionar fecha'}
@@ -77,7 +117,7 @@ export default function ValidationReport() {
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className={cn('w-[240px] justify-start text-left font-normal', !endDate && 'text-muted-foreground')}
+                    className={cn('w-full justify-start text-left font-normal', !endDate && 'text-muted-foreground')}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {endDate ? format(endDate, 'dd/MM/yyyy') : 'Seleccionar fecha'}
@@ -88,7 +128,7 @@ export default function ValidationReport() {
                 </PopoverContent>
               </Popover>
             </div>
-            <Button onClick={handleValidate} disabled={validationMutation.isPending}>
+            <Button onClick={handleValidate} disabled={validationMutation.isPending} className="w-full md:w-auto">
               {validationMutation.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -119,23 +159,70 @@ export default function ValidationReport() {
         <>
           {/* Estado general */}
           <Alert variant={result.is_valid ? 'default' : 'destructive'} className={cn(result.is_valid && 'bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800')}>
-            {result.is_valid ? (
-              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-            ) : (
-              <XCircle className="h-4 w-4" />
-            )}
-            <AlertDescription className={cn(result.is_valid && 'text-green-800 dark:text-green-200')}>
-              {result.is_valid
-                ? 'El sistema contable está válido. No se encontraron errores.'
-                : `Se encontraron ${result.errors.filter((e) => e.severity === 'error').length} error(es) que requieren atención.`}
-            </AlertDescription>
+            <div className="flex items-start justify-between">
+              <div className="flex items-start gap-2 flex-1">
+                {result.is_valid ? (
+                  <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5" />
+                ) : (
+                  <XCircle className="h-4 w-4 mt-0.5" />
+                )}
+                <AlertDescription className={cn(result.is_valid && 'text-green-800 dark:text-green-200')}>
+                  {result.is_valid
+                    ? 'El sistema contable está válido. No se encontraron errores.'
+                    : `Se encontraron ${result.errors.filter((e) => e.severity === 'error').length} error(es) que requieren atención.`}
+                </AlertDescription>
+              </div>
+              {hasUnbalancedEntries && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleRecalculateTotals}
+                  disabled={recalculateMutation.isPending}
+                  className="ml-4"
+                >
+                  {recalculateMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                      Corrigiendo...
+                    </>
+                  ) : (
+                    <>
+                      <Wrench className="w-3 h-3 mr-2" />
+                      Corregir Automáticamente
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </Alert>
 
           {/* Errores */}
           {result.errors.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-destructive">Errores Encontrados ({result.errors.length})</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-destructive">Errores Encontrados ({result.errors.length})</CardTitle>
+                  {hasUnbalancedEntries && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleRecalculateTotals}
+                      disabled={recalculateMutation.isPending}
+                    >
+                      {recalculateMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                          Corrigiendo...
+                        </>
+                      ) : (
+                        <>
+                          <Wrench className="w-3 h-3 mr-2" />
+                          Corregir Asientos Desbalanceados
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 {result.errors.map((error, index) => (

@@ -46,14 +46,14 @@ export default function ReconciliationTool() {
           <CardTitle>Reconciliación de Cuentas Contables</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
             <div className="space-y-2">
               <Label>Fecha de Corte</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className={cn('w-[240px] justify-start text-left font-normal', !asOfDate && 'text-muted-foreground')}
+                    className={cn('w-full justify-start text-left font-normal', !asOfDate && 'text-muted-foreground')}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {asOfDate ? format(asOfDate, 'dd/MM/yyyy') : 'Seleccionar fecha'}
@@ -64,7 +64,7 @@ export default function ReconciliationTool() {
                 </PopoverContent>
               </Popover>
             </div>
-            <Button onClick={handleReconcile} disabled={reconciliationMutation.isPending}>
+            <Button onClick={handleReconcile} disabled={reconciliationMutation.isPending} className="w-full md:w-auto">
               {reconciliationMutation.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
