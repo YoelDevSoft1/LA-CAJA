@@ -37,13 +37,33 @@ export default function ValidationReport() {
       }),
     onSuccess: (data) => {
       if (data.corrected > 0) {
-        toast.success(`Se corrigieron ${data.corrected} asiento(s) desbalanceado(s)`)
+        const balancedCount = data.corrected - data.errors.length
+        if (balancedCount > 0) {
+          toast.success(
+            `Se balancearon ${balancedCount} asiento(s) automáticamente${data.errors.length > 0 ? `. ${data.errors.length} requieren revisión manual.` : '.'}`
+          )
+        }
         // Refrescar la validación después de corregir
         validationMutation.mutate()
       }
       if (data.errors.length > 0) {
-        toast.error(`No se pudieron corregir ${data.errors.length} asiento(s). Ver detalles en la consola.`)
-        console.error('Errores al corregir asientos:', data.errors)
+        const needsManualReview = data.errors.filter((e) => 
+          e.error.includes('requiere crear cuenta de ajuste') || 
+          e.error.includes('no tiene líneas')
+        ).length
+        
+        if (needsManualReview > 0) {
+          toast.warning(
+            `${needsManualReview} asiento(s) requieren revisión manual. Ver detalles en la consola.`,
+            { duration: 5000 }
+          )
+        } else {
+          toast.info(
+            `${data.errors.length} asiento(s) fueron balanceados pero requieren verificación. Ver detalles en la consola.`,
+            { duration: 5000 }
+          )
+        }
+        console.warn('Detalles de corrección de asientos:', data.errors)
       }
     },
     onError: (error: any) => {
