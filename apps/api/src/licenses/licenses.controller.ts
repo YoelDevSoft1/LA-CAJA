@@ -71,6 +71,20 @@ export class LicensesController {
     return this.paymentsService.getPaymentById(id, storeId);
   }
 
+  /**
+   * GET /licenses/payments
+   * Listar solicitudes de pago propias del usuario
+   */
+  @Get('payments')
+  @UseGuards(JwtAuthGuard)
+  async listMyPayments(
+    @Request() req: any,
+    @Query('status') status?: LicensePaymentStatus,
+  ) {
+    const storeId = req.user.store_id;
+    return this.paymentsService.listPayments(storeId, status, 50, 0);
+  }
+
   // ============================================
   // ENDPOINTS ADMIN (requieren AdminApiGuard)
   // ============================================

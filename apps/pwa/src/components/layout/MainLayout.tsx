@@ -36,6 +36,7 @@ import {
   Brain,
   TrendingUp,
   Activity,
+  CreditCard,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -120,6 +121,7 @@ const navSections: NavSection[] = [
   { path: '/app/cash', label: 'Caja', icon: DollarSign, badge: null },
   { path: '/app/shifts', label: 'Turnos', icon: Clock, badge: null },
   { path: '/app/payments', label: 'Pagos', icon: Settings, badge: null },
+  { path: '/app/license', label: 'Mi Licencia', icon: CreditCard, badge: null },
   { path: '/app/discounts', label: 'Descuentos', icon: Percent, badge: null },
       { path: '/app/promotions', label: 'Promociones', icon: Tag, badge: null },
       { path: '/app/price-lists', label: 'Listas de Precio', icon: DollarSignIcon, badge: null },

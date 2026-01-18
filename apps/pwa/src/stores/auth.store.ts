@@ -8,6 +8,7 @@ export interface AuthUser {
   full_name: string | null
   license_status?: string
   license_expires_at?: string | null
+  license_plan?: string | null
 }
 
 interface AuthState {

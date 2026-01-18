@@ -97,6 +97,7 @@ const LicensePaymentsPage = lazy(() => import('./pages/admin/LicensePaymentsPage
 const AccountingPage = lazy(() => import('./pages/AccountingPage'))
 const ConflictsPage = lazy(() => import('./pages/ConflictsPage'))
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage'))
+const LicensePage = lazy(() => import('./pages/LicensePage'))
 
 function App() {
   const { user, isAuthenticated, showLoader: authShowLoader, setShowLoader } = useAuth()
@@ -370,6 +371,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['owner']}>
                 <PaymentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="license"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <LicensePage />
               </ProtectedRoute>
             }
           />
