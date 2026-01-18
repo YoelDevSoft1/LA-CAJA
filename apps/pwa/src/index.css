@@ -158,6 +158,13 @@
     --info: 199 89% 48%;
     --info-foreground: 0 0% 98%;
 
+    /* Chart Colors - Vibrant palette for data visualization */
+    --chart-1: 240 6% 10%; /* Primary color (same as primary) */
+    --chart-2: 173 80% 40%; /* Teal/Cyan */
+    --chart-3: 262 83% 58%; /* Purple */
+    --chart-4: 350 89% 60%; /* Pink/Rose */
+    --chart-5: 38 92% 50%; /* Amber/Yellow */
+
     /* Borders & Inputs - Visible but refined lines - WCAG AA: contraste visible */
     --border: 240 5.9% 65%; /* Mejorado de 70% a 65% para mejor visibilidad */
     --input: 240 5.9% 65%; /* Mejorado de 70% a 65% para mejor visibilidad */
@@ -211,6 +218,13 @@
     /* Info */
     --info: 199 89% 48%;
     --info-foreground: 0 0% 100%;
+
+    /* Chart Colors - Vibrant palette for data visualization (dark mode) */
+    --chart-1: 262 83% 58%; /* Primary color (same as primary) */
+    --chart-2: 173 80% 50%; /* Teal/Cyan - brighter for dark mode */
+    --chart-3: 262 83% 65%; /* Purple - brighter for dark mode */
+    --chart-4: 350 89% 65%; /* Pink/Rose - brighter for dark mode */
+    --chart-5: 38 92% 55%; /* Amber/Yellow - brighter for dark mode */
 
     /* Borders & Inputs */
     --border: 240 3.7% 15.9%;

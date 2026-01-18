@@ -850,11 +850,21 @@ export default function MainLayout() {
         )}
       </header>
 
-      <div className={cn(
-        "flex",
-        // Ajustar altura para compensar el banner cuando está visible
-        isBannerVisible ? "h-[calc(100vh-4rem-48px)]" : "h-[calc(100vh-4rem)]"
-      )}>
+      <div 
+        className={cn(
+          "flex",
+          // Ajustar altura para compensar el banner cuando está visible
+          isBannerVisible 
+            ? "h-[calc(100vh-4rem-48px)]" 
+            : "h-[calc(100vh-4rem)]"
+        )}
+        style={{
+          // Cuando el banner está visible, el header sticky está en top-[48px]
+          // El contenedor normalmente empieza después del header (64px), pero como el header
+          // ahora está desplazado 48px hacia abajo, el contenedor necesita 48px adicionales de padding
+          paddingTop: isBannerVisible ? '48px' : undefined
+        }}
+      >
         {/* Desktop Sidebar */}
         <aside
           id="main-navigation"

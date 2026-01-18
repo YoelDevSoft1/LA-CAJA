@@ -34,7 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { formatQuantity } from '@/lib/weight'
 import SalesTrendChart from '@/components/dashboard/SalesTrendChart'
 import TopProductsChart from '@/components/dashboard/TopProductsChart'
@@ -756,68 +756,154 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto overflow-y-auto max-h-[280px] sm:max-h-[380px] min-h-0 [-webkit-overflow-scrolling:touch]">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-background z-10">
-                      <TableRow>
-                        <TableHead className="w-12">#</TableHead>
-                        <TableHead>Producto</TableHead>
-                        <TableHead className="text-right">Cant.</TableHead>
-                        <TableHead className="text-right">Ingresos</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {trends.top_products_trend.length > 0 ? (
-                        trends.top_products_trend.map((product, index) => (
-                          <TableRow key={product.product_id} className="hover:bg-muted/50">
-                            <TableCell>
-                              <Badge
-                                variant={index < 3 ? 'default' : 'secondary'}
-                                className={
-                                  index === 0
-                                    ? 'bg-amber-500 hover:bg-amber-600'
-                                    : index === 1
-                                      ? 'bg-slate-400 hover:bg-slate-500'
-                                      : index === 2
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : ''
-                                }
-                              >
-                                {index + 1}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="font-medium max-w-[150px] truncate" title={product.product_name}>
-                              {product.product_name}
-                            </TableCell>
-                            <TableCell className="text-right text-sm">
-                              {formatQuantity(
-                                product.quantity_sold,
-                                product.is_weight_product,
-                                product.weight_unit,
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div>
-                                <span className="font-semibold text-sm">
-                                  {formatCurrency(product.revenue_bs, 'BS')}
-                                </span>
-                                <p className="text-xs text-muted-foreground">
-                                  {formatCurrency(product.revenue_usd, 'USD')}
-                                </p>
-                              </div>
-                            </TableCell>
+                <Tabs defaultValue="weight" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger value="weight">Por Peso</TabsTrigger>
+                    <TabsTrigger value="units">Por Cantidad</TabsTrigger>
+                  </TabsList>
+                  
+                  {/* Tab: Productos por Peso */}
+                  <TabsContent value="weight" className="mt-0">
+                    <div className="overflow-x-auto overflow-y-auto max-h-[280px] sm:max-h-[380px] min-h-0 [-webkit-overflow-scrolling:touch]">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-background z-10">
+                          <TableRow>
+                            <TableHead className="w-12">#</TableHead>
+                            <TableHead>Producto</TableHead>
+                            <TableHead className="text-right">Cant.</TableHead>
+                            <TableHead className="text-right">Ingresos</TableHead>
                           </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                            No hay datos disponibles
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                        </TableHeader>
+                        <TableBody>
+                          {(() => {
+                            const weightProducts = trends.top_products_trend
+                              .filter(p => p.is_weight_product)
+                              .slice(0, 10)
+                            return weightProducts.length > 0 ? (
+                              weightProducts.map((product, index) => (
+                                <TableRow key={product.product_id} className="hover:bg-muted/50">
+                                  <TableCell>
+                                    <Badge
+                                      variant={index < 3 ? 'default' : 'secondary'}
+                                      className={
+                                        index === 0
+                                          ? 'bg-amber-500 hover:bg-amber-600'
+                                          : index === 1
+                                            ? 'bg-slate-400 hover:bg-slate-500'
+                                            : index === 2
+                                              ? 'bg-orange-600 hover:bg-orange-700'
+                                              : ''
+                                      }
+                                    >
+                                      {index + 1}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="font-medium max-w-[150px] truncate" title={product.product_name}>
+                                    {product.product_name}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm">
+                                    {formatQuantity(
+                                      product.quantity_sold,
+                                      product.is_weight_product,
+                                      product.weight_unit,
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div>
+                                      <span className="font-semibold text-sm">
+                                        {formatCurrency(product.revenue_bs, 'BS')}
+                                      </span>
+                                      <p className="text-xs text-muted-foreground">
+                                        {formatCurrency(product.revenue_usd, 'USD')}
+                                      </p>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            ) : (
+                              <TableRow>
+                                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                                  No hay productos por peso disponibles
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })()}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </TabsContent>
+
+                  {/* Tab: Productos por Cantidad/Unidades */}
+                  <TabsContent value="units" className="mt-0">
+                    <div className="overflow-x-auto overflow-y-auto max-h-[280px] sm:max-h-[380px] min-h-0 [-webkit-overflow-scrolling:touch]">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-background z-10">
+                          <TableRow>
+                            <TableHead className="w-12">#</TableHead>
+                            <TableHead>Producto</TableHead>
+                            <TableHead className="text-right">Cant.</TableHead>
+                            <TableHead className="text-right">Ingresos</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(() => {
+                            const unitProducts = trends.top_products_trend
+                              .filter(p => !p.is_weight_product)
+                              .slice(0, 10)
+                            return unitProducts.length > 0 ? (
+                              unitProducts.map((product, index) => (
+                                <TableRow key={product.product_id} className="hover:bg-muted/50">
+                                  <TableCell>
+                                    <Badge
+                                      variant={index < 3 ? 'default' : 'secondary'}
+                                      className={
+                                        index === 0
+                                          ? 'bg-amber-500 hover:bg-amber-600'
+                                          : index === 1
+                                            ? 'bg-slate-400 hover:bg-slate-500'
+                                            : index === 2
+                                              ? 'bg-orange-600 hover:bg-orange-700'
+                                              : ''
+                                      }
+                                    >
+                                      {index + 1}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="font-medium max-w-[150px] truncate" title={product.product_name}>
+                                    {product.product_name}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm">
+                                    {formatQuantity(
+                                      product.quantity_sold,
+                                      product.is_weight_product,
+                                      product.weight_unit,
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div>
+                                      <span className="font-semibold text-sm">
+                                        {formatCurrency(product.revenue_bs, 'BS')}
+                                      </span>
+                                      <p className="text-xs text-muted-foreground">
+                                        {formatCurrency(product.revenue_usd, 'USD')}
+                                      </p>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            ) : (
+                              <TableRow>
+                                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                                  No hay productos por cantidad disponibles
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })()}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           </div>

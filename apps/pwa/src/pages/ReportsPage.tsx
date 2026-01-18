@@ -27,6 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import {
@@ -700,58 +701,146 @@ export default function ReportsPage() {
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4">
-              <div className="space-y-2">
-                {topProducts.map((product: any, index: number) => {
-                  const maxQty = topProducts[0]?.quantity_sold || 1
-                  const percentage = (product.quantity_sold / maxQty) * 100
+              <Tabs defaultValue="weight" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                  <TabsTrigger value="weight">Por Peso</TabsTrigger>
+                  <TabsTrigger value="units">Por Cantidad</TabsTrigger>
+                </TabsList>
+                
+                {/* Tab: Productos por Peso */}
+                <TabsContent value="weight" className="mt-0">
+                  <div className="space-y-2">
+                    {(() => {
+                      const weightProducts = topProducts
+                        .filter((p: any) => p.is_weight_product)
+                        .slice(0, 10)
+                      const maxQtyWeight = weightProducts[0]?.quantity_sold || 1
+                      
+                      return weightProducts.length > 0 ? (
+                        weightProducts.map((product: any, index: number) => {
+                          const percentage = (product.quantity_sold / maxQtyWeight) * 100
+                          return (
+                            <Card
+                              key={product.product_id}
+                              className="bg-muted/50 border-border relative overflow-hidden"
+                            >
+                              <CardContent className="p-3">
+                                <div className="relative flex items-center justify-between">
+                                  <div className="flex items-center flex-1 min-w-0">
+                                    <Badge
+                                      variant={index < 3 ? 'default' : 'secondary'}
+                                      className={cn(
+                                        'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0',
+                                        index < 3 && 'bg-primary text-white'
+                                      )}
+                                    >
+                                      {index + 1}
+                                    </Badge>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-medium text-foreground truncate">{product.product_name}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {formatQuantity(
+                                          product.quantity_sold,
+                                          product.is_weight_product,
+                                          product.weight_unit,
+                                        )}{' '}
+                                        vendidos • ${product.revenue_usd.toFixed(2)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right ml-3 flex-shrink-0">
+                                    <p className="font-bold text-success">
+                                      +${product.profit_usd.toFixed(2)}
+                                    </p>
+                                    <p className="text-xs text-info">
+                                      {product.profit_margin.toFixed(0)}% margen
+                                    </p>
+                                  </div>
+                                </div>
+                                {/* Barra de progreso */}
+                                <div className="mt-2">
+                                  <Progress value={percentage} className="h-2" />
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )
+                        })
+                      ) : (
+                        <p className="text-center text-muted-foreground py-4">
+                          No hay productos por peso disponibles
+                        </p>
+                      )
+                    })()}
+                  </div>
+                </TabsContent>
 
-                  return (
-                    <Card
-                      key={product.product_id}
-                      className="bg-muted/50 border-border relative overflow-hidden"
-                    >
-                      <CardContent className="p-3">
-                      <div className="relative flex items-center justify-between">
-                        <div className="flex items-center flex-1 min-w-0">
-                            <Badge
-                              variant={index < 3 ? 'default' : 'secondary'}
-                              className={cn(
-                                'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0',
-                                index < 3 && 'bg-primary text-white'
-                              )}
-                          >
-                            {index + 1}
-                            </Badge>
-                            <div className="min-w-0 flex-1">
-                              <p className="font-medium text-foreground truncate">{product.product_name}</p>
-                              <p className="text-xs text-muted-foreground">
-                              {formatQuantity(
-                                product.quantity_sold,
-                                product.is_weight_product,
-                                product.weight_unit,
-                              )}{' '}
-                              vendidos • ${product.revenue_usd.toFixed(2)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right ml-3 flex-shrink-0">
-                            <p className="font-bold text-success">
-                            +${product.profit_usd.toFixed(2)}
-                          </p>
-                            <p className="text-xs text-info">
-                            {product.profit_margin.toFixed(0)}% margen
-                          </p>
-                        </div>
-                      </div>
-                        {/* Barra de progreso */}
-                        <div className="mt-2">
-                          <Progress value={percentage} className="h-2" />
-                    </div>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
-              </div>
+                {/* Tab: Productos por Cantidad/Unidades */}
+                <TabsContent value="units" className="mt-0">
+                  <div className="space-y-2">
+                    {(() => {
+                      const unitProducts = topProducts
+                        .filter((p: any) => !p.is_weight_product)
+                        .slice(0, 10)
+                      const maxQtyUnits = unitProducts[0]?.quantity_sold || 1
+                      
+                      return unitProducts.length > 0 ? (
+                        unitProducts.map((product: any, index: number) => {
+                          const percentage = (product.quantity_sold / maxQtyUnits) * 100
+                          return (
+                            <Card
+                              key={product.product_id}
+                              className="bg-muted/50 border-border relative overflow-hidden"
+                            >
+                              <CardContent className="p-3">
+                                <div className="relative flex items-center justify-between">
+                                  <div className="flex items-center flex-1 min-w-0">
+                                    <Badge
+                                      variant={index < 3 ? 'default' : 'secondary'}
+                                      className={cn(
+                                        'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0',
+                                        index < 3 && 'bg-primary text-white'
+                                      )}
+                                    >
+                                      {index + 1}
+                                    </Badge>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-medium text-foreground truncate">{product.product_name}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {formatQuantity(
+                                          product.quantity_sold,
+                                          product.is_weight_product,
+                                          product.weight_unit,
+                                        )}{' '}
+                                        vendidos • ${product.revenue_usd.toFixed(2)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right ml-3 flex-shrink-0">
+                                    <p className="font-bold text-success">
+                                      +${product.profit_usd.toFixed(2)}
+                                    </p>
+                                    <p className="text-xs text-info">
+                                      {product.profit_margin.toFixed(0)}% margen
+                                    </p>
+                                  </div>
+                                </div>
+                                {/* Barra de progreso */}
+                                <div className="mt-2">
+                                  <Progress value={percentage} className="h-2" />
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )
+                        })
+                      ) : (
+                        <p className="text-center text-muted-foreground py-4">
+                          No hay productos por cantidad disponibles
+                        </p>
+                      )
+                    })()}
+                  </div>
+                </TabsContent>
+              </Tabs>
             </AccordionContent>
           </AccordionItem>
         </Accordion>
