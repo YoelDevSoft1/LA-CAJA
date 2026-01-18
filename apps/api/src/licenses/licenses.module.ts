@@ -11,6 +11,7 @@ import {
 } from '../database/entities';
 import { Store } from '../database/entities/store.entity';
 import { Profile } from '../database/entities/profile.entity';
+import { SecurityModule } from '../security/security.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { Profile } from '../database/entities/profile.entity';
       Store,
       Profile,
     ]),
+    SecurityModule, // ✅ Necesario para AdminApiGuard (usa SecurityAuditService)
   ],
   controllers: [LicensesController],
   providers: [
