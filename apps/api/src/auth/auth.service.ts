@@ -518,13 +518,29 @@ export class AuthService {
     await this.storeMemberRepository.save(validMember);
 
     // Verificar si el usuario tiene 2FA habilitado
-    const twoFactor = await this.twoFactorAuthRepository.findOne({
-      where: {
-        user_id: validMember.user_id,
-        store_id: dto.store_id,
-        is_enabled: true,
-      },
-    });
+    // Manejar caso donde la tabla two_factor_auth no existe (migración pendiente)
+    let twoFactor: TwoFactorAuth | null = null;
+    try {
+      twoFactor = await this.twoFactorAuthRepository.findOne({
+        where: {
+          user_id: validMember.user_id,
+          store_id: dto.store_id,
+          is_enabled: true,
+        },
+      });
+    } catch (error: any) {
+      // Si la tabla no existe, continuar sin verificar 2FA
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        this.logger.warn(
+          `Tabla two_factor_auth no existe. Migración 55 pendiente. Continuando sin verificar 2FA.`,
+        );
+      } else {
+        // Otro tipo de error, loguear pero continuar
+        this.logger.error(
+          `Error verificando 2FA durante login: ${error?.message || error}`,
+        );
+      }
+    }
 
     // Si tiene 2FA habilitado, requerir código 2FA antes de generar tokens
     if (twoFactor) {
@@ -1317,9 +1333,19 @@ export class AuthService {
     );
 
     // Crear o actualizar registro de 2FA (aún no habilitado)
-    let twoFactor = await this.twoFactorAuthRepository.findOne({
-      where: { user_id: userId, store_id: storeId },
-    });
+    let twoFactor: TwoFactorAuth | null = null;
+    try {
+      twoFactor = await this.twoFactorAuthRepository.findOne({
+        where: { user_id: userId, store_id: storeId },
+      });
+    } catch (error: any) {
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        throw new BadRequestException(
+          'La tabla two_factor_auth no existe. Por favor, ejecuta la migración 55_two_factor_auth.sql primero.',
+        );
+      }
+      throw error;
+    }
 
     if (twoFactor) {
       twoFactor.secret = secret.base32;
@@ -1335,7 +1361,16 @@ export class AuthService {
       });
     }
 
-    await this.twoFactorAuthRepository.save(twoFactor);
+    try {
+      await this.twoFactorAuthRepository.save(twoFactor);
+    } catch (error: any) {
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        throw new BadRequestException(
+          'La tabla two_factor_auth no existe. Por favor, ejecuta la migración 55_two_factor_auth.sql primero.',
+        );
+      }
+      throw error;
+    }
 
     // Generar QR code
     const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url || '');
@@ -1355,9 +1390,19 @@ export class AuthService {
     storeId: string,
     dto: Enable2FADto,
   ): Promise<{ enabled: boolean; message: string }> {
-    const twoFactor = await this.twoFactorAuthRepository.findOne({
-      where: { user_id: userId, store_id: storeId },
-    });
+    let twoFactor: TwoFactorAuth | null = null;
+    try {
+      twoFactor = await this.twoFactorAuthRepository.findOne({
+        where: { user_id: userId, store_id: storeId },
+      });
+    } catch (error: any) {
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        throw new BadRequestException(
+          'La tabla two_factor_auth no existe. Por favor, ejecuta la migración 55_two_factor_auth.sql primero.',
+        );
+      }
+      throw error;
+    }
 
     if (!twoFactor) {
       throw new NotFoundException('2FA no iniciado. Debes iniciar el proceso primero.');
@@ -1382,7 +1427,16 @@ export class AuthService {
     // Habilitar 2FA
     twoFactor.is_enabled = true;
     twoFactor.enabled_at = new Date();
-    await this.twoFactorAuthRepository.save(twoFactor);
+    try {
+      await this.twoFactorAuthRepository.save(twoFactor);
+    } catch (error: any) {
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        throw new BadRequestException(
+          'La tabla two_factor_auth no existe. Por favor, ejecuta la migración 55_two_factor_auth.sql primero.',
+        );
+      }
+      throw error;
+    }
 
     this.logger.log(`2FA habilitado para usuario: ${userId}`);
 
@@ -1400,9 +1454,19 @@ export class AuthService {
     storeId: string,
     verificationCode: string,
   ): Promise<{ disabled: boolean; message: string }> {
-    const twoFactor = await this.twoFactorAuthRepository.findOne({
-      where: { user_id: userId, store_id: storeId },
-    });
+    let twoFactor: TwoFactorAuth | null = null;
+    try {
+      twoFactor = await this.twoFactorAuthRepository.findOne({
+        where: { user_id: userId, store_id: storeId },
+      });
+    } catch (error: any) {
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        throw new BadRequestException(
+          'La tabla two_factor_auth no existe. Por favor, ejecuta la migración 55_two_factor_auth.sql primero.',
+        );
+      }
+      throw error;
+    }
 
     if (!twoFactor || !twoFactor.is_enabled) {
       throw new BadRequestException('2FA no está habilitado');
@@ -1437,7 +1501,16 @@ export class AuthService {
     // Deshabilitar 2FA
     twoFactor.is_enabled = false;
     twoFactor.enabled_at = null;
-    await this.twoFactorAuthRepository.save(twoFactor);
+    try {
+      await this.twoFactorAuthRepository.save(twoFactor);
+    } catch (error: any) {
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        throw new BadRequestException(
+          'La tabla two_factor_auth no existe. Por favor, ejecuta la migración 55_two_factor_auth.sql primero.',
+        );
+      }
+      throw error;
+    }
 
     this.logger.log(`2FA deshabilitado para usuario: ${userId}`);
 
@@ -1455,13 +1528,23 @@ export class AuthService {
     storeId: string,
     dto: Verify2FADto,
   ): Promise<{ verified: boolean }> {
-    const twoFactor = await this.twoFactorAuthRepository.findOne({
-      where: {
-        user_id: userId,
-        store_id: storeId,
-        is_enabled: true,
-      },
-    });
+    let twoFactor: TwoFactorAuth | null = null;
+    try {
+      twoFactor = await this.twoFactorAuthRepository.findOne({
+        where: {
+          user_id: userId,
+          store_id: storeId,
+          is_enabled: true,
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        throw new BadRequestException(
+          'La tabla two_factor_auth no existe. Por favor, ejecuta la migración 55_two_factor_auth.sql primero.',
+        );
+      }
+      throw error;
+    }
 
     if (!twoFactor) {
       throw new BadRequestException('2FA no está habilitado para este usuario');
@@ -1485,14 +1568,32 @@ export class AuthService {
             (code) => code !== hashedCode,
           );
           twoFactor.last_used_at = new Date();
-          await this.twoFactorAuthRepository.save(twoFactor);
+          try {
+            await this.twoFactorAuthRepository.save(twoFactor);
+          } catch (error: any) {
+            if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+              throw new BadRequestException(
+                'La tabla two_factor_auth no existe. Por favor, ejecuta la migración 55_two_factor_auth.sql primero.',
+              );
+            }
+            throw error;
+          }
           break;
         }
       }
     } else {
       // Actualizar last_used_at
       twoFactor.last_used_at = new Date();
-      await this.twoFactorAuthRepository.save(twoFactor);
+      try {
+        await this.twoFactorAuthRepository.save(twoFactor);
+      } catch (error: any) {
+        if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+          throw new BadRequestException(
+            'La tabla two_factor_auth no existe. Por favor, ejecuta la migración 55_two_factor_auth.sql primero.',
+          );
+        }
+        throw error;
+      }
     }
 
     if (!verified) {
@@ -1509,13 +1610,28 @@ export class AuthService {
     userId: string,
     storeId: string,
   ): Promise<{ is_enabled: boolean; enabled_at: Date | null }> {
-    const twoFactor = await this.twoFactorAuthRepository.findOne({
-      where: { user_id: userId, store_id: storeId },
-    });
+    try {
+      const twoFactor = await this.twoFactorAuthRepository.findOne({
+        where: { user_id: userId, store_id: storeId },
+      });
 
-    return {
-      is_enabled: twoFactor?.is_enabled || false,
-      enabled_at: twoFactor?.enabled_at || null,
-    };
+      return {
+        is_enabled: twoFactor?.is_enabled || false,
+        enabled_at: twoFactor?.enabled_at || null,
+      };
+    } catch (error: any) {
+      // Si la tabla no existe, asumir que 2FA no está habilitado
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        this.logger.warn(
+          `Tabla two_factor_auth no existe. Migración 55 pendiente. Retornando 2FA deshabilitado.`,
+        );
+        return {
+          is_enabled: false,
+          enabled_at: null,
+        };
+      }
+      // Re-lanzar otros errores
+      throw error;
+    }
   }
 }
