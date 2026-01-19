@@ -154,6 +154,22 @@ export default function SaleDetailModal({
     setVoidedReason(sale?.void_reason || null)
   }, [sale?.voided_at, sale?.void_reason])
 
+  const voidSaleMutation = useMutation({
+    mutationFn: ({ saleId, reason }: { saleId: string; reason?: string }) =>
+      salesService.voidSale(saleId, reason),
+    onSuccess: (updatedSale) => {
+      toast.success('Venta anulada correctamente')
+      setVoidedAt(updatedSale.voided_at || new Date().toISOString())
+      setVoidedReason(updatedSale.void_reason || voidReason.trim() || null)
+      setVoidReason('')
+      setShowVoidDialog(false)
+      queryClient.invalidateQueries({ queryKey: ['sales'] })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'No se pudo anular la venta')
+    },
+  })
+
   if (!sale) return null
 
   const isOwner = user?.role === 'owner'
@@ -179,22 +195,6 @@ export default function SaleDetailModal({
     refetchFiscalInvoice()
     setShowCreateModal(false)
   }
-
-  const voidSaleMutation = useMutation({
-    mutationFn: ({ saleId, reason }: { saleId: string; reason?: string }) =>
-      salesService.voidSale(saleId, reason),
-    onSuccess: (updatedSale) => {
-      toast.success('Venta anulada correctamente')
-      setVoidedAt(updatedSale.voided_at || new Date().toISOString())
-      setVoidedReason(updatedSale.void_reason || voidReason.trim() || null)
-      setVoidReason('')
-      setShowVoidDialog(false)
-      queryClient.invalidateQueries({ queryKey: ['sales'] })
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'No se pudo anular la venta')
-    },
-  })
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
