@@ -289,7 +289,7 @@ export class MLInsightsService {
         title: `🚨 Anomalía ${severity === 'critical' ? 'Crítica' : 'Detectada'}: ${anomaly.anomaly_type}`,
         description: anomaly.description,
         severity,
-        priority: anomaly.score,
+        priority: Math.round(anomaly.score),
         isActionable: true,
         suggestedActions: [
           {
@@ -353,7 +353,7 @@ export class MLInsightsService {
         title: `🎯 Oportunidad de Cross-Selling`,
         description: `Alta probabilidad (${rec.score.toFixed(0)}%) de venta conjunta. ${rec.reason}`,
         severity: rec.score >= 90 ? 'high' : 'medium',
-        priority: rec.score,
+        priority: Math.round(rec.score),
         isActionable: true,
         suggestedActions: [
           {
@@ -517,7 +517,7 @@ export class MLInsightsService {
       existing.description = params.description;
       existing.confidence_score = params.confidenceScore || existing.confidence_score;
       existing.severity = params.severity;
-      existing.priority = params.priority;
+      existing.priority = Math.round(params.priority);
       existing.ml_data = params.mlData;
       existing.suggested_actions = params.suggestedActions || existing.suggested_actions;
       existing.updated_at = new Date();
@@ -526,6 +526,8 @@ export class MLInsightsService {
     }
 
     // Crear nuevo insight
+    // Asegurar que priority sea un entero (campo INTEGER en BD)
+    const priorityInt = Math.round(params.priority);
     const insight = this.mlInsightRepository.create({
       id: randomUUID(),
       store_id: params.storeId,
@@ -539,7 +541,7 @@ export class MLInsightsService {
       title: params.title,
       description: params.description,
       severity: params.severity,
-      priority: params.priority,
+      priority: priorityInt,
       is_actionable: params.isActionable,
       suggested_actions: params.suggestedActions || null,
       ml_data: params.mlData,

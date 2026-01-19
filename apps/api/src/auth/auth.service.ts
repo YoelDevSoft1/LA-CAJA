@@ -281,6 +281,14 @@ export class AuthService {
       // Enviar email de bienvenida con token de verificación (fuera de la transacción)
       // Si falla el email, no afecta el registro
       try {
+        // Verificar que el servicio de email esté disponible
+        if (!this.emailService.isAvailable()) {
+          this.logger.warn(`⚠️ Email service not available - cannot send verification email to ${dto.owner_email}`);
+          this.logger.warn('   Please configure RESEND_API_KEY in environment variables');
+        } else {
+          this.logger.log(`📧 Sending verification email to ${dto.owner_email}`);
+        }
+
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
         const verificationUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
 
@@ -319,7 +327,17 @@ export class AuthService {
         textBody: `Bienvenido a LA-CAJA\n\nHola ${dto.owner_name},\n\nGracias por registrarte en LA-CAJA. Tu tienda ${dto.store_name} ha sido creada exitosamente.\n\nPara completar tu registro, verifica tu dirección de email visitando:\n${verificationUrl}\n\nEste enlace expirará en 24 horas.\n\nSi no creaste esta cuenta, puedes ignorar este email.`,
       });
     } catch (error) {
-        this.logger.error('Error enviando email de verificación:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        this.logger.error(`❌ Error enviando email de verificación a ${dto.owner_email}: ${errorMessage}`, errorStack);
+        
+        // Log detalle del error para debugging
+        if (error instanceof Error) {
+          this.logger.error(`   Error details: ${error.constructor.name}`, {
+            message: error.message,
+            name: error.name,
+          });
+        }
         // No fallar el registro si falla el email, pero loguear el error
       }
 
@@ -429,9 +447,16 @@ export class AuthService {
     });
     await this.emailVerificationTokenRepository.save(emailToken);
 
+    // Verificar que el servicio de email esté disponible
+    if (!this.emailService.isAvailable()) {
+      throw new BadRequestException('El servicio de email no está disponible. Por favor configura RESEND_API_KEY.');
+    }
+
     // Enviar email
     const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     const verificationUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
+
+    this.logger.log(`📧 Sending verification email to ${profile.email}`);
 
     try {
       await this.emailService.sendEmail({
@@ -467,8 +492,19 @@ export class AuthService {
         textBody: `Verifica tu email - LA-CAJA\n\nHola ${profile.full_name || 'Usuario'},\n\nHaz clic en el siguiente enlace para verificar tu dirección de email:\n${verificationUrl}\n\nEste enlace expirará en 24 horas.`,
       });
     } catch (error) {
-      this.logger.error('Error reenviando email de verificación:', error);
-      throw new BadRequestException('Error al enviar email de verificación');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`❌ Error reenviando email de verificación a ${profile.email}: ${errorMessage}`, errorStack);
+      
+      // Log detalle del error para debugging
+      if (error instanceof Error) {
+        this.logger.error(`   Error details: ${error.constructor.name}`, {
+          message: error.message,
+          name: error.name,
+        });
+      }
+      
+      throw new BadRequestException(`Error al enviar email de verificación: ${errorMessage}`);
     }
   }
 

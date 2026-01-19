@@ -56,24 +56,39 @@ export class EmailService {
   ) {
     const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
 
-    if (resendApiKey) {
-      this.resend = new Resend(resendApiKey);
-      this.logger.log('Resend Email Service initialized');
+    if (resendApiKey && resendApiKey !== 're_123456789_YOUR_RESEND_API_KEY_HERE') {
+      try {
+        this.resend = new Resend(resendApiKey);
+        this.logger.log(`✅ Resend Email Service initialized with API key: ${resendApiKey.substring(0, 10)}...`);
+      } catch (error) {
+        this.logger.error('❌ Failed to initialize Resend:', error);
+        this.resend = null;
+      }
     } else {
-      this.logger.warn('RESEND_API_KEY not configured - email sending disabled');
+      this.logger.warn('⚠️ RESEND_API_KEY not configured or using placeholder - email sending disabled');
+      this.logger.warn('   Configure RESEND_API_KEY in environment variables to enable email sending');
     }
 
+    // Usar dominio de testing de Resend por defecto (no requiere verificación)
+    // Para producción, configura EMAIL_FROM con un dominio verificado
     this.defaultFrom =
-      this.configService.get<string>('EMAIL_FROM') || 'noreply@la-caja.app';
+      this.configService.get<string>('EMAIL_FROM') || 'onboarding@resend.dev';
     this.defaultFromName =
       this.configService.get<string>('EMAIL_FROM_NAME') || 'LA-CAJA';
+    
+    this.logger.log(`📧 Email default FROM: ${this.defaultFromName} <${this.defaultFrom}>`);
+    this.logger.log(`   Using Resend domain for testing (change EMAIL_FROM for production)`);
   }
 
   /**
    * Verifica si el servicio de email está disponible
    */
   isAvailable(): boolean {
-    return this.resend !== null;
+    const available = this.resend !== null;
+    if (!available) {
+      this.logger.warn('📧 Email service is not available (RESEND_API_KEY not configured or invalid)');
+    }
+    return available;
   }
 
   /**
@@ -112,8 +127,11 @@ export class EmailService {
       await this.emailQueueRepository.save(queueEntry);
 
       // Enviar con Resend
+      const fromAddress = `${queueEntry.from_name} <${queueEntry.from_email}>`;
+      this.logger.log(`📤 Attempting to send email via Resend: ${options.to} from ${fromAddress}`);
+      
       const result = await this.resend!.emails.send({
-        from: `${queueEntry.from_name} <${queueEntry.from_email}>`,
+        from: fromAddress,
         to: [options.to],
         subject: options.subject,
         html: options.htmlBody,
@@ -122,7 +140,15 @@ export class EmailService {
       });
 
       if (result.error) {
-        throw new Error(result.error.message);
+        const errorMessage = result.error.message || 'Unknown Resend error';
+        this.logger.error(`❌ Resend API error: ${errorMessage}`, result.error);
+        throw new Error(`Resend API error: ${errorMessage}`);
+      }
+
+      if (!result.data) {
+        this.logger.warn('⚠️ Resend returned success but no data/ID');
+      } else {
+        this.logger.log(`✅ Resend accepted email: ${result.data.id}`);
       }
 
       // Actualizar queue entry como exitoso
@@ -144,10 +170,20 @@ export class EmailService {
         });
       }
 
-      this.logger.log(`Email sent successfully: ${emailId} (Resend ID: ${result.data?.id})`);
+      this.logger.log(`✅ Email sent successfully: ${emailId} (Resend ID: ${result.data?.id})`);
       return emailId;
     } catch (error) {
-      this.logger.error(`Failed to send email ${emailId}:`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`❌ Failed to send email ${emailId}: ${errorMessage}`, errorStack);
+      
+      // Log detalle del error para debugging
+      if (error instanceof Error) {
+        this.logger.error(`   Error details: ${error.constructor.name}`, {
+          message: error.message,
+          stack: error.stack?.split('\n').slice(0, 5).join('\n'),
+        });
+      }
 
       // Marcar como fallido
       const queueEntry = await this.emailQueueRepository.findOne({

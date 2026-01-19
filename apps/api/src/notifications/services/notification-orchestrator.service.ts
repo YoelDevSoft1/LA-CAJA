@@ -242,26 +242,42 @@ export class NotificationOrchestratorService {
     user: User,
     htmlBody: string,
   ): Promise<void> {
-    if (!this.emailService.isAvailable() || !user.email) {
+    if (!user.email) {
+      this.logger.warn(`⚠️ Cannot send email for notification ${notification.id}: user ${user.id} has no email`);
       return;
     }
 
-    await this.emailService.sendEmail({
-      storeId: notification.store_id,
-      notificationId: notification.id,
-      to: user.email,
-      toName: user.name || undefined,
-      subject: notification.title,
-      htmlBody,
-      textBody: notification.message,
-      templateId: (notification.metadata as any)?.template_id || undefined,
-      templateVariables: (notification.metadata as any)?.template_variables || undefined,
-      priority: this.getPriorityScore(notification.priority),
-    });
+    if (!this.emailService.isAvailable()) {
+      this.logger.warn(`⚠️ Cannot send email for notification ${notification.id}: email service not available`);
+      return;
+    }
 
-    this.logger.log(
-      `Email notification ${notification.id} queued for ${user.email}`,
-    );
+    try {
+      this.logger.log(`📧 Sending email notification ${notification.id} to ${user.email}`);
+      
+      await this.emailService.sendEmail({
+        storeId: notification.store_id,
+        notificationId: notification.id,
+        to: user.email,
+        toName: user.name || undefined,
+        subject: notification.title,
+        htmlBody,
+        textBody: notification.message,
+        templateId: (notification.metadata as any)?.template_id || undefined,
+        templateVariables: (notification.metadata as any)?.template_variables || undefined,
+        priority: this.getPriorityScore(notification.priority),
+      });
+
+      this.logger.log(
+        `✅ Email notification ${notification.id} sent successfully to ${user.email}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ Failed to send email notification ${notification.id} to ${user.email}:`,
+        error instanceof Error ? error.message : String(error),
+      );
+      // No re-lanzar el error para que otros canales puedan funcionar
+    }
   }
 
   /**
