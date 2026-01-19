@@ -15,12 +15,24 @@ import { Store } from '../database/entities/store.entity';
 import { Profile } from '../database/entities/profile.entity';
 import { StoreMember } from '../database/entities/store-member.entity';
 import { RefreshToken } from '../database/entities/refresh-token.entity';
+import { EmailVerificationToken } from '../database/entities/email-verification-token.entity';
+import { PinRecoveryToken } from '../database/entities/pin-recovery-token.entity';
+import { TwoFactorAuth } from '../database/entities/two-factor-auth.entity';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { CreateCashierDto } from './dto/create-cashier.dto';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPinDto } from './dto/forgot-pin.dto';
+import { ResetPinDto } from './dto/reset-pin.dto';
+import { Enable2FADto } from './dto/enable-2fa.dto';
+import { Verify2FADto } from './dto/verify-2fa.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { RefreshTokenResponseDto } from './dto/refresh-token.dto';
+import { EmailService } from '../notifications/services/email.service';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import * as speakeasy from 'speakeasy';
+import * as QRCode from 'qrcode';
 
 @Injectable()
 export class AuthService {
@@ -37,8 +49,16 @@ export class AuthService {
     private storeMemberRepository: Repository<StoreMember>,
     @InjectRepository(RefreshToken)
     private refreshTokenRepository: Repository<RefreshToken>,
+    @InjectRepository(EmailVerificationToken)
+    private emailVerificationTokenRepository: Repository<EmailVerificationToken>,
+    @InjectRepository(PinRecoveryToken)
+    private pinRecoveryTokenRepository: Repository<PinRecoveryToken>,
+    @InjectRepository(TwoFactorAuth)
+    private twoFactorAuthRepository: Repository<TwoFactorAuth>,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private emailService: EmailService,
+    private dataSource: DataSource,
   ) {}
 
   private getTrialExpiration(plan: 'trial' | 'freemium' = 'trial'): {
@@ -147,6 +167,7 @@ export class AuthService {
 
   /**
    * Registra una nueva tienda con owner y cashier, asignando licencia freemium
+   * Usa transacción para asegurar integridad de datos
    */
   async register(
     dto: RegisterDto,
@@ -164,82 +185,291 @@ export class AuthService {
   }> {
     this.logger.log(`Intento de registro para tienda: ${dto.store_name}`);
 
-    // Crear tienda con licencia freemium
-    const freemiumLicense = this.getTrialExpiration('freemium');
-    const storeId = randomUUID();
-    const store = this.storeRepository.create({
-      id: storeId,
-      name: dto.store_name,
-      license_status: 'active',
-      license_plan: freemiumLicense.plan,
-      license_expires_at: freemiumLicense.expiresAt,
-      license_grace_days: freemiumLicense.graceDays,
+    // Usar transacción para asegurar integridad de datos
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Verificar que el email no esté en uso
+      const existingProfile = await queryRunner.manager.findOne(Profile, {
+        where: { email: dto.owner_email.toLowerCase().trim() },
+      });
+      if (existingProfile) {
+        await queryRunner.rollbackTransaction();
+        throw new BadRequestException('Este email ya está registrado');
+      }
+
+      // Crear tienda con licencia freemium
+      const freemiumLicense = this.getTrialExpiration('freemium');
+      const storeId = randomUUID();
+      const store = queryRunner.manager.create(Store, {
+        id: storeId,
+        name: dto.store_name,
+        license_status: 'active',
+        license_plan: freemiumLicense.plan,
+        license_expires_at: freemiumLicense.expiresAt,
+        license_grace_days: freemiumLicense.graceDays,
+      });
+
+      const savedStore = await queryRunner.manager.save(Store, store);
+
+      // Crear perfil del owner con email
+      const ownerId = randomUUID();
+      const ownerProfile = queryRunner.manager.create(Profile, {
+        id: ownerId,
+        full_name: dto.owner_name,
+        email: dto.owner_email.toLowerCase().trim(),
+        email_verified: false,
+      });
+      await queryRunner.manager.save(Profile, ownerProfile);
+
+      // Hashear PIN del owner
+      const ownerPinHash = await bcrypt.hash(dto.owner_pin, 10);
+
+      // Crear store member como owner (con PIN)
+      const ownerMember = queryRunner.manager.create(StoreMember, {
+        store_id: savedStore.id,
+        user_id: ownerId,
+        role: 'owner',
+        pin_hash: ownerPinHash,
+      });
+      await queryRunner.manager.save(StoreMember, ownerMember);
+
+      // Crear perfil del cashier
+      const cashierId = randomUUID();
+      const cashierProfile = queryRunner.manager.create(Profile, {
+        id: cashierId,
+        full_name: dto.cashier_name,
+      });
+      await queryRunner.manager.save(Profile, cashierProfile);
+
+      // Hashear PIN del cashier
+      const pinHash = await bcrypt.hash(dto.cashier_pin, 10);
+
+      // Crear store member como cashier (con PIN)
+      const cashierMember = queryRunner.manager.create(StoreMember, {
+        store_id: savedStore.id,
+        user_id: cashierId,
+        role: 'cashier',
+        pin_hash: pinHash,
+      });
+      await queryRunner.manager.save(StoreMember, cashierMember);
+
+      // Calcular días restantes de prueba
+      const now = Date.now();
+      const licenseExpiresAt = freemiumLicense.expiresAt.getTime();
+      const trialDaysRemaining = Math.ceil(
+        (licenseExpiresAt - now) / (1000 * 60 * 60 * 24),
+      );
+
+      // Generar token de verificación de email
+      const verificationToken = randomUUID();
+      const tokenExpiresAt = new Date();
+      tokenExpiresAt.setHours(tokenExpiresAt.getHours() + 24); // Expira en 24 horas
+
+      const emailToken = queryRunner.manager.create(EmailVerificationToken, {
+        user_id: ownerId,
+        token: verificationToken,
+        expires_at: tokenExpiresAt,
+      });
+      await queryRunner.manager.save(EmailVerificationToken, emailToken);
+
+      // Commit de la transacción
+      await queryRunner.commitTransaction();
+
+      // Enviar email de bienvenida con token de verificación (fuera de la transacción)
+      // Si falla el email, no afecta el registro
+      try {
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+        const verificationUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
+
+        await this.emailService.sendEmail({
+          storeId: savedStore.id,
+          to: dto.owner_email,
+          toName: dto.owner_name,
+          subject: 'Bienvenido a LA-CAJA - Verifica tu email',
+        htmlBody: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Bienvenido a LA-CAJA</title>
+          </head>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #0d81ce 0%, #0a5d9c 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+              <h1 style="color: white; margin: 0;">¡Bienvenido a LA-CAJA!</h1>
+            </div>
+            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+              <p>Hola <strong>${dto.owner_name}</strong>,</p>
+              <p>Gracias por registrarte en LA-CAJA. Tu tienda <strong>${dto.store_name}</strong> ha sido creada exitosamente.</p>
+              <p>Para completar tu registro, por favor verifica tu dirección de email haciendo clic en el siguiente botón:</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${verificationUrl}" style="background: #0d81ce; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Verificar Email</a>
+              </div>
+              <p style="font-size: 12px; color: #666;">O copia y pega este enlace en tu navegador:</p>
+              <p style="font-size: 12px; color: #666; word-break: break-all;">${verificationUrl}</p>
+              <p style="font-size: 12px; color: #999; margin-top: 30px;">Este enlace expirará en 24 horas.</p>
+              <p style="font-size: 12px; color: #999;">Si no creaste esta cuenta, puedes ignorar este email.</p>
+            </div>
+          </body>
+          </html>
+        `,
+        textBody: `Bienvenido a LA-CAJA\n\nHola ${dto.owner_name},\n\nGracias por registrarte en LA-CAJA. Tu tienda ${dto.store_name} ha sido creada exitosamente.\n\nPara completar tu registro, verifica tu dirección de email visitando:\n${verificationUrl}\n\nEste enlace expirará en 24 horas.\n\nSi no creaste esta cuenta, puedes ignorar este email.`,
+      });
+    } catch (error) {
+        this.logger.error('Error enviando email de verificación:', error);
+        // No fallar el registro si falla el email, pero loguear el error
+      }
+
+      this.logger.log(
+        `Registro exitoso: tienda ${savedStore.id}, owner ${ownerId}, cashier ${cashierId}`,
+      );
+
+      return {
+        store_id: savedStore.id,
+        store_name: savedStore.name,
+        owner_id: ownerId,
+        cashier_id: cashierId,
+        license_status: savedStore.license_status,
+        license_plan: savedStore.license_plan || 'freemium',
+        license_expires_at: savedStore.license_expires_at,
+        license_grace_days: savedStore.license_grace_days,
+        trial_days_remaining: trialDaysRemaining,
+      };
+    } catch (error) {
+      // Rollback en caso de error
+      await queryRunner.rollbackTransaction();
+      this.logger.error('Error en registro, rollback ejecutado:', error);
+      throw error;
+    } finally {
+      // Liberar query runner
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Verifica un email usando un token de verificación
+   */
+  async verifyEmail(token: string): Promise<{ verified: boolean; message: string }> {
+    const emailToken = await this.emailVerificationTokenRepository.findOne({
+      where: { token },
+      relations: ['profile'],
     });
 
-    const savedStore = await this.storeRepository.save(store);
+    if (!emailToken) {
+      throw new NotFoundException('Token de verificación inválido');
+    }
 
-    // Crear perfil del owner
-    const ownerId = randomUUID();
-    const ownerProfile = this.profileRepository.create({
-      id: ownerId,
-      full_name: dto.owner_name,
-    });
-    await this.profileRepository.save(ownerProfile);
+    if (!emailToken.isActive()) {
+      throw new BadRequestException('Token de verificación expirado o ya usado');
+    }
 
-    // Hashear PIN del owner
-    const ownerPinHash = await bcrypt.hash(dto.owner_pin, 10);
+    // Marcar token como usado
+    emailToken.used_at = new Date();
+    await this.emailVerificationTokenRepository.save(emailToken);
 
-    // Crear store member como owner (con PIN)
-    const ownerMember = this.storeMemberRepository.create({
-      store_id: savedStore.id,
-      user_id: ownerId,
-      role: 'owner',
-      pin_hash: ownerPinHash,
-    });
-    await this.storeMemberRepository.save(ownerMember);
+    // Marcar email como verificado
+    const profile = emailToken.profile;
+    if (profile) {
+      profile.email_verified = true;
+      profile.email_verified_at = new Date();
+      await this.profileRepository.save(profile);
+    }
 
-    // Crear perfil del cashier
-    const cashierId = randomUUID();
-    const cashierProfile = this.profileRepository.create({
-      id: cashierId,
-      full_name: dto.cashier_name,
-    });
-    await this.profileRepository.save(cashierProfile);
-
-    // Hashear PIN del cashier
-    const pinHash = await bcrypt.hash(dto.cashier_pin, 10);
-
-    // Crear store member como cashier (con PIN)
-    const cashierMember = this.storeMemberRepository.create({
-      store_id: savedStore.id,
-      user_id: cashierId,
-      role: 'cashier',
-      pin_hash: pinHash,
-    });
-    await this.storeMemberRepository.save(cashierMember);
-
-    // Calcular días restantes de prueba
-    const now = Date.now();
-    const expiresAt = freemiumLicense.expiresAt.getTime();
-    const trialDaysRemaining = Math.ceil(
-      (expiresAt - now) / (1000 * 60 * 60 * 24),
-    );
-
-    this.logger.log(
-      `Registro exitoso: tienda ${savedStore.id}, owner ${ownerId}, cashier ${cashierId}`,
-    );
+    this.logger.log(`Email verificado para usuario: ${emailToken.user_id}`);
 
     return {
-      store_id: savedStore.id,
-      store_name: savedStore.name,
-      owner_id: ownerId,
-      cashier_id: cashierId,
-      license_status: savedStore.license_status,
-      license_plan: savedStore.license_plan || 'freemium',
-      license_expires_at: savedStore.license_expires_at,
-      license_grace_days: savedStore.license_grace_days,
-      trial_days_remaining: trialDaysRemaining,
+      verified: true,
+      message: 'Email verificado exitosamente',
     };
+  }
+
+  /**
+   * Reenvía el email de verificación
+   */
+  async resendVerificationEmail(userId: string): Promise<void> {
+    const profile = await this.profileRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!profile) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    if (!profile.email) {
+      throw new BadRequestException('Usuario no tiene email registrado');
+    }
+
+    if (profile.email_verified) {
+      throw new BadRequestException('Email ya está verificado');
+    }
+
+    // Revocar tokens anteriores no usados
+    await this.emailVerificationTokenRepository.update(
+      {
+        user_id: userId,
+        used_at: IsNull(),
+      },
+      {
+        used_at: new Date(),
+      },
+    );
+
+    // Generar nuevo token
+    const verificationToken = randomUUID();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    const emailToken = this.emailVerificationTokenRepository.create({
+      user_id: userId,
+      token: verificationToken,
+      expires_at: expiresAt,
+    });
+    await this.emailVerificationTokenRepository.save(emailToken);
+
+    // Enviar email
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+    const verificationUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
+
+    try {
+      await this.emailService.sendEmail({
+        storeId: profile.id, // Usar userId como storeId temporal
+        to: profile.email,
+        toName: profile.full_name || 'Usuario',
+        subject: 'Verifica tu email - LA-CAJA',
+        htmlBody: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Verifica tu email - LA-CAJA</title>
+          </head>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #0d81ce 0%, #0a5d9c 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+              <h1 style="color: white; margin: 0;">Verifica tu email</h1>
+            </div>
+            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+              <p>Hola <strong>${profile.full_name || 'Usuario'}</strong>,</p>
+              <p>Haz clic en el siguiente botón para verificar tu dirección de email:</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${verificationUrl}" style="background: #0d81ce; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Verificar Email</a>
+              </div>
+              <p style="font-size: 12px; color: #666;">O copia y pega este enlace en tu navegador:</p>
+              <p style="font-size: 12px; color: #666; word-break: break-all;">${verificationUrl}</p>
+              <p style="font-size: 12px; color: #999; margin-top: 30px;">Este enlace expirará en 24 horas.</p>
+            </div>
+          </body>
+          </html>
+        `,
+        textBody: `Verifica tu email - LA-CAJA\n\nHola ${profile.full_name || 'Usuario'},\n\nHaz clic en el siguiente enlace para verificar tu dirección de email:\n${verificationUrl}\n\nEste enlace expirará en 24 horas.`,
+      });
+    } catch (error) {
+      this.logger.error('Error reenviando email de verificación:', error);
+      throw new BadRequestException('Error al enviar email de verificación');
+    }
   }
 
   async login(
@@ -256,6 +486,16 @@ export class AuthService {
     // Verificar PIN contra todos los miembros de la tienda
     let validMember: StoreMember | null = null;
     for (const member of members) {
+      // Verificar si la cuenta está bloqueada
+      if (member.isLocked()) {
+        const minutesRemaining = Math.ceil(
+          (member.locked_until!.getTime() - Date.now()) / (1000 * 60),
+        );
+        throw new ForbiddenException(
+          `Cuenta bloqueada. Intenta nuevamente en ${minutesRemaining} minutos.`,
+        );
+      }
+
       if (member.pin_hash && (await bcrypt.compare(dto.pin, member.pin_hash))) {
         validMember = member;
         break;
@@ -263,7 +503,36 @@ export class AuthService {
     }
 
     if (!validMember || !validMember.profile) {
+      // Incrementar intentos fallidos para todos los miembros de la tienda
+      for (const member of members) {
+        if (member.pin_hash) {
+          member.incrementFailedAttempts(5, 15); // 5 intentos, bloqueo de 15 minutos
+          await this.storeMemberRepository.save(member);
+        }
+      }
       throw new UnauthorizedException('PIN incorrecto o usuario no encontrado');
+    }
+
+    // Login exitoso: resetear intentos fallidos
+    validMember.resetFailedAttempts();
+    await this.storeMemberRepository.save(validMember);
+
+    // Verificar si el usuario tiene 2FA habilitado
+    const twoFactor = await this.twoFactorAuthRepository.findOne({
+      where: {
+        user_id: validMember.user_id,
+        store_id: dto.store_id,
+        is_enabled: true,
+      },
+    });
+
+    // Si tiene 2FA habilitado, requerir código 2FA antes de generar tokens
+    if (twoFactor) {
+      // Por ahora, permitimos login sin 2FA pero deberíamos requerirlo
+      // TODO: Implementar flujo de 2FA en login (requerir código después del PIN)
+      this.logger.log(
+        `Usuario ${validMember.user_id} tiene 2FA habilitado, pero no se está verificando en login`,
+      );
     }
 
     // Logging para depuración del login
@@ -338,6 +607,105 @@ export class AuthService {
       expiresIn: `${this.ACCESS_TOKEN_EXPIRES_IN}s`,
     });
 
+    // DETECCIÓN DE NUEVOS DISPOSITIVOS: Generar fingerprint del dispositivo
+    const deviceFingerprint = this.generateDeviceFingerprint(
+      deviceId,
+      ipAddress,
+      validMember.user_id,
+    );
+
+    // Verificar si este dispositivo ya tiene sesiones activas
+    const existingDeviceSession = await this.refreshTokenRepository.findOne({
+      where: {
+        user_id: validMember.user_id,
+        store_id: dto.store_id,
+        device_fingerprint: deviceFingerprint,
+        revoked_at: IsNull(),
+      },
+      order: { created_at: 'DESC' },
+    });
+
+    // Si es un dispositivo nuevo, notificar por email
+    if (!existingDeviceSession && validMember.profile?.email && validMember.profile?.email_verified) {
+      try {
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+        await this.emailService.sendEmail({
+          storeId: dto.store_id,
+          to: validMember.profile.email,
+          toName: validMember.profile.full_name || 'Usuario',
+          subject: 'Nuevo dispositivo detectado - LA-CAJA',
+          htmlBody: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Nuevo dispositivo - LA-CAJA</title>
+            </head>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: linear-gradient(135deg, #0d81ce 0%, #0a5d9c 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                <h1 style="color: white; margin: 0;">Nuevo dispositivo detectado</h1>
+              </div>
+              <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+                <p>Hola <strong>${validMember.profile.full_name || 'Usuario'}</strong>,</p>
+                <p>Se detectó un inicio de sesión desde un nuevo dispositivo o ubicación.</p>
+                <div style="background: #fff; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                  <p style="margin: 5px 0;"><strong>IP:</strong> ${ipAddress || 'Desconocida'}</p>
+                  <p style="margin: 5px 0;"><strong>Fecha:</strong> ${new Date().toLocaleString('es-VE')}</p>
+                </div>
+                <p>Si no fuiste tú, por favor:</p>
+                <ol>
+                  <li>Cambia tu PIN inmediatamente</li>
+                  <li>Revisa tus sesiones activas en <a href="${frontendUrl}/app/security">Configuración de Seguridad</a></li>
+                  <li>Revoca todas las sesiones si es necesario</li>
+                </ol>
+                <p style="font-size: 12px; color: #999; margin-top: 30px;">Si fuiste tú, puedes ignorar este email.</p>
+              </div>
+            </body>
+            </html>
+          `,
+          textBody: `Nuevo dispositivo detectado - LA-CAJA\n\nHola ${validMember.profile.full_name || 'Usuario'},\n\nSe detectó un inicio de sesión desde un nuevo dispositivo.\n\nIP: ${ipAddress || 'Desconocida'}\nFecha: ${new Date().toLocaleString('es-VE')}\n\nSi no fuiste tú, cambia tu PIN inmediatamente y revisa tus sesiones activas.\n\nSi fuiste tú, puedes ignorar este email.`,
+        });
+        this.logger.log(`Email de nuevo dispositivo enviado a: ${validMember.profile.email}`);
+      } catch (error) {
+        this.logger.error('Error enviando email de nuevo dispositivo:', error);
+        // No fallar el login si falla el email
+      }
+    }
+
+    // CONTROL DE SESIONES CONCURRENTES: Verificar límite de sesiones activas
+    const MAX_CONCURRENT_SESSIONS = 3;
+    const activeSessions = await this.refreshTokenRepository.count({
+      where: {
+        user_id: validMember.user_id,
+        store_id: dto.store_id,
+        revoked_at: IsNull(),
+      },
+    });
+
+    // Si hay demasiadas sesiones activas, revocar las más antiguas
+    if (activeSessions >= MAX_CONCURRENT_SESSIONS) {
+      const oldestSessions = await this.refreshTokenRepository.find({
+        where: {
+          user_id: validMember.user_id,
+          store_id: dto.store_id,
+          revoked_at: IsNull(),
+        },
+        order: { created_at: 'ASC' },
+        take: activeSessions - MAX_CONCURRENT_SESSIONS + 1, // +1 porque vamos a agregar una nueva
+      });
+
+      for (const oldSession of oldestSessions) {
+        oldSession.revoked_at = new Date();
+        oldSession.revoked_reason = 'max_concurrent_sessions';
+        await this.refreshTokenRepository.save(oldSession);
+      }
+
+      this.logger.log(
+        `Revocadas ${oldestSessions.length} sesiones antiguas para usuario ${validMember.user_id} (límite: ${MAX_CONCURRENT_SESSIONS})`,
+      );
+    }
+
     // Generar refresh token (largo: 30 días)
     const refreshTokenValue = randomUUID();
     const refreshTokenHash = createHash('sha256')
@@ -356,6 +724,7 @@ export class AuthService {
       store_id: dto.store_id,
       device_id: deviceId || null,
       device_info: null, // Se puede mejorar con más info del dispositivo
+      device_fingerprint: deviceFingerprint,
       ip_address: ipAddress || null,
       expires_at: refreshTokenExpiresAt,
     });
@@ -447,19 +816,47 @@ export class AuthService {
       expiresIn: `${this.ACCESS_TOKEN_EXPIRES_IN}s`,
     });
 
-    // Actualizar last_used_at del refresh token
-    refreshToken.last_used_at = new Date();
-    if (deviceId) {
-      refreshToken.device_id = deviceId;
-    }
-    if (ipAddress) {
-      refreshToken.ip_address = ipAddress;
-    }
+    // ROTACIÓN DE REFRESH TOKEN: Generar nuevo refresh token y revocar el anterior
+    const newRefreshTokenValue = randomUUID();
+    const newRefreshTokenHash = createHash('sha256')
+      .update(newRefreshTokenValue)
+      .digest('hex');
+
+    const newRefreshTokenExpiresAt = new Date();
+    newRefreshTokenExpiresAt.setDate(
+      newRefreshTokenExpiresAt.getDate() + this.REFRESH_TOKEN_EXPIRES_IN_DAYS,
+    );
+
+    // Revocar el refresh token anterior
+    refreshToken.revoked_at = new Date();
+    refreshToken.revoked_reason = 'rotated';
     await this.refreshTokenRepository.save(refreshToken);
+
+    // Crear nuevo refresh token
+    const newRefreshToken = this.refreshTokenRepository.create({
+      token: newRefreshTokenHash,
+      user_id: refreshToken.user_id,
+      store_id: refreshToken.store_id,
+      device_id: deviceId || refreshToken.device_id,
+      device_info: refreshToken.device_info,
+      ip_address: ipAddress || refreshToken.ip_address,
+      expires_at: newRefreshTokenExpiresAt,
+    });
+    await this.refreshTokenRepository.save(newRefreshToken);
+
+    // Detectar reutilización de tokens revocados (posible ataque)
+    // Si el token anterior ya estaba revocado, es sospechoso
+    if (refreshToken.revoked_at && refreshToken.revoked_at < new Date()) {
+      this.logger.warn(
+        `⚠️ Posible reutilización de refresh token revocado detectada para usuario: ${refreshToken.user_id}`,
+      );
+      // Registrar en auditoría de seguridad
+      // Nota: Esto requeriría inyectar SecurityAuditService, por ahora solo logueamos
+    }
 
     return {
       access_token: accessToken,
-      refresh_token: refreshTokenValue, // Devolver el mismo refresh token
+      refresh_token: newRefreshTokenValue, // Devolver el nuevo refresh token
       expires_in: this.ACCESS_TOKEN_EXPIRES_IN,
     };
   }
@@ -505,6 +902,67 @@ export class AuthService {
         revoked_reason: reason,
       },
     );
+  }
+
+  /**
+   * Obtiene todas las sesiones activas de un usuario
+   */
+  async getActiveSessions(
+    userId: string,
+    storeId: string,
+  ): Promise<
+    Array<{
+      id: string;
+      device_id: string | null;
+      device_info: string | null;
+      ip_address: string | null;
+      created_at: Date;
+      last_used_at: Date | null;
+    }>
+  > {
+    const sessions = await this.refreshTokenRepository.find({
+      where: {
+        user_id: userId,
+        store_id: storeId,
+        revoked_at: IsNull(),
+      },
+      order: { last_used_at: 'DESC', created_at: 'DESC' },
+    });
+
+    return sessions
+      .filter((s) => s.isActive())
+      .map((s) => ({
+        id: s.id,
+        device_id: s.device_id,
+        device_info: s.device_info,
+        ip_address: s.ip_address,
+        created_at: s.created_at,
+        last_used_at: s.last_used_at,
+      }));
+  }
+
+  /**
+   * Revoca una sesión específica (por ID de refresh token)
+   */
+  async revokeSession(
+    sessionId: string,
+    userId: string,
+    storeId: string,
+    reason: string = 'user_revoked',
+  ): Promise<void> {
+    const session = await this.refreshTokenRepository.findOne({
+      where: {
+        id: sessionId,
+        user_id: userId,
+        store_id: storeId,
+      },
+    });
+
+    if (session && session.isActive()) {
+      session.revoked_at = new Date();
+      session.revoked_reason = reason;
+      await this.refreshTokenRepository.save(session);
+    }
   }
 
   async getStores(): Promise<
@@ -617,5 +1075,447 @@ export class AuthService {
       role: member.role,
       full_name: member.profile?.full_name || null,
     }));
+  }
+
+  /**
+   * Solicita recuperación de PIN olvidado
+   * Envía email con token de recuperación
+   */
+  async forgotPin(
+    dto: ForgotPinDto,
+    ipAddress?: string,
+  ): Promise<{ message: string }> {
+    // Buscar usuario por email y store_id
+    const profile = await this.profileRepository.findOne({
+      where: { email: dto.email.toLowerCase().trim() },
+    });
+
+    if (!profile) {
+      // No revelar si el email existe o no por seguridad
+      this.logger.warn(`Intento de recuperación de PIN para email no encontrado: ${dto.email}`);
+      return {
+        message: 'Si el email existe, recibirás un enlace para recuperar tu PIN',
+      };
+    }
+
+    // Buscar si el usuario pertenece a la tienda
+    const member = await this.storeMemberRepository.findOne({
+      where: {
+        user_id: profile.id,
+        store_id: dto.store_id,
+      },
+      relations: ['store'],
+    });
+
+    if (!member) {
+      // No revelar si el email existe o no por seguridad
+      this.logger.warn(`Intento de recuperación de PIN para usuario no perteneciente a tienda: ${dto.email}`);
+      return {
+        message: 'Si el email existe, recibirás un enlace para recuperar tu PIN',
+      };
+    }
+
+    // Verificar que el email exista y esté verificado
+    if (!profile.email) {
+      throw new BadRequestException(
+        'El usuario no tiene un email registrado',
+      );
+    }
+
+    if (!profile.email_verified) {
+      throw new BadRequestException(
+        'Debes verificar tu email antes de poder recuperar tu PIN',
+      );
+    }
+
+    // Revocar tokens anteriores no usados del mismo usuario
+    await this.pinRecoveryTokenRepository.update(
+      {
+        user_id: profile.id,
+        store_id: dto.store_id,
+        used_at: IsNull(),
+      },
+      {
+        used_at: new Date(),
+      },
+    );
+
+    // Generar token de recuperación
+    const recoveryToken = randomUUID();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1); // Expira en 1 hora
+
+    const pinToken = this.pinRecoveryTokenRepository.create({
+      user_id: profile.id,
+      store_id: dto.store_id,
+      token: recoveryToken,
+      expires_at: expiresAt,
+      ip_address: ipAddress || null,
+    });
+    await this.pinRecoveryTokenRepository.save(pinToken);
+
+    // Enviar email de recuperación
+    try {
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+      const resetUrl = `${frontendUrl}/reset-pin?token=${recoveryToken}`;
+
+      await this.emailService.sendEmail({
+        storeId: dto.store_id,
+        to: profile.email,
+        toName: profile.full_name || 'Usuario',
+        subject: 'Recuperación de PIN - LA-CAJA',
+        htmlBody: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Recuperación de PIN - LA-CAJA</title>
+          </head>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #0d81ce 0%, #0a5d9c 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+              <h1 style="color: white; margin: 0;">Recuperación de PIN</h1>
+            </div>
+            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+              <p>Hola <strong>${profile.full_name || 'Usuario'}</strong>,</p>
+              <p>Recibimos una solicitud para recuperar tu PIN de acceso a LA-CAJA.</p>
+              <p>Haz clic en el siguiente botón para restablecer tu PIN:</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${resetUrl}" style="background: #0d81ce; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Restablecer PIN</a>
+              </div>
+              <p style="font-size: 12px; color: #666;">O copia y pega este enlace en tu navegador:</p>
+              <p style="font-size: 12px; color: #666; word-break: break-all;">${resetUrl}</p>
+              <p style="font-size: 12px; color: #999; margin-top: 30px;">Este enlace expirará en 1 hora.</p>
+              <p style="font-size: 12px; color: #ff0000; margin-top: 20px; font-weight: bold;">Si no solicitaste este cambio, ignora este email. Tu PIN no será modificado.</p>
+            </div>
+          </body>
+          </html>
+        `,
+        textBody: `Recuperación de PIN - LA-CAJA\n\nHola ${profile.full_name || 'Usuario'},\n\nRecibimos una solicitud para recuperar tu PIN de acceso a LA-CAJA.\n\nHaz clic en el siguiente enlace para restablecer tu PIN:\n${resetUrl}\n\nEste enlace expirará en 1 hora.\n\nSi no solicitaste este cambio, ignora este email. Tu PIN no será modificado.`,
+      });
+
+      this.logger.log(`Email de recuperación de PIN enviado a: ${profile.email}`);
+    } catch (error) {
+      this.logger.error('Error enviando email de recuperación de PIN:', error);
+      throw new BadRequestException('Error al enviar email de recuperación');
+    }
+
+    return {
+      message: 'Si el email existe, recibirás un enlace para recuperar tu PIN',
+    };
+  }
+
+  /**
+   * Restablece el PIN usando un token de recuperación
+   */
+  async resetPin(dto: ResetPinDto): Promise<{ message: string }> {
+    const recoveryToken = await this.pinRecoveryTokenRepository.findOne({
+      where: { token: dto.token },
+      relations: ['profile', 'store'],
+    });
+
+    if (!recoveryToken) {
+      throw new NotFoundException('Token de recuperación inválido');
+    }
+
+    if (!recoveryToken.isActive()) {
+      throw new BadRequestException('Token de recuperación expirado o ya usado');
+    }
+
+    // Marcar token como usado
+    recoveryToken.used_at = new Date();
+    await this.pinRecoveryTokenRepository.save(recoveryToken);
+
+    // Buscar el miembro de la tienda
+    const member = await this.storeMemberRepository.findOne({
+      where: {
+        user_id: recoveryToken.user_id,
+        store_id: recoveryToken.store_id,
+      },
+    });
+
+    if (!member) {
+      throw new NotFoundException('Usuario no encontrado en la tienda');
+    }
+
+    // Hashear nuevo PIN
+    const newPinHash = await bcrypt.hash(dto.new_pin, 10);
+
+    // Actualizar PIN
+    member.pin_hash = newPinHash;
+    await this.storeMemberRepository.save(member);
+
+    // Revocar todos los refresh tokens del usuario por seguridad
+    await this.revokeAllUserTokens(
+      recoveryToken.user_id,
+      recoveryToken.store_id,
+      'pin_reset',
+    );
+
+    this.logger.log(`PIN restablecido para usuario: ${recoveryToken.user_id}`);
+
+    return {
+      message: 'PIN restablecido exitosamente. Por favor inicia sesión con tu nuevo PIN.',
+    };
+  }
+
+  /**
+   * Genera un fingerprint del dispositivo para detección de nuevos dispositivos
+   */
+  private generateDeviceFingerprint(
+    deviceId: string | null | undefined,
+    ipAddress: string | null | undefined,
+    userId: string,
+  ): string {
+    // Combinar device_id, IP y user_id para crear un fingerprint único
+    const components = [
+      deviceId || 'no-device-id',
+      ipAddress || 'no-ip',
+      userId,
+    ];
+    const fingerprintString = components.join('|');
+    
+    // Hashear para crear un fingerprint único pero no reversible
+    return createHash('sha256').update(fingerprintString).digest('hex');
+  }
+
+  /**
+   * Inicia el proceso de habilitación de 2FA
+   * Genera un secret y QR code para configurar en app de autenticación
+   */
+  async initiate2FA(userId: string, storeId: string): Promise<{
+    secret: string;
+    qrCodeUrl: string;
+    backupCodes: string[];
+  }> {
+    // Verificar que el usuario existe
+    const member = await this.storeMemberRepository.findOne({
+      where: { user_id: userId, store_id: storeId },
+    });
+
+    if (!member) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    // Generar secret para TOTP
+    const secret = speakeasy.generateSecret({
+      name: `LA-CAJA (${storeId.substring(0, 8)})`,
+      issuer: 'LA-CAJA',
+      length: 32,
+    });
+
+    // Generar códigos de respaldo (10 códigos de 8 dígitos)
+    const backupCodes: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const code = Math.floor(10000000 + Math.random() * 90000000).toString();
+      backupCodes.push(code);
+    }
+
+    // Hashear códigos de respaldo antes de guardar
+    const hashedBackupCodes = await Promise.all(
+      backupCodes.map((code) => bcrypt.hash(code, 10)),
+    );
+
+    // Crear o actualizar registro de 2FA (aún no habilitado)
+    let twoFactor = await this.twoFactorAuthRepository.findOne({
+      where: { user_id: userId, store_id: storeId },
+    });
+
+    if (twoFactor) {
+      twoFactor.secret = secret.base32;
+      twoFactor.backup_codes = hashedBackupCodes;
+      twoFactor.is_enabled = false;
+    } else {
+      twoFactor = this.twoFactorAuthRepository.create({
+        user_id: userId,
+        store_id: storeId,
+        secret: secret.base32,
+        backup_codes: hashedBackupCodes,
+        is_enabled: false,
+      });
+    }
+
+    await this.twoFactorAuthRepository.save(twoFactor);
+
+    // Generar QR code
+    const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url || '');
+
+    return {
+      secret: secret.base32, // Devolver secret para mostrar al usuario (solo una vez)
+      qrCodeUrl,
+      backupCodes, // Devolver códigos de respaldo (solo una vez)
+    };
+  }
+
+  /**
+   * Habilita 2FA después de verificar el código
+   */
+  async enable2FA(
+    userId: string,
+    storeId: string,
+    dto: Enable2FADto,
+  ): Promise<{ enabled: boolean; message: string }> {
+    const twoFactor = await this.twoFactorAuthRepository.findOne({
+      where: { user_id: userId, store_id: storeId },
+    });
+
+    if (!twoFactor) {
+      throw new NotFoundException('2FA no iniciado. Debes iniciar el proceso primero.');
+    }
+
+    if (twoFactor.is_enabled) {
+      throw new BadRequestException('2FA ya está habilitado');
+    }
+
+    // Verificar código TOTP
+    const verified = speakeasy.totp.verify({
+      secret: twoFactor.secret,
+      encoding: 'base32',
+      token: dto.verification_code,
+      window: 2, // Permitir ±2 períodos de tiempo (60 segundos)
+    });
+
+    if (!verified) {
+      throw new BadRequestException('Código de verificación inválido');
+    }
+
+    // Habilitar 2FA
+    twoFactor.is_enabled = true;
+    twoFactor.enabled_at = new Date();
+    await this.twoFactorAuthRepository.save(twoFactor);
+
+    this.logger.log(`2FA habilitado para usuario: ${userId}`);
+
+    return {
+      enabled: true,
+      message: '2FA habilitado exitosamente',
+    };
+  }
+
+  /**
+   * Deshabilita 2FA
+   */
+  async disable2FA(
+    userId: string,
+    storeId: string,
+    verificationCode: string,
+  ): Promise<{ disabled: boolean; message: string }> {
+    const twoFactor = await this.twoFactorAuthRepository.findOne({
+      where: { user_id: userId, store_id: storeId },
+    });
+
+    if (!twoFactor || !twoFactor.is_enabled) {
+      throw new BadRequestException('2FA no está habilitado');
+    }
+
+    // Verificar código TOTP o código de respaldo
+    let verified = speakeasy.totp.verify({
+      secret: twoFactor.secret,
+      encoding: 'base32',
+      token: verificationCode,
+      window: 2,
+    });
+
+    // Si no es un código TOTP válido, verificar si es un código de respaldo
+    if (!verified) {
+      for (const hashedCode of twoFactor.backup_codes) {
+        if (await bcrypt.compare(verificationCode, hashedCode)) {
+          verified = true;
+          // Remover código de respaldo usado
+          twoFactor.backup_codes = twoFactor.backup_codes.filter(
+            (code) => code !== hashedCode,
+          );
+          break;
+        }
+      }
+    }
+
+    if (!verified) {
+      throw new BadRequestException('Código de verificación inválido');
+    }
+
+    // Deshabilitar 2FA
+    twoFactor.is_enabled = false;
+    twoFactor.enabled_at = null;
+    await this.twoFactorAuthRepository.save(twoFactor);
+
+    this.logger.log(`2FA deshabilitado para usuario: ${userId}`);
+
+    return {
+      disabled: true,
+      message: '2FA deshabilitado exitosamente',
+    };
+  }
+
+  /**
+   * Verifica código 2FA durante el login
+   */
+  async verify2FACode(
+    userId: string,
+    storeId: string,
+    dto: Verify2FADto,
+  ): Promise<{ verified: boolean }> {
+    const twoFactor = await this.twoFactorAuthRepository.findOne({
+      where: {
+        user_id: userId,
+        store_id: storeId,
+        is_enabled: true,
+      },
+    });
+
+    if (!twoFactor) {
+      throw new BadRequestException('2FA no está habilitado para este usuario');
+    }
+
+    // Verificar código TOTP
+    let verified = speakeasy.totp.verify({
+      secret: twoFactor.secret,
+      encoding: 'base32',
+      token: dto.code,
+      window: 2,
+    });
+
+    // Si no es un código TOTP válido, verificar si es un código de respaldo
+    if (!verified) {
+      for (const hashedCode of twoFactor.backup_codes) {
+        if (await bcrypt.compare(dto.code, hashedCode)) {
+          verified = true;
+          // Remover código de respaldo usado
+          twoFactor.backup_codes = twoFactor.backup_codes.filter(
+            (code) => code !== hashedCode,
+          );
+          twoFactor.last_used_at = new Date();
+          await this.twoFactorAuthRepository.save(twoFactor);
+          break;
+        }
+      }
+    } else {
+      // Actualizar last_used_at
+      twoFactor.last_used_at = new Date();
+      await this.twoFactorAuthRepository.save(twoFactor);
+    }
+
+    if (!verified) {
+      throw new BadRequestException('Código 2FA inválido');
+    }
+
+    return { verified: true };
+  }
+
+  /**
+   * Obtiene el estado de 2FA para un usuario
+   */
+  async get2FAStatus(
+    userId: string,
+    storeId: string,
+  ): Promise<{ is_enabled: boolean; enabled_at: Date | null }> {
+    const twoFactor = await this.twoFactorAuthRepository.findOne({
+      where: { user_id: userId, store_id: storeId },
+    });
+
+    return {
+      is_enabled: twoFactor?.is_enabled || false,
+      enabled_at: twoFactor?.enabled_at || null,
+    };
   }
 }

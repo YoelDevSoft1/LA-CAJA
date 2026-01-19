@@ -39,6 +39,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/passport-jwt": "^4.0.1",
     "@types/qrcode": "^1.5.6",
+    "@types/speakeasy": "^2.0.10",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
     "bull": "^4.16.5",
@@ -58,6 +59,7 @@
     "resend": "^6.6.0",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.1",
+    "speakeasy": "^2.0.0",
     "typeorm": "^0.3.17",
     "uuid": "^9.0.1",
     "web-push": "^3.6.7"

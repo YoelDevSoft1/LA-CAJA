@@ -324,12 +324,12 @@ export default function BulkStockAdjustModal({
                 <Label htmlFor="warehouse" className="mb-2">
                   Bodega (Opcional)
                 </Label>
-                <Select value={warehouseId || ''} onValueChange={(v) => setWarehouseId(v || null)}>
+                <Select value={warehouseId || '__default__'} onValueChange={(v) => setWarehouseId(v === '__default__' ? null : v)}>
                   <SelectTrigger id="warehouse">
                     <SelectValue placeholder="Bodega por defecto" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Bodega por defecto</SelectItem>
+                    <SelectItem value="__default__">Bodega por defecto</SelectItem>
                     {warehouses.map((wh) => (
                       <SelectItem key={wh.id} value={wh.id}>
                         {wh.name}

@@ -24,18 +24,33 @@ export class LoginRateLimitGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const ipAddress = request.ip || request.headers['x-forwarded-for'] || 'unknown';
+    const body = request.body || {};
+    const storeId = body.store_id;
 
-    // Verificar intentos fallidos recientes
-    const failedAttempts = await this.securityAudit.getFailedLoginAttempts(
+    // Verificar intentos fallidos recientes por IP
+    const failedAttemptsByIP = await this.securityAudit.getFailedLoginAttempts(
       ipAddress,
       this.BLOCK_DURATION_MINUTES,
     );
+
+    // Verificar intentos fallidos por store_id si está disponible
+    let failedAttemptsByStore = 0;
+    if (storeId) {
+      failedAttemptsByStore = await this.securityAudit.getFailedLoginAttempts(
+        `store:${storeId}`,
+        this.BLOCK_DURATION_MINUTES,
+      );
+    }
+
+    // Usar el máximo entre IP y store para el bloqueo
+    const failedAttempts = Math.max(failedAttemptsByIP, failedAttemptsByStore);
 
     // Bloqueo progresivo: bloquear después de N intentos fallidos
     if (failedAttempts >= this.MAX_FAILED_ATTEMPTS) {
       // Registrar bloqueo
       await this.securityAudit.log({
         event_type: 'login_blocked',
+        store_id: storeId,
         ip_address: ipAddress,
         user_agent: request.headers['user-agent'] || 'unknown',
         request_path: request.url,
@@ -44,12 +59,14 @@ export class LoginRateLimitGuard implements CanActivate {
         details: {
           reason: 'Too many failed attempts',
           failedAttempts,
+          failedAttemptsByIP,
+          failedAttemptsByStore,
           blockDurationMinutes: this.BLOCK_DURATION_MINUTES,
         },
       });
 
       this.logger.warn(
-        `IP ${ipAddress} bloqueada por ${failedAttempts} intentos fallidos`,
+        `Bloqueo de login: IP ${ipAddress}${storeId ? `, Store ${storeId}` : ''} - ${failedAttempts} intentos fallidos`,
       );
 
       throw new HttpException(
@@ -65,11 +82,12 @@ export class LoginRateLimitGuard implements CanActivate {
     // Si hay intentos fallidos pero no alcanzó el límite, permitir pero con advertencia
     if (failedAttempts >= 5) {
       this.logger.warn(
-        `IP ${ipAddress} tiene ${failedAttempts} intentos fallidos recientes`,
+        `Advertencia: IP ${ipAddress}${storeId ? `, Store ${storeId}` : ''} tiene ${failedAttempts} intentos fallidos recientes`,
       );
     }
 
     // Permitir continuar (el @Throttle decorator aplicará rate limiting normal)
+    // El bloqueo de cuenta individual se maneja en AuthService.login()
     return true;
   }
 }

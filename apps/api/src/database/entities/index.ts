@@ -6,6 +6,9 @@ export { StoreMember } from './store-member.entity';
 export { Event } from './event.entity';
 export { SecurityAuditLog } from './security-audit-log.entity';
 export { RefreshToken } from './refresh-token.entity';
+export { EmailVerificationToken } from './email-verification-token.entity';
+export { PinRecoveryToken } from './pin-recovery-token.entity';
+export { TwoFactorAuth } from './two-factor-auth.entity';
 
 // Product entities
 export { Product } from './product.entity';
@@ -211,6 +214,9 @@ import { AccountingPeriod } from './accounting-period.entity';
 import { Event } from './event.entity';
 import { SecurityAuditLog } from './security-audit-log.entity';
 import { RefreshToken } from './refresh-token.entity';
+import { EmailVerificationToken } from './email-verification-token.entity';
+import { PinRecoveryToken } from './pin-recovery-token.entity';
+import { TwoFactorAuth } from './two-factor-auth.entity';
 import { LicensePayment } from './license-payment.entity';
 import { LicensePaymentDocument } from './license-payment-document.entity';
 import { LicensePaymentVerification } from './license-payment-verification.entity';
@@ -303,6 +309,9 @@ export const ALL_ENTITIES = [
   Event,
   SecurityAuditLog,
   RefreshToken,
+  EmailVerificationToken,
+  PinRecoveryToken,
+  TwoFactorAuth,
   LicensePayment,
   LicensePaymentDocument,
   LicensePaymentVerification,

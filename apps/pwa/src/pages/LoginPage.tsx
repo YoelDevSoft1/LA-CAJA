@@ -29,7 +29,7 @@ import { colors, motionVariants } from '@/design-system'
 
 const loginSchema = z.object({
   store_id: z.string().min(1, 'Selecciona una tienda'),
-  pin: z.string().min(4, 'El PIN debe tener al menos 4 dígitos').max(6, 'El PIN debe tener máximo 6 dígitos'),
+  pin: z.string().min(4, 'El PIN debe tener al menos 4 caracteres').max(8, 'El PIN debe tener máximo 8 caracteres'),
 })
 
 type LoginForm = z.infer<typeof loginSchema>
@@ -547,8 +547,14 @@ export default function LoginPage() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
         >
-          <p className="text-xs text-slate-400">
-            ¿Problemas para acceder? Contacta al administrador.
+          <p className="text-sm text-slate-500">
+            <Link
+              to="/forgot-pin"
+              className="font-semibold hover:underline"
+              style={{ color: colors.brand.primary }}
+            >
+              ¿Olvidaste tu PIN?
+            </Link>
           </p>
           <p className="text-sm text-slate-500">
             ¿No tienes una cuenta?{' '}

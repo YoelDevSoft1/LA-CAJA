@@ -39,6 +39,9 @@ export class RefreshToken {
   @Column({ type: 'text', nullable: true })
   device_info: string | null;
 
+  @Column({ type: 'text', nullable: true })
+  device_fingerprint: string | null;
+
   @Column({ type: 'inet', nullable: true })
   ip_address: string | null;
 

@@ -29,17 +29,18 @@ import { LicenseInfoCard } from '@/components/auth/LicenseInfoCard'
 const registerSchema = z.object({
   store_name: z.string().min(2, 'El nombre de la tienda debe tener al menos 2 caracteres'),
   owner_name: z.string().min(2, 'El nombre del dueño debe tener al menos 2 caracteres'),
+  owner_email: z.string().email('El email debe ser válido'),
   owner_pin: z
     .string()
-    .min(4, 'El PIN del administrador debe tener al menos 4 dígitos')
-    .max(6, 'El PIN del administrador debe tener máximo 6 dígitos')
-    .regex(/^\d+$/, 'El PIN solo puede contener números'),
+    .min(6, 'El PIN del administrador debe tener al menos 6 caracteres')
+    .max(8, 'El PIN del administrador debe tener máximo 8 caracteres')
+    .regex(/^[a-zA-Z0-9]+$/, 'El PIN solo puede contener letras y números'),
   cashier_name: z.string().min(2, 'El nombre del cajero debe tener al menos 2 caracteres'),
   cashier_pin: z
     .string()
-    .min(4, 'El PIN del cajero debe tener al menos 4 dígitos')
-    .max(6, 'El PIN del cajero debe tener máximo 6 dígitos')
-    .regex(/^\d+$/, 'El PIN solo puede contener números'),
+    .min(6, 'El PIN del cajero debe tener al menos 6 caracteres')
+    .max(8, 'El PIN del cajero debe tener máximo 8 caracteres')
+    .regex(/^[a-zA-Z0-9]+$/, 'El PIN solo puede contener letras y números'),
 })
 
 type RegisterForm = z.infer<typeof registerSchema>
@@ -64,6 +65,7 @@ export default function RegisterPage() {
     defaultValues: {
       store_name: '',
       owner_name: '',
+      owner_email: '',
       owner_pin: '',
       cashier_name: '',
       cashier_pin: '',
@@ -78,6 +80,7 @@ export default function RegisterPage() {
       return authService.register({
         store_name: data.store_name,
         owner_name: data.owner_name,
+        owner_email: data.owner_email,
         owner_pin: data.owner_pin,
         cashier_name: data.cashier_name,
         cashier_pin: data.cashier_pin,
@@ -465,6 +468,55 @@ export default function RegisterPage() {
               </AnimatePresence>
             </motion.div>
 
+            {/* Owner Email */}
+            <motion.div
+              className="space-y-3"
+              variants={motionVariants.staggerItem}
+              initial="hidden"
+              animate="visible"
+            >
+              <Label
+                htmlFor="owner_email"
+                className="text-sm font-semibold text-slate-700 flex items-center gap-2"
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: colors.brand.primary }}
+                />
+                Email del Dueño
+              </Label>
+
+              <Input
+                id="owner_email"
+                type="email"
+                placeholder="Ej: juan@example.com"
+                className={cn(
+                  'h-12 text-base border-2 transition-all duration-200',
+                  'focus:ring-0 focus:ring-offset-0 focus:outline-none focus-visible:outline-none focus-visible:ring-0',
+                  errors.owner_email
+                    ? 'border-destructive focus:border-destructive'
+                    : 'border-slate-200 focus:border-[rgb(13,129,206)] hover:border-[rgba(13,129,206,0.5)]'
+                )}
+                {...register('owner_email')}
+              />
+
+              <AnimatePresence>
+                {errors.owner_email && (
+                  <motion.p
+                    className="text-xs text-destructive font-medium"
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5 }}
+                  >
+                    {errors.owner_email.message}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+              <p className="text-xs text-muted-foreground">
+                Te enviaremos un email de verificación a esta dirección
+              </p>
+            </motion.div>
+
             {/* Owner PIN */}
             <motion.div
               className="space-y-3"
@@ -487,7 +539,7 @@ export default function RegisterPage() {
                 id="owner_pin"
                 type="password"
                 placeholder="••••"
-                maxLength={6}
+                maxLength={8}
                 className={cn(
                   'h-14 text-center text-2xl tracking-[0.5em] font-semibold border-2 transition-all duration-200',
                   'focus:ring-0 focus:ring-offset-0 focus:outline-none focus-visible:outline-none focus-visible:ring-0',
@@ -511,7 +563,7 @@ export default function RegisterPage() {
                 )}
               </AnimatePresence>
               <p className="text-xs text-muted-foreground">
-                El PIN del administrador debe tener entre 4 y 6 dígitos numéricos
+                El PIN del administrador debe tener entre 6 y 8 caracteres (letras y números)
               </p>
             </motion.div>
 
@@ -583,7 +635,7 @@ export default function RegisterPage() {
                 id="cashier_pin"
                 type="password"
                 placeholder="••••"
-                maxLength={6}
+                maxLength={8}
                 className={cn(
                   'h-14 text-center text-2xl tracking-[0.5em] font-semibold border-2 transition-all duration-200',
                   'focus:ring-0 focus:ring-offset-0 focus:outline-none focus-visible:outline-none focus-visible:ring-0',
@@ -607,7 +659,7 @@ export default function RegisterPage() {
                 )}
               </AnimatePresence>
               <p className="text-xs text-muted-foreground">
-                El PIN debe tener entre 4 y 6 dígitos numéricos
+                El PIN debe tener entre 6 y 8 caracteres (letras y números)
               </p>
             </motion.div>
 

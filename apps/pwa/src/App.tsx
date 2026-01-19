@@ -11,6 +11,8 @@ import { getDefaultRoute } from './lib/permissions'
 import { syncService } from './services/sync.service'
 import { realtimeWebSocketService } from './services/realtime-websocket.service'
 import { usePushNotifications } from './hooks/usePushNotifications'
+import { useActivityTracker } from './hooks/use-activity-tracker'
+import { useLicenseStatus } from './hooks/use-license-status'
 import { Loader2 } from 'lucide-react'
 
 // Componente de loading para Suspense
@@ -26,6 +28,9 @@ const PageLoader = () => (
 // Lazy loading de páginas - Críticas (login/landing/pos)
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'))
+const ForgotPinPage = lazy(() => import('./pages/ForgotPinPage'))
+const ResetPinPage = lazy(() => import('./pages/ResetPinPage'))
 const LandingPageEnhanced = lazy(() => import('./pages/LandingPageEnhanced'))
 const POSPage = lazy(() => import('./pages/POSPage'))
 
@@ -99,14 +104,17 @@ const AccountingPage = lazy(() => import('./pages/AccountingPage'))
 const ConflictsPage = lazy(() => import('./pages/ConflictsPage'))
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage'))
 const LicensePage = lazy(() => import('./pages/LicensePage'))
+const SecurityPage = lazy(() => import('./pages/SecurityPage'))
 
 function App() {
   const { user, isAuthenticated, showLoader: authShowLoader, setShowLoader } = useAuth()
-  const defaultRoute = getDefaultRoute(user?.role || 'cashier')
   const { isOnline, wasOffline } = useOnline()
   const { isSupported, subscribe } = usePushNotifications()
   const [isLoaderComplete, setIsLoaderComplete] = useState(false)
   const queryClient = useQueryClient()
+  
+  // Rastrear actividad del usuario para timeout de inactividad
+  useActivityTracker()
 
   // Rehidratar el sync service si hay sesión persistida
   useEffect(() => {
@@ -296,7 +304,23 @@ function App() {
       )}
       {(isLoaderComplete || !authShowLoader) && (
     <BrowserRouter>
-      <Suspense fallback={<PageLoader />}>
+      <AppRoutes />
+    </BrowserRouter>
+      )}
+    </>
+  )
+}
+
+// Componente interno que usa hooks que requieren Router
+function AppRoutes() {
+  // Validar estado de licencia periódicamente y escuchar cambios vía WebSocket
+  useLicenseStatus()
+
+  const { user, isAuthenticated } = useAuth()
+  const defaultRoute = getDefaultRoute(user?.role || 'cashier')
+
+  return (
+    <Suspense fallback={<PageLoader />}>
       <Routes>
         {/* Public routes */}
         <Route
@@ -318,6 +342,9 @@ function App() {
             isAuthenticated ? <Navigate to={defaultRoute} replace /> : <RegisterPage />
           }
         />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/forgot-pin" element={<ForgotPinPage />} />
+        <Route path="/reset-pin" element={<ResetPinPage />} />
         <Route
           path="/license"
           element={
@@ -389,6 +416,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['owner']}>
                 <LicensePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="security"
+            element={
+              <ProtectedRoute>
+                <SecurityPage />
               </ProtectedRoute>
             }
           />
@@ -554,10 +589,7 @@ function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      </Suspense>
-    </BrowserRouter>
-      )}
-    </>
+    </Suspense>
   )
 }
 

@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Store } from '../database/entities/store.entity';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 
 @Injectable()
 export class LicenseWatcherService implements OnModuleInit, OnModuleDestroy {
@@ -16,6 +17,7 @@ export class LicenseWatcherService implements OnModuleInit, OnModuleDestroy {
   constructor(
     @InjectRepository(Store)
     private readonly storeRepo: Repository<Store>,
+    private readonly notificationsGateway: NotificationsGateway,
   ) {}
 
   onModuleInit() {
@@ -57,10 +59,24 @@ export class LicenseWatcherService implements OnModuleInit, OnModuleDestroy {
       const isExpired = now > expires + graceMs;
 
       if (isExpired && store.license_status !== 'expired') {
+        const oldStatus = store.license_status;
         store.license_status = 'expired';
         store.license_notes =
           store.license_notes ?? 'Expirada automáticamente por cron';
         await this.storeRepo.save(store);
+        
+        // Notificar cambio de licencia vía WebSocket
+        this.notificationsGateway.emitLicenseStatusChange(store.id, {
+          license_status: store.license_status,
+          license_expires_at: store.license_expires_at,
+          license_plan: store.license_plan,
+          license_grace_days: store.license_grace_days,
+        });
+        
+        this.logger.log(
+          `Licencia expirada para tienda ${store.id} (${oldStatus} -> expired)`,
+        );
+        
         expired++;
         updated++;
         continue;

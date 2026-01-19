@@ -205,10 +205,12 @@ export default function SimpleLoader({
 
                     {/* Glow pulsante */}
                     <motion.div
-                      className="absolute inset-0 blur-2xl rounded-full"
-                      style={{ background: 'rgba(13, 129, 206, 0.4)' }}
+                      className="absolute inset-0 blur-xl rounded-full"
+                      style={{
+                        background: `radial-gradient(circle, rgba(13, 129, 206, 0.4) 0%, rgba(13, 129, 206, 0.2) 50%, transparent 80%)`,
+                      }}
                       animate={{
-                        opacity: [0.2, 0.5, 0.2],
+                        opacity: [0.3, 0.5, 0.3],
                         scale: [1, 1.2, 1],
                       }}
                       transition={{

@@ -1,4 +1,4 @@
-import { IsString, Length, IsNotEmpty } from 'class-validator';
+import { IsString, Length, IsNotEmpty, MinLength, MaxLength } from 'class-validator';
 
 export class LoginDto {
   @IsNotEmpty()
@@ -7,6 +7,7 @@ export class LoginDto {
 
   @IsNotEmpty()
   @IsString()
-  @Length(4, 6)
+  @MinLength(4) // Compatibilidad con PINs antiguos (4-6)
+  @MaxLength(8) // Soporte para PINs nuevos (6-8)
   pin: string;
 }

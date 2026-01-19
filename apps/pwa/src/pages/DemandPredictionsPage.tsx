@@ -72,9 +72,9 @@ export default function DemandPredictionsPage() {
               </SelectTrigger>
               <SelectContent>
                 {filteredProducts.length === 0 ? (
-                  <SelectItem value="" disabled>
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
                     No se encontraron productos
-                  </SelectItem>
+                  </div>
                 ) : (
                   filteredProducts.map((product: { id: string; name: string }) => (
                     <SelectItem key={product.id} value={product.id}>

@@ -8,6 +8,7 @@ import {
   Request,
   Get,
   Param,
+  Delete,
   BadRequestException,
   Logger,
 } from '@nestjs/common';
@@ -17,6 +18,10 @@ import { CreateStoreDto } from './dto/create-store.dto';
 import { CreateCashierDto } from './dto/create-cashier.dto';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPinDto } from './dto/forgot-pin.dto';
+import { ResetPinDto } from './dto/reset-pin.dto';
+import { Enable2FADto } from './dto/enable-2fa.dto';
+import { Verify2FADto } from './dto/verify-2fa.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -166,6 +171,129 @@ export class AuthController {
     }
   }
 
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 intentos por minuto
+  async verifyEmail(@Body() body: { token: string }): Promise<{ verified: boolean; message: string }> {
+    if (!body.token) {
+      throw new BadRequestException('Token de verificación es requerido');
+    }
+
+    return this.authService.verifyEmail(body.token);
+  }
+
+  @Post('resend-verification-email')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 3, ttl: 3600000 } }) // 3 intentos por hora
+  async resendVerificationEmail(@Request() req: any): Promise<{ message: string }> {
+    const userId = req.user?.sub;
+    if (!userId) {
+      throw new BadRequestException('Usuario no autenticado');
+    }
+
+    await this.authService.resendVerificationEmail(userId);
+    return { message: 'Email de verificación enviado' };
+  }
+
+  @Post('forgot-pin')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 3600000 } }) // 3 intentos por hora (muy estricto)
+  async forgotPin(
+    @Body() dto: ForgotPinDto,
+    @Request() req: any,
+  ): Promise<{ message: string }> {
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+
+    this.logger.log(`Solicitud de recuperación de PIN para email: ${dto.email}`);
+
+    try {
+      const result = await this.authService.forgotPin(dto, ipAddress);
+
+      // Registrar intento (éxito o no, por seguridad no revelamos si el email existe)
+      await this.securityAudit.log({
+        event_type: 'admin_action',
+        store_id: dto.store_id,
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        request_path: '/auth/forgot-pin',
+        request_method: 'POST',
+        status: 'success',
+        details: {
+          action: 'forgot_pin_request',
+        },
+      });
+
+      return result;
+    } catch (error) {
+      // Registrar error
+      await this.securityAudit.log({
+        event_type: 'unauthorized_access',
+        store_id: dto.store_id,
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        request_path: '/auth/forgot-pin',
+        request_method: 'POST',
+        status: 'failure',
+        details: {
+          error: error instanceof Error ? error.message : String(error),
+          action: 'forgot_pin_request',
+        },
+      });
+
+      throw error;
+    }
+  }
+
+  @Post('reset-pin')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 intentos por minuto
+  async resetPin(
+    @Body() dto: ResetPinDto,
+    @Request() req: any,
+  ): Promise<{ message: string }> {
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+
+    this.logger.log('Intento de restablecimiento de PIN');
+
+    try {
+      const result = await this.authService.resetPin(dto);
+
+      // Registrar restablecimiento exitoso
+      await this.securityAudit.log({
+        event_type: 'admin_action',
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        request_path: '/auth/reset-pin',
+        request_method: 'POST',
+        status: 'success',
+        details: {
+          action: 'pin_reset',
+        },
+      });
+
+      return result;
+    } catch (error) {
+      // Registrar error
+      await this.securityAudit.log({
+        event_type: 'unauthorized_access',
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        request_path: '/auth/reset-pin',
+        request_method: 'POST',
+        status: 'failure',
+        details: {
+          error: error instanceof Error ? error.message : String(error),
+          action: 'pin_reset',
+        },
+      });
+
+      throw error;
+    }
+  }
+
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @UseGuards(LoginRateLimitGuard) // Bloqueo progresivo
@@ -217,7 +345,7 @@ export class AuthController {
       );
       return result;
     } catch (error) {
-      // ✅ Registrar login fallido
+      // ✅ Registrar login fallido (tanto por IP como por store_id para rate limiting mejorado)
       await this.securityAudit.log({
         event_type: 'login_failure',
         store_id: dto.store_id,
@@ -228,6 +356,7 @@ export class AuthController {
         status: 'failure',
         details: {
           error: error instanceof Error ? error.message : String(error),
+          store_id: dto.store_id, // Incluir store_id en details para búsquedas
         },
       });
 
@@ -315,5 +444,87 @@ export class AuthController {
     });
 
     return { message: 'Sesión cerrada correctamente' };
+  }
+
+  @Get('sessions')
+  @UseGuards(JwtAuthGuard)
+  async getActiveSessions(@Request() req: any): Promise<
+    Array<{
+      id: string;
+      device_id: string | null;
+      device_info: string | null;
+      ip_address: string | null;
+      created_at: Date;
+      last_used_at: Date | null;
+    }>
+  > {
+    const user = req.user;
+    return this.authService.getActiveSessions(user.sub, user.store_id);
+  }
+
+  @Delete('sessions/:sessionId')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async revokeSession(
+    @Param('sessionId') sessionId: string,
+    @Request() req: any,
+  ): Promise<{ message: string }> {
+    const user = req.user;
+    await this.authService.revokeSession(sessionId, user.sub, user.store_id);
+    return { message: 'Sesión revocada correctamente' };
+  }
+
+  @Get('2fa/initiate')
+  @UseGuards(JwtAuthGuard)
+  async initiate2FA(@Request() req: any): Promise<{
+    secret: string;
+    qrCodeUrl: string;
+    backupCodes: string[];
+  }> {
+    const user = req.user;
+    return this.authService.initiate2FA(user.sub, user.store_id);
+  }
+
+  @Post('2fa/enable')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async enable2FA(
+    @Body() dto: Enable2FADto,
+    @Request() req: any,
+  ): Promise<{ enabled: boolean; message: string }> {
+    const user = req.user;
+    return this.authService.enable2FA(user.sub, user.store_id, dto);
+  }
+
+  @Post('2fa/disable')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async disable2FA(
+    @Body() body: { verification_code: string },
+    @Request() req: any,
+  ): Promise<{ disabled: boolean; message: string }> {
+    const user = req.user;
+    return this.authService.disable2FA(user.sub, user.store_id, body.verification_code);
+  }
+
+  @Post('2fa/verify')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async verify2FA(
+    @Body() dto: Verify2FADto,
+    @Request() req: any,
+  ): Promise<{ verified: boolean }> {
+    const user = req.user;
+    return this.authService.verify2FACode(user.sub, user.store_id, dto);
+  }
+
+  @Get('2fa/status')
+  @UseGuards(JwtAuthGuard)
+  async get2FAStatus(@Request() req: any): Promise<{
+    is_enabled: boolean;
+    enabled_at: Date | null;
+  }> {
+    const user = req.user;
+    return this.authService.get2FAStatus(user.sub, user.store_id);
   }
 }

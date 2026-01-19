@@ -214,6 +214,9 @@ api.interceptors.response.use(
         );
 
         const { access_token, refresh_token: newRefreshToken } = response.data;
+        
+        // ✅ ROTACIÓN: Actualizar el refresh token en localStorage con el nuevo token
+        // El backend ahora rota los refresh tokens por seguridad
 
         console.log('[API] ✅ Token renovado exitosamente');
 

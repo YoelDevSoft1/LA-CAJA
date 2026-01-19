@@ -121,10 +121,11 @@ import { MLNotificationsController } from './ml-notifications.controller';
   ],
   exports: [
     NotificationsService,
-    NotificationsGateway,
+    NotificationsGateway, // ✅ Exportar para que LicenseWatcherService pueda usarlo
     MLInsightsService,
     NotificationOrchestratorService,
     AnalyticsService,
+    EmailService,
   ],
 })
 export class NotificationsModule {}

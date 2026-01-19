@@ -67,19 +67,34 @@ export class SecurityAuditService {
   }
 
   /**
-   * Obtiene el número de intentos de login fallidos desde una IP
+   * Obtiene el número de intentos de login fallidos desde una IP o store_id
    * Útil para rate limiting y bloqueo progresivo
+   * Si identifier empieza con "store:", busca por store_id, sino por ip_address
    */
   async getFailedLoginAttempts(
-    ipAddress: string,
+    identifier: string,
     minutes: number = 15,
   ): Promise<number> {
     try {
       const since = new Date(Date.now() - minutes * 60 * 1000);
+      
+      // Si el identificador empieza con "store:", buscar por store_id
+      if (identifier.startsWith('store:')) {
+        const storeId = identifier.replace('store:', '');
+        return await this.auditRepository.count({
+          where: {
+            event_type: 'login_failure',
+            store_id: storeId,
+            created_at: MoreThanOrEqual(since),
+          },
+        });
+      }
+      
+      // Por defecto, buscar por IP
       return await this.auditRepository.count({
         where: {
           event_type: 'login_failure',
-          ip_address: ipAddress,
+          ip_address: identifier,
           created_at: MoreThanOrEqual(since),
         },
       });

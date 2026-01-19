@@ -117,6 +117,10 @@ class RealtimeWebSocketService {
       this.heatmapUpdateCallbacks.forEach((callback) => callback(data))
     })
 
+    // Escuchar cambios de estado de licencia desde el namespace de notificaciones
+    // Nota: Los eventos de licencia se emiten desde /notifications, no /realtime
+    // Necesitamos escuchar en el socket de notificaciones
+
     this.socket.on('error', (error: { message?: string }) => {
       const errorMessage = error?.message || 'Error desconocido'
       // No mostrar errores de autenticación como errores críticos

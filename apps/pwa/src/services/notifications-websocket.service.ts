@@ -156,6 +156,23 @@ class NotificationsWebSocketService {
         console.debug('[NotificationsWS] Error de conexión (esperado si el backend no está corriendo):', error.message)
       }
     })
+
+    // Escuchar cambios de estado de licencia
+    this.socket.on('license:status_change', (data: {
+      license: {
+        license_status: string
+        license_expires_at: string | null
+        license_plan: string | null
+        license_grace_days: number
+      }
+      timestamp: number
+    }) => {
+      console.log('[NotificationsWS] Cambio de estado de licencia:', data)
+      // Emitir evento personalizado para que los hooks puedan escucharlo
+      window.dispatchEvent(new CustomEvent('license:status_change', {
+        detail: data.license,
+      }))
+    })
   }
 }
 
