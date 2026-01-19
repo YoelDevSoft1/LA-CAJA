@@ -206,9 +206,9 @@ export default function SimpleLoader({
                     {/* Glow pulsante */}
                     <motion.div
                       className="absolute inset-0 blur-2xl rounded-full"
-                      style={{ background: colors.brand.primary }}
+                      style={{ background: 'rgba(13, 129, 206, 0.4)' }}
                       animate={{
-                        opacity: [0.15, 0.3, 0.15],
+                        opacity: [0.2, 0.5, 0.2],
                         scale: [1, 1.2, 1],
                       }}
                       transition={{
