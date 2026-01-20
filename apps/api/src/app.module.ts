@@ -45,6 +45,9 @@ import { SecurityModule } from './security/security.module';
 import { ConfigModule as SystemConfigModule } from './config/config.module';
 import { SetupModule } from './setup/setup.module';
 import { LicensesModule } from './licenses/licenses.module';
+import { MenuModule } from './menu/menu.module';
+import { KitchenDisplayModule } from './kitchen/kitchen-display.module';
+import { ReservationsModule } from './reservations/reservations.module';
 import { AdminController } from './admin/admin.controller';
 import { AdminApiGuard } from './admin/admin-api.guard';
 import { LicenseWatcherService } from './admin/license-watcher.service';
@@ -198,6 +201,9 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     SystemConfigModule, // ✅ Módulo de validación de configuración
     SetupModule, // ✅ Módulo de setup automático y onboarding
     LicensesModule, // ✅ Módulo de pagos de licencias
+    MenuModule, // ✅ Módulo de menú público QR
+    KitchenDisplayModule, // ✅ Módulo de Kitchen Display System
+    ReservationsModule, // ✅ Módulo de reservas
   ],
   controllers: [AppController, AdminController],
   providers: [

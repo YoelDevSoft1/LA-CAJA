@@ -1,0 +1,124 @@
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Order } from '../database/entities/order.entity';
+import { OrderItem } from '../database/entities/order-item.entity';
+import { Table } from '../database/entities/table.entity';
+import { QRCode } from '../database/entities/qr-code.entity';
+import { Product } from '../database/entities/product.entity';
+import { randomUUID } from 'crypto';
+
+export interface CreatePublicOrderDto {
+  qr_code: string;
+  items: Array<{
+    product_id: string;
+    qty: number;
+    note?: string | null;
+  }>;
+}
+
+/**
+ * Servicio para crear órdenes desde el menú público (sin autenticación)
+ */
+@Injectable()
+export class PublicOrdersService {
+  constructor(
+    @InjectRepository(Order)
+    private orderRepository: Repository<Order>,
+    @InjectRepository(OrderItem)
+    private orderItemRepository: Repository<OrderItem>,
+    @InjectRepository(Table)
+    private tableRepository: Repository<Table>,
+    @InjectRepository(QRCode)
+    private qrCodeRepository: Repository<QRCode>,
+    @InjectRepository(Product)
+    private productRepository: Repository<Product>,
+  ) {}
+
+  /**
+   * Crea una orden desde el menú público
+   */
+  async createOrderFromMenu(dto: CreatePublicOrderDto): Promise<Order> {
+    // Validar código QR
+    const qrCode = await this.qrCodeRepository.findOne({
+      where: { qr_code: dto.qr_code },
+      relations: ['table'],
+    });
+
+    if (!qrCode || !qrCode.is_active) {
+      throw new BadRequestException('Código QR inválido o inactivo');
+    }
+
+    if (qrCode.expires_at && qrCode.expires_at < new Date()) {
+      throw new BadRequestException('Código QR expirado');
+    }
+
+    const table = await this.tableRepository.findOne({
+      where: { id: qrCode.table_id },
+    });
+
+    if (!table) {
+      throw new NotFoundException('Mesa no encontrada');
+    }
+
+    // Verificar que los productos existan y estén activos
+    const productIds = dto.items.map((item) => item.product_id);
+    const products = await this.productRepository.find({
+      where: productIds.map((id) => ({ id, is_active: true })),
+    });
+
+    if (products.length !== productIds.length) {
+      throw new BadRequestException('Uno o más productos no están disponibles');
+    }
+
+    // Crear orden
+    const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    const order = this.orderRepository.create({
+      id: randomUUID(),
+      store_id: table.store_id,
+      table_id: table.id,
+      order_number: orderNumber,
+      status: 'open',
+      opened_at: new Date(),
+    });
+
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Crear items de la orden
+    const orderItems = dto.items.map((item) => {
+      const product = products.find((p) => p.id === item.product_id);
+      if (!product) {
+        throw new BadRequestException(`Producto ${item.product_id} no encontrado`);
+      }
+
+      return this.orderItemRepository.create({
+        id: randomUUID(),
+        order_id: savedOrder.id,
+        product_id: item.product_id,
+        qty: item.qty,
+        unit_price_bs: product.price_bs,
+        unit_price_usd: product.price_usd,
+        discount_bs: 0,
+        discount_usd: 0,
+        note: item.note || null,
+      });
+    });
+
+    await this.orderItemRepository.save(orderItems);
+
+    // Actualizar mesa
+    table.current_order_id = savedOrder.id;
+    table.status = 'occupied';
+    await this.tableRepository.save(table);
+
+    // Recargar orden con items
+    return this.orderRepository.findOne({
+      where: { id: savedOrder.id },
+      relations: ['items', 'table'],
+    }) as Promise<Order>;
+  }
+}

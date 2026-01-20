@@ -863,15 +863,10 @@ export default function POSPage() {
     updateItem(itemId, { qty: newQty })
   }
 
-  const total = getTotal()
   const hasOpenCash = !!currentCashSession?.id
   const allowDiscounts = !fastCheckoutConfig?.enabled || fastCheckoutConfig?.allow_discounts
   const exchangeRate = bcvRateData?.rate && bcvRateData.rate > 0 ? bcvRateData.rate : 36
-  const hasDiscounts = items.some(
-    (item) => (item.discount_usd || 0) > 0 || (item.discount_bs || 0) > 0
-  )
-  const totalDiscountUsd = items.reduce((sum, item) => sum + Number(item.discount_usd || 0), 0)
-
+  
   const resolveItemRate = (item: CartItem) => {
     const unitUsd = Number(item.unit_price_usd || 0)
     const unitBs = Number(item.unit_price_bs || 0)
@@ -880,6 +875,62 @@ export default function POSPage() {
     }
     return exchangeRate > 0 ? exchangeRate : 1
   }
+  
+  // Calcular totales recalculando precios en BS con la tasa actual
+  const calculateTotalWithCurrentRate = useMemo(() => {
+    const baseTotal = getTotal()
+    // Recalcular total en BS usando la tasa actual (exchangeRate) para asegurar consistencia
+    // Siempre usar la tasa actual, no la tasa del producto guardada
+    let recalculatedBs = 0
+    items.forEach((item) => {
+      const lineSubtotalUsd = item.qty * Number(item.unit_price_usd || 0)
+      const lineDiscountUsd = Number(item.discount_usd || 0)
+      const lineTotalUsd = lineSubtotalUsd - lineDiscountUsd
+      // Recalcular BS usando la tasa actual (exchangeRate), no la tasa del producto
+      const recalculatedLineBs = lineTotalUsd * exchangeRate
+      recalculatedBs += recalculatedLineBs
+    })
+    // Siempre usar el recalculado con la tasa actual
+    return { bs: recalculatedBs, usd: baseTotal.usd }
+  }, [items, exchangeRate, bcvRateData, getTotal])
+  
+  const total = calculateTotalWithCurrentRate
+  
+  // #region agent log
+  // Log para debug: verificar tasa de cambio y totales
+  useEffect(() => {
+    if (items.length > 0) {
+      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'POSPage.tsx:872',
+          message: 'Preview total calculation',
+          data: {
+            exchangeRate,
+            totalUsd: total.usd,
+            totalBs: total.bs,
+            itemsCount: items.length,
+            firstItem: items[0] ? {
+              product_name: items[0].product_name,
+              unit_price_usd: items[0].unit_price_usd,
+              unit_price_bs: items[0].unit_price_bs,
+              qty: items[0].qty,
+            } : null,
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'preview-check',
+          hypothesisId: 'A',
+        }),
+      }).catch(() => {});
+    }
+  }, [items, total, exchangeRate]);
+  // #endregion
+  const hasDiscounts = items.some(
+    (item) => (item.discount_usd || 0) > 0 || (item.discount_bs || 0) > 0
+  )
+  const totalDiscountUsd = items.reduce((sum, item) => sum + Number(item.discount_usd || 0), 0)
 
   // Porcentaje máximo de descuento permitido (configurable por rol en el futuro)
   const MAX_DISCOUNT_PERCENT = user?.role === 'owner' ? 100 : 30 // Cajeros: 30%, Dueños: 100%
@@ -1792,11 +1843,58 @@ export default function POSPage() {
                       )}
                   {items.map((item) => {
                     const lineSubtotalUsd = item.qty * Number(item.unit_price_usd || 0)
+                    // Recalcular precio en BS usando la tasa actual si es necesario
+                    // Si el precio en BS no coincide con la conversión actual, usar la tasa
+                    const calculatedBsFromUsd = lineSubtotalUsd * exchangeRate
                     const lineSubtotalBs = item.qty * Number(item.unit_price_bs || 0)
+                    // Si hay diferencia significativa, usar el precio recalculado
+                    const finalLineSubtotalBs = Math.abs(lineSubtotalBs - calculatedBsFromUsd) > 0.01 
+                      ? calculatedBsFromUsd 
+                      : lineSubtotalBs
                     const lineDiscountUsd = Number(item.discount_usd || 0)
                     const lineDiscountBs = Number(item.discount_bs || 0)
+                    // Recalcular descuento en BS si es necesario
+                    const calculatedDiscountBs = lineDiscountUsd * exchangeRate
+                    const finalLineDiscountBs = Math.abs(lineDiscountBs - calculatedDiscountBs) > 0.01
+                      ? calculatedDiscountBs
+                      : lineDiscountBs
                     const lineTotalUsd = lineSubtotalUsd - lineDiscountUsd
-                    const lineTotalBs = lineSubtotalBs - lineDiscountBs
+                    const lineTotalBs = finalLineSubtotalBs - finalLineDiscountBs
+                    
+                    // #region agent log
+                    // Log para debug: verificar cálculo de línea
+                    if (items.indexOf(item) === 0) {
+                      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          location: 'POSPage.tsx:1830',
+                          message: 'Line item calculation',
+                          data: {
+                            product_name: item.product_name,
+                            unit_price_usd: item.unit_price_usd,
+                            unit_price_bs: item.unit_price_bs,
+                            qty: item.qty,
+                            exchangeRate,
+                            lineSubtotalUsd,
+                            lineSubtotalBs,
+                            calculatedBsFromUsd,
+                            finalLineSubtotalBs,
+                            lineDiscountUsd,
+                            lineDiscountBs,
+                            calculatedDiscountBs,
+                            finalLineDiscountBs,
+                            lineTotalUsd,
+                            lineTotalBs,
+                          },
+                          timestamp: Date.now(),
+                          sessionId: 'debug-session',
+                          runId: 'line-calculation',
+                          hypothesisId: 'B',
+                        }),
+                      }).catch(() => {});
+                    }
+                    // #endregion
                     const discountInputValue =
                       discountInputs[item.id] ??
                       (lineDiscountUsd > 0 ? lineDiscountUsd.toFixed(2) : '')

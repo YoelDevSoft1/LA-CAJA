@@ -37,6 +37,7 @@ import {
   TrendingUp,
   Activity,
   CreditCard,
+  UtensilsCrossed,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -97,6 +98,7 @@ const navSections: NavSection[] = [
       { path: '/app/fast-checkout', label: 'Caja Rápida', icon: Zap, badge: null },
       { path: '/app/sales', label: 'Ventas', icon: FileText, badge: null },
       { path: '/app/tables', label: 'Mesas y Órdenes', icon: Square, badge: null },
+      { path: '/app/kitchen', label: 'Cocina (KDS)', icon: UtensilsCrossed, badge: null },
     ],
   },
   {

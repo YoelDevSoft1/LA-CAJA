@@ -76,6 +76,7 @@ const ReportsPage = lazy(() => import('./pages/ReportsPage'))
 const LotsPage = lazy(() => import('./pages/LotsPage'))
 const InvoiceSeriesPage = lazy(() => import('./pages/InvoiceSeriesPage'))
 const TablesPage = lazy(() => import('./pages/TablesPage'))
+const KitchenDisplayPage = lazy(() => import('./pages/KitchenDisplayPage'))
 const PeripheralsPage = lazy(() => import('./pages/PeripheralsPage'))
 const PriceListsPage = lazy(() => import('./pages/PriceListsPage'))
 const PromotionsPage = lazy(() => import('./pages/PromotionsPage'))
@@ -105,6 +106,10 @@ const ConflictsPage = lazy(() => import('./pages/ConflictsPage'))
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage'))
 const LicensePage = lazy(() => import('./pages/LicensePage'))
 const SecurityPage = lazy(() => import('./pages/SecurityPage'))
+
+// Lazy loading - Páginas públicas (menú QR)
+const PublicMenuQRPage = lazy(() => import('./pages/public/PublicMenuQRPage'))
+const PublicMenuPage = lazy(() => import('./pages/public/PublicMenuPage'))
 
 function App() {
   const { user, isAuthenticated, showLoader: authShowLoader, setShowLoader } = useAuth()
@@ -365,6 +370,10 @@ function AppRoutes() {
           }
         />
 
+        {/* Public routes - Menú QR para restaurantes */}
+        <Route path="/public/qr/:qrCode" element={<PublicMenuQRPage />} />
+        <Route path="/public/menu/:tableId" element={<PublicMenuPage />} />
+
         {/* Protected routes */}
         <Route
           path="/app"
@@ -453,6 +462,14 @@ function AppRoutes() {
             }
           />
           <Route path="tables" element={<TablesPage />} />
+          <Route
+            path="kitchen"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <KitchenDisplayPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="peripherals"
             element={

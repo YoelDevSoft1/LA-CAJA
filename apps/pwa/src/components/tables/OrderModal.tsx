@@ -10,12 +10,14 @@ import {
   XCircle,
   CheckCircle,
   Coffee,
+  Users,
 } from 'lucide-react'
 import { ordersService, Order, AddOrderItemRequest, CreatePartialPaymentRequest } from '@/services/orders.service'
 import { CreateSaleRequest } from '@/services/sales.service'
 import toast from 'react-hot-toast'
 import OrderItemModal from './OrderItemModal'
 import PartialPaymentModal from './PartialPaymentModal'
+import SplitBillModal from './SplitBillModal'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -47,6 +49,7 @@ export default function OrderModal({ isOpen, onClose, order, onOrderUpdated }: O
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false)
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
+  const [isSplitBillModalOpen, setIsSplitBillModalOpen] = useState(false)
 
   // Optimización: diferir carga en mobile para mejor percepción de rendimiento
   const [shouldLoad, setShouldLoad] = useState(false)
@@ -466,6 +469,14 @@ export default function OrderModal({ isOpen, onClose, order, onOrderUpdated }: O
                     <DollarSign className="w-4 h-4 mr-1" />
                     Pago Parcial
                   </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsSplitBillModalOpen(true)}
+                    disabled={currentOrder.items.length === 0}
+                  >
+                    <Users className="w-4 h-4 mr-1" />
+                    Dividir Cuenta
+                  </Button>
                   {canClose && (
                     <Button
                       variant="outline"
@@ -559,6 +570,34 @@ export default function OrderModal({ isOpen, onClose, order, onOrderUpdated }: O
             setIsCloseModalOpen(false)
           }}
           isLoading={false}
+        />
+      )}
+
+      {/* Modal de dividir cuenta */}
+      {isSplitBillModalOpen && currentOrder && (
+        <SplitBillModal
+          isOpen={isSplitBillModalOpen}
+          onClose={() => setIsSplitBillModalOpen(false)}
+          order={currentOrder}
+          onSplit={async (splits) => {
+            // Crear pagos parciales para cada división
+            try {
+              for (const split of splits) {
+                await ordersService.createPartialPayment(currentOrder.id, {
+                  amount_bs: split.amount_bs,
+                  amount_usd: split.amount_usd,
+                  payment_method: 'SPLIT',
+                  note: split.diner_name ? `División: ${split.diner_name}` : 'División de cuenta',
+                })
+              }
+              toast.success('Cuenta dividida correctamente')
+              queryClient.invalidateQueries({ queryKey: ['order', currentOrder.id] })
+              queryClient.invalidateQueries({ queryKey: ['orders', 'open'] })
+              onOrderUpdated?.()
+            } catch (error: any) {
+              toast.error(error.response?.data?.message || 'Error al dividir la cuenta')
+            }
+          }}
         />
       )}
 

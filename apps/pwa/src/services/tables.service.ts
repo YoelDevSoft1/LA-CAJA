@@ -10,6 +10,9 @@ export interface Table {
   capacity: number | null
   status: TableStatus
   current_order_id: string | null
+  zone: string | null
+  coordinates: { x: number; y: number } | null
+  estimated_dining_time: number | null
   note: string | null
   created_at: string
   updated_at: string
@@ -18,6 +21,11 @@ export interface Table {
     order_number: string
     status: string
   } | null
+  qrCode?: {
+    id: string
+    qr_code: string
+    public_url: string
+  } | null
 }
 
 export interface CreateTableRequest {
@@ -25,6 +33,9 @@ export interface CreateTableRequest {
   name?: string | null
   capacity?: number | null
   status?: TableStatus
+  zone?: string | null
+  coordinates?: { x: number; y: number } | null
+  estimated_dining_time?: number | null
   note?: string | null
 }
 
@@ -33,6 +44,9 @@ export interface UpdateTableRequest {
   name?: string | null
   capacity?: number | null
   status?: TableStatus
+  zone?: string | null
+  coordinates?: { x: number; y: number } | null
+  estimated_dining_time?: number | null
   note?: string | null
 }
 

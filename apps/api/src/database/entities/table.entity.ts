@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { Store } from './store.entity';
 import { Order } from './order.entity';
+import { QRCode } from './qr-code.entity';
 
 export type TableStatus =
   | 'available'
@@ -21,6 +22,7 @@ export type TableStatus =
 @Index(['store_id'])
 @Index(['store_id', 'status'])
 @Index(['current_order_id'], { where: 'current_order_id IS NOT NULL' })
+@Index(['zone'])
 export class Table {
   @PrimaryColumn('uuid')
   id: string;
@@ -50,6 +52,21 @@ export class Table {
 
   @Column({ type: 'uuid', nullable: true })
   current_order_id: string | null;
+
+  @OneToOne(() => QRCode, (qrCode) => qrCode.table, { nullable: true })
+  qrCode: QRCode | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  qr_code_id: string | null;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  zone: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  coordinates: { x: number; y: number } | null;
+
+  @Column({ type: 'int', nullable: true })
+  estimated_dining_time: number | null;
 
   @Column({ type: 'text', nullable: true })
   note: string | null;

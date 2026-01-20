@@ -489,59 +489,151 @@ export default function SaleDetailModal({
               )}
 
               {/* Detalle de pago mixto */}
-              {sale.payment.method === 'SPLIT' && sale.payment.split && (
-                <Card className="bg-info/5 border-info/50">
-                  <CardHeader>
-                    <CardTitle className="text-sm sm:text-base text-info">
-                      Desglose de Pago Mixto
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-                      {sale.payment.split.cash_bs && (
-                        <div>
-                          <span className="text-muted-foreground">Efectivo Bs:</span>
-                          <span className="ml-2 font-semibold text-foreground">
-                            {Number(sale.payment.split.cash_bs).toFixed(2)} Bs
-                          </span>
-                        </div>
-                      )}
-                      {sale.payment.split.cash_usd && (
-                        <div>
-                          <span className="text-muted-foreground">Efectivo USD:</span>
-                          <span className="ml-2 font-semibold text-foreground">
-                            ${Number(sale.payment.split.cash_usd).toFixed(2)}
-                          </span>
-                        </div>
-                      )}
-                      {sale.payment.split.pago_movil_bs && (
-                        <div>
-                          <span className="text-muted-foreground">Pago Móvil:</span>
-                          <span className="ml-2 font-semibold text-foreground">
-                            {Number(sale.payment.split.pago_movil_bs).toFixed(2)} Bs
-                          </span>
-                        </div>
-                      )}
-                      {sale.payment.split.transfer_bs && (
-                        <div>
-                          <span className="text-muted-foreground">Transferencia:</span>
-                          <span className="ml-2 font-semibold text-foreground">
-                            {Number(sale.payment.split.transfer_bs).toFixed(2)} Bs
-                          </span>
-                        </div>
-                      )}
-                      {sale.payment.split.other_bs && (
-                        <div>
-                          <span className="text-muted-foreground">Otro:</span>
-                          <span className="ml-2 font-semibold text-foreground">
-                            {Number(sale.payment.split.other_bs).toFixed(2)} Bs
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+              {(() => {
+                // #region agent log
+                // Log para debug: verificar datos de pago
+                if (sale.currency === 'MIXED' || sale.payment.method === 'SPLIT') {
+                  fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      location: 'SaleDetailModal.tsx:492',
+                      message: 'Mixed payment data check',
+                      data: {
+                        currency: sale.currency,
+                        paymentMethod: sale.payment.method,
+                        hasSplit: !!sale.payment.split,
+                        splitData: sale.payment.split,
+                        hasSplitPayments: !!sale.payment.split_payments,
+                        splitPaymentsLength: sale.payment.split_payments?.length || 0,
+                        splitPayments: sale.payment.split_payments,
+                        fullPayment: sale.payment,
+                      },
+                      timestamp: Date.now(),
+                      sessionId: 'debug-session',
+                      runId: 'mixed-payment-check',
+                      hypothesisId: 'C',
+                    }),
+                  }).catch(() => {});
+                }
+                // #endregion
+
+                // Construir desglose desde split si existe, o desde split_payments
+                let splitBreakdown: {
+                  cash_bs?: number
+                  cash_usd?: number
+                  pago_movil_bs?: number
+                  transfer_bs?: number
+                  other_bs?: number
+                } | null = null
+
+                // Si hay split directo, usarlo
+                if (sale.payment.split) {
+                  splitBreakdown = sale.payment.split
+                } 
+                // Si no hay split pero hay split_payments, construir el desglose
+                else if (sale.payment.split_payments && sale.payment.split_payments.length > 0) {
+                  const exchangeRate = Number(sale.exchange_rate) || 1
+                  splitBreakdown = {}
+                  
+                  for (const payment of sale.payment.split_payments) {
+                    const amountUsd = Number(payment.amount_usd ?? 0)
+                    const amountBs = Number(payment.amount_bs ?? 0)
+                    
+                    if (amountUsd <= 0 && amountBs <= 0) continue
+                    
+                    switch (payment.method) {
+                      case 'CASH_BS':
+                        splitBreakdown.cash_bs = (splitBreakdown.cash_bs || 0) + (amountBs || amountUsd * exchangeRate)
+                        break
+                      case 'CASH_USD':
+                        splitBreakdown.cash_usd = (splitBreakdown.cash_usd || 0) + (amountUsd || amountBs / exchangeRate)
+                        break
+                      case 'PAGO_MOVIL':
+                        splitBreakdown.pago_movil_bs = (splitBreakdown.pago_movil_bs || 0) + (amountBs || amountUsd * exchangeRate)
+                        break
+                      case 'TRANSFER':
+                        splitBreakdown.transfer_bs = (splitBreakdown.transfer_bs || 0) + (amountBs || amountUsd * exchangeRate)
+                        break
+                      case 'OTHER':
+                        splitBreakdown.other_bs = (splitBreakdown.other_bs || 0) + (amountBs || amountUsd * exchangeRate)
+                        break
+                    }
+                  }
+                }
+
+                // Mostrar si hay desglose y (método es SPLIT o currency es MIXED)
+                const shouldShow = splitBreakdown && (
+                  sale.payment.method === 'SPLIT' || 
+                  sale.currency === 'MIXED' ||
+                  (sale.payment.split_payments && sale.payment.split_payments.length > 0)
+                )
+
+                if (!shouldShow || !splitBreakdown) return null
+
+                const hasAnyAmount = 
+                  (splitBreakdown.cash_bs && splitBreakdown.cash_bs > 0) ||
+                  (splitBreakdown.cash_usd && splitBreakdown.cash_usd > 0) ||
+                  (splitBreakdown.pago_movil_bs && splitBreakdown.pago_movil_bs > 0) ||
+                  (splitBreakdown.transfer_bs && splitBreakdown.transfer_bs > 0) ||
+                  (splitBreakdown.other_bs && splitBreakdown.other_bs > 0)
+
+                if (!hasAnyAmount) return null
+
+                return (
+                  <Card className="bg-info/5 border-info/50">
+                    <CardHeader>
+                      <CardTitle className="text-sm sm:text-base text-info">
+                        Desglose de Pago Mixto
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                        {splitBreakdown.cash_bs && splitBreakdown.cash_bs > 0 && (
+                          <div>
+                            <span className="text-muted-foreground">Efectivo Bs:</span>
+                            <span className="ml-2 font-semibold text-foreground">
+                              {Number(splitBreakdown.cash_bs).toFixed(2)} Bs
+                            </span>
+                          </div>
+                        )}
+                        {splitBreakdown.cash_usd && splitBreakdown.cash_usd > 0 && (
+                          <div>
+                            <span className="text-muted-foreground">Efectivo USD:</span>
+                            <span className="ml-2 font-semibold text-foreground">
+                              ${Number(splitBreakdown.cash_usd).toFixed(2)}
+                            </span>
+                          </div>
+                        )}
+                        {splitBreakdown.pago_movil_bs && splitBreakdown.pago_movil_bs > 0 && (
+                          <div>
+                            <span className="text-muted-foreground">Pago Móvil:</span>
+                            <span className="ml-2 font-semibold text-foreground">
+                              {Number(splitBreakdown.pago_movil_bs).toFixed(2)} Bs
+                            </span>
+                          </div>
+                        )}
+                        {splitBreakdown.transfer_bs && splitBreakdown.transfer_bs > 0 && (
+                          <div>
+                            <span className="text-muted-foreground">Transferencia:</span>
+                            <span className="ml-2 font-semibold text-foreground">
+                              {Number(splitBreakdown.transfer_bs).toFixed(2)} Bs
+                            </span>
+                          </div>
+                        )}
+                        {splitBreakdown.other_bs && splitBreakdown.other_bs > 0 && (
+                          <div>
+                            <span className="text-muted-foreground">Otro:</span>
+                            <span className="ml-2 font-semibold text-foreground">
+                              {Number(splitBreakdown.other_bs).toFixed(2)} Bs
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })()}
 
               {/* Lista de productos */}
               <div>

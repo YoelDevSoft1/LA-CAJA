@@ -40,6 +40,8 @@ export { DebtPayment } from './debt-payment.entity';
 
 // Order entities
 export { Table } from './table.entity';
+export { QRCode } from './qr-code.entity';
+export { Reservation } from './reservation.entity';
 export { Order } from './order.entity';
 export { OrderItem } from './order-item.entity';
 export { OrderPayment } from './order-payment.entity';
@@ -220,6 +222,8 @@ import { TwoFactorAuth } from './two-factor-auth.entity';
 import { LicensePayment } from './license-payment.entity';
 import { LicensePaymentDocument } from './license-payment-document.entity';
 import { LicensePaymentVerification } from './license-payment-verification.entity';
+import { QRCode } from './qr-code.entity';
+import { Reservation } from './reservation.entity';
 
 /**
  * Array con todas las entidades de TypeORM para configuración centralizada
@@ -238,6 +242,8 @@ export const ALL_ENTITIES = [
   ProductSerial,
   InvoiceSeries,
   Table,
+  QRCode,
+  Reservation,
   Order,
   OrderItem,
   OrderPayment,

@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 import { Table, TableStatus } from '../database/entities/table.entity';
 import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
+import { QRCodesService } from './qr-codes.service';
 import { randomUUID } from 'crypto';
 
 /**
@@ -18,6 +19,7 @@ export class TablesService {
   constructor(
     @InjectRepository(Table)
     private tableRepository: Repository<Table>,
+    private qrCodesService: QRCodesService,
   ) {}
 
   /**
@@ -45,10 +47,23 @@ export class TablesService {
       name: dto.name || null,
       capacity: dto.capacity || null,
       status: dto.status || 'available',
+      zone: dto.zone || null,
+      coordinates: dto.coordinates || null,
+      estimated_dining_time: dto.estimated_dining_time || null,
       note: dto.note || null,
     });
 
-    return this.tableRepository.save(table);
+    const savedTable = await this.tableRepository.save(table);
+
+    // Generar código QR automáticamente para la nueva mesa
+    try {
+      await this.qrCodesService.createOrUpdateQRCode(storeId, savedTable.id);
+      // Recargar la mesa con el QR code
+      return this.getTableById(storeId, savedTable.id);
+    } catch (error) {
+      // Si falla la generación del QR, la mesa se crea igual
+      return savedTable;
+    }
   }
 
   /**
@@ -58,7 +73,7 @@ export class TablesService {
     return this.tableRepository.find({
       where: { store_id: storeId },
       order: { table_number: 'ASC' },
-      relations: ['currentOrder'],
+      relations: ['currentOrder', 'qrCode'],
     });
   }
 
@@ -68,7 +83,7 @@ export class TablesService {
   async getTableById(storeId: string, tableId: string): Promise<Table> {
     const table = await this.tableRepository.findOne({
       where: { id: tableId, store_id: storeId },
-      relations: ['currentOrder'],
+      relations: ['currentOrder', 'qrCode'],
     });
 
     if (!table) {
@@ -88,7 +103,7 @@ export class TablesService {
     return this.tableRepository.find({
       where: { store_id: storeId, status },
       order: { table_number: 'ASC' },
-      relations: ['currentOrder'],
+      relations: ['currentOrder', 'qrCode'],
     });
   }
 
@@ -123,6 +138,9 @@ export class TablesService {
     if (dto.name !== undefined) table.name = dto.name;
     if (dto.capacity !== undefined) table.capacity = dto.capacity;
     if (dto.status !== undefined) table.status = dto.status;
+    if (dto.zone !== undefined) table.zone = dto.zone;
+    if (dto.coordinates !== undefined) table.coordinates = dto.coordinates;
+    if (dto.estimated_dining_time !== undefined) table.estimated_dining_time = dto.estimated_dining_time;
     if (dto.note !== undefined) table.note = dto.note;
 
     table.updated_at = new Date();

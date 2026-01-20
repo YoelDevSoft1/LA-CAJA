@@ -1,17 +1,20 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Square } from 'lucide-react'
+import { Square, Grid3x3, LayoutGrid } from 'lucide-react'
 import { Table } from '@/services/tables.service'
 import { ordersService, Order } from '@/services/orders.service'
 import toast from 'react-hot-toast'
 import TablesGrid from '@/components/tables/TablesGrid'
+import FloorPlanView from '@/components/tables/FloorPlanView'
 import OrderModal from '@/components/tables/OrderModal'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 export default function TablesPage() {
   const queryClient = useQueryClient()
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<'grid' | 'floor'>('grid')
 
   const { data: openOrders } = useQuery({
     queryKey: ['orders', 'open'],
@@ -67,13 +70,38 @@ export default function TablesPage() {
               <Square className="w-6 h-6 sm:w-7 sm:h-7 text-primary mr-2" />
               Mesas y Órdenes
             </CardTitle>
+            <div className="flex gap-2">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+              >
+                <LayoutGrid className="w-4 h-4 mr-2" />
+                Grid
+              </Button>
+              <Button
+                variant={viewMode === 'floor' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('floor')}
+              >
+                <Grid3x3 className="w-4 h-4 mr-2" />
+                Plano
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          <TablesGrid
-            onTableClick={handleTableClick}
-            onCreateOrder={handleCreateOrder}
-          />
+          {viewMode === 'grid' ? (
+            <TablesGrid
+              onTableClick={handleTableClick}
+              onCreateOrder={handleCreateOrder}
+            />
+          ) : (
+            <FloorPlanView
+              onTableClick={handleTableClick}
+              onCreateOrder={handleCreateOrder}
+            />
+          )}
         </CardContent>
       </Card>
 

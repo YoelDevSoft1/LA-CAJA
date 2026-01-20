@@ -5,7 +5,21 @@ import {
   Min,
   MaxLength,
   IsIn,
+  IsObject,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+/**
+ * DTO para coordenadas de la mesa en el plano
+ */
+class CoordinatesDto {
+  @IsInt()
+  x: number;
+
+  @IsInt()
+  y: number;
+}
 
 /**
  * DTO para actualizar una mesa
@@ -37,6 +51,22 @@ export class UpdateTableDto {
     | 'reserved'
     | 'cleaning'
     | 'out_of_service';
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(50, { message: 'La zona no puede exceder 50 caracteres' })
+  zone?: string | null;
+
+  @IsObject()
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CoordinatesDto)
+  coordinates?: { x: number; y: number } | null;
+
+  @IsInt()
+  @Min(1, { message: 'El tiempo estimado debe ser mayor a 0' })
+  @IsOptional()
+  estimated_dining_time?: number | null;
 
   @IsString()
   @IsOptional()
