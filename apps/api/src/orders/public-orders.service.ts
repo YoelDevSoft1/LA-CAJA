@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -10,6 +12,7 @@ import { OrderItem } from '../database/entities/order-item.entity';
 import { Table } from '../database/entities/table.entity';
 import { QRCode } from '../database/entities/qr-code.entity';
 import { Product } from '../database/entities/product.entity';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { randomUUID } from 'crypto';
 
 export interface CreatePublicOrderDto {
@@ -37,6 +40,8 @@ export class PublicOrdersService {
     private qrCodeRepository: Repository<QRCode>,
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
+    @Inject(forwardRef(() => NotificationsGateway))
+    private notificationsGateway: NotificationsGateway,
   ) {}
 
   /**
@@ -113,12 +118,22 @@ export class PublicOrdersService {
     // Actualizar mesa
     table.current_order_id = savedOrder.id;
     table.status = 'occupied';
-    await this.tableRepository.save(table);
+    const updatedTable = await this.tableRepository.save(table);
 
     // Recargar orden con items
-    return this.orderRepository.findOne({
+    const finalOrder = await this.orderRepository.findOne({
       where: { id: savedOrder.id },
       relations: ['items', 'table'],
-    }) as Promise<Order>;
+    }) as Order;
+
+    // Emitir eventos WebSocket para notificar en tiempo real
+    if (finalOrder) {
+      this.notificationsGateway.emitOrderCreated(table.store_id, finalOrder);
+      this.notificationsGateway.emitOrderUpdate(table.store_id, finalOrder);
+      this.notificationsGateway.emitTableUpdate(table.store_id, updatedTable);
+      this.notificationsGateway.emitKitchenUpdate(table.store_id, finalOrder);
+    }
+
+    return finalOrder;
   }
 }

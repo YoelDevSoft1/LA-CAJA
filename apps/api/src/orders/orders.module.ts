@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
@@ -9,6 +9,7 @@ import { Table } from '../database/entities/table.entity';
 import { Product } from '../database/entities/product.entity';
 import { TablesModule } from '../tables/tables.module';
 import { SalesModule } from '../sales/sales.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 /**
  * Módulo para gestión de órdenes (cuentas abiertas)
@@ -18,6 +19,7 @@ import { SalesModule } from '../sales/sales.module';
     TypeOrmModule.forFeature([Order, OrderItem, OrderPayment, Table, Product]),
     TablesModule,
     SalesModule,
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

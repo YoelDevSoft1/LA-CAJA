@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MenuController } from './menu.controller';
 import { MenuService } from './menu.service';
@@ -9,6 +9,7 @@ import { InventoryMovement } from '../database/entities/inventory-movement.entit
 import { Order } from '../database/entities/order.entity';
 import { OrderItem } from '../database/entities/order-item.entity';
 import { PublicOrdersService } from '../orders/public-orders.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 /**
  * Módulo para menú público (acceso desde QR codes)
@@ -23,6 +24,7 @@ import { PublicOrdersService } from '../orders/public-orders.service';
       Order,
       OrderItem,
     ]),
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [MenuController],
   providers: [MenuService, PublicOrdersService],

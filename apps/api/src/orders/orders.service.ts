@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In, Between } from 'typeorm';
@@ -19,6 +21,7 @@ import { MergeOrdersDto } from './dto/merge-orders.dto';
 import { TablesService } from '../tables/tables.service';
 import { SalesService } from '../sales/sales.service';
 import { CreateSaleDto } from '../sales/dto/create-sale.dto';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { randomUUID } from 'crypto';
 
 /**
@@ -40,6 +43,8 @@ export class OrdersService {
     private dataSource: DataSource,
     private tablesService: TablesService,
     private salesService: SalesService,
+    @Inject(forwardRef(() => NotificationsGateway))
+    private notificationsGateway: NotificationsGateway,
   ) {}
 
   /**
@@ -124,6 +129,14 @@ export class OrdersService {
           manager,
         );
         savedOrder.items = items;
+      }
+
+      // Emitir eventos WebSocket después de la transacción
+      this.notificationsGateway.emitOrderCreated(storeId, savedOrder);
+      this.notificationsGateway.emitOrderUpdate(storeId, savedOrder);
+      if (table) {
+        this.notificationsGateway.emitTableUpdate(storeId, table);
+        this.notificationsGateway.emitKitchenUpdate(storeId, savedOrder);
       }
 
       return savedOrder;
@@ -255,6 +268,12 @@ export class OrdersService {
         [dto],
         manager,
       );
+      
+      // Recargar orden completa para emitir
+      const updatedOrder = await this.getOrderById(storeId, orderId);
+      this.notificationsGateway.emitOrderUpdate(storeId, updatedOrder);
+      this.notificationsGateway.emitKitchenUpdate(storeId, updatedOrder);
+      
       return items[0];
     });
   }
@@ -284,6 +303,11 @@ export class OrdersService {
     }
 
     await this.orderItemRepository.remove(item);
+    
+    // Recargar orden completa para emitir
+    const updatedOrder = await this.getOrderById(storeId, orderId);
+    this.notificationsGateway.emitOrderUpdate(storeId, updatedOrder);
+    this.notificationsGateway.emitKitchenUpdate(storeId, updatedOrder);
   }
 
   /**
@@ -302,7 +326,12 @@ export class OrdersService {
     order.paused_at = new Date();
     order.updated_at = new Date();
 
-    return this.orderRepository.save(order);
+    const savedOrder = await this.orderRepository.save(order);
+    
+    // Emitir eventos WebSocket
+    this.notificationsGateway.emitOrderUpdate(storeId, savedOrder);
+    
+    return savedOrder;
   }
 
   /**
@@ -321,7 +350,13 @@ export class OrdersService {
     order.paused_at = null;
     order.updated_at = new Date();
 
-    return this.orderRepository.save(order);
+    const savedOrder = await this.orderRepository.save(order);
+    
+    // Emitir eventos WebSocket
+    this.notificationsGateway.emitOrderUpdate(storeId, savedOrder);
+    this.notificationsGateway.emitKitchenUpdate(storeId, savedOrder);
+    
+    return savedOrder;
   }
 
   /**
@@ -617,6 +652,7 @@ export class OrdersService {
       const savedOrder = await manager.save(Order, order);
 
       // Liberar mesa si tiene
+      let updatedTable: Table | null = null;
       if (order.table_id) {
         const table = await manager.findOne(Table, {
           where: { id: order.table_id },
@@ -625,8 +661,14 @@ export class OrdersService {
           table.current_order_id = null;
           table.status = 'available';
           table.updated_at = new Date();
-          await manager.save(Table, table);
+          updatedTable = await manager.save(Table, table);
         }
+      }
+
+      // Emitir eventos WebSocket después de la transacción
+      this.notificationsGateway.emitOrderUpdate(storeId, savedOrder);
+      if (updatedTable) {
+        this.notificationsGateway.emitTableUpdate(storeId, updatedTable);
       }
 
       return { order: savedOrder, sale };
@@ -658,6 +700,7 @@ export class OrdersService {
       const savedOrder = await manager.save(Order, order);
 
       // Liberar mesa si tiene
+      let updatedTable: Table | null = null;
       if (order.table_id) {
         const table = await manager.findOne(Table, {
           where: { id: order.table_id },
@@ -666,8 +709,14 @@ export class OrdersService {
           table.current_order_id = null;
           table.status = 'available';
           table.updated_at = new Date();
-          await manager.save(Table, table);
+          updatedTable = await manager.save(Table, table);
         }
+      }
+
+      // Emitir eventos WebSocket después de la transacción
+      this.notificationsGateway.emitOrderUpdate(storeId, savedOrder);
+      if (updatedTable) {
+        this.notificationsGateway.emitTableUpdate(storeId, updatedTable);
       }
 
       return savedOrder;

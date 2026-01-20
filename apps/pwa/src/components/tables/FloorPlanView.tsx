@@ -29,6 +29,7 @@ export default function FloorPlanView({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
+  const dragStartPos = useRef<{ x: number; y: number } | null>(null)
 
   const { data: tables, isLoading } = useQuery({
     queryKey: ['tables'],
@@ -84,6 +85,8 @@ export default function FloorPlanView({
       point.x = (e.clientX - rect.left - pan.x) / zoom
       point.y = (e.clientY - rect.top - pan.y) / zoom
 
+      // Guardar posición inicial del mouse
+      dragStartPos.current = { x: e.clientX, y: e.clientY }
       setDragging(table.id)
       setDragOffset({
         x: point.x - table.coordinates.x,
@@ -144,7 +147,11 @@ export default function FloorPlanView({
           data: { coordinates: table.coordinates },
         })
       }
-      setDragging(null)
+      // Resetear después de un pequeño delay para prevenir el onClick
+      setTimeout(() => {
+        setDragging(null)
+        dragStartPos.current = null
+      }, 100)
     }
     setIsPanning(false)
   }, [dragging, tables, updateTableMutation])
@@ -269,7 +276,21 @@ export default function FloorPlanView({
                   onMouseDown={(e) => handleTableMouseDown(e, table)}
                   onClick={(e) => {
                     e.stopPropagation()
-                    onTableClick(table)
+                    // Solo llamar onTableClick si no se ha arrastrado
+                    // Verificar si hubo movimiento significativo (>5px)
+                    if (dragStartPos.current) {
+                      const deltaX = Math.abs(e.clientX - dragStartPos.current.x)
+                      const deltaY = Math.abs(e.clientY - dragStartPos.current.y)
+                      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
+                      if (distance > 5) {
+                        // Se arrastró, no hacer click
+                        return
+                      }
+                    }
+                    // Solo si la mesa no está siendo arrastrada actualmente
+                    if (dragging !== table.id) {
+                      onTableClick(table)
+                    }
                   }}
                 >
                   {/* Mesa */}

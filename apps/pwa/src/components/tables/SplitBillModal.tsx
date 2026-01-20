@@ -52,13 +52,16 @@ export default function SplitBillModal({
     let totalBs = 0
     let totalUsd = 0
 
-    order.items.forEach((item) => {
+    const items = order.items || []
+    const payments = order.payments || []
+
+    items.forEach((item) => {
       totalBs += Number(item.unit_price_bs) * item.qty - Number(item.discount_bs || 0)
       totalUsd += Number(item.unit_price_usd) * item.qty - Number(item.discount_usd || 0)
     })
 
     // Restar pagos parciales
-    order.payments.forEach((payment) => {
+    payments.forEach((payment) => {
       totalBs -= Number(payment.amount_bs)
       totalUsd -= Number(payment.amount_usd)
     })
@@ -101,8 +104,9 @@ export default function SplitBillModal({
     let totalBs = 0
     let totalUsd = 0
 
+    const items = order.items || []
     itemSplits.forEach((splits, itemId) => {
-      const item = order.items.find((i) => i.id === itemId)
+      const item = items.find((i) => i.id === itemId)
       if (!item) return
 
       const dinerSplit = splits.find((s) => s.dinerIndex === dinerIndex)
@@ -122,8 +126,9 @@ export default function SplitBillModal({
     let totalBs = 0
     let totalUsd = 0
 
+    const items = order.items || []
     itemIds.forEach((itemId) => {
-      const item = order.items.find((i) => i.id === itemId)
+      const item = items.find((i) => i.id === itemId)
       if (item) {
         totalBs += Number(item.unit_price_bs) * item.qty - Number(item.discount_bs || 0)
         totalUsd += Number(item.unit_price_usd) * item.qty - Number(item.discount_usd || 0)
@@ -190,7 +195,7 @@ export default function SplitBillModal({
       percentageSplits.forEach((percentage, dinerIndex) => {
         if (percentage > 0) {
           splits.push({
-            items: order.items.map((i) => i.id), // Todos los items
+            items: (order.items || []).map((i) => i.id), // Todos los items
             amount_bs: (orderTotal.bs * percentage) / 100,
             amount_usd: (orderTotal.usd * percentage) / 100,
             diner_name: `Comensal ${dinerIndex + 1}`,
@@ -246,7 +251,7 @@ export default function SplitBillModal({
 
               <ScrollArea className="h-[400px]">
                 <div className="space-y-3">
-                  {order.items.map((item) => {
+                  {(order.items || []).map((item) => {
                     const splits = itemSplits.get(item.id) || []
                     const totalAssigned = splits.reduce((sum, s) => sum + s.quantity, 0)
                     const remaining = item.qty - totalAssigned
@@ -385,7 +390,7 @@ export default function SplitBillModal({
                           <div className="space-y-2">
                             <Label className="text-sm">Items asignados:</Label>
                             <div className="flex flex-wrap gap-2">
-                              {order.items.map((item) => {
+                              {(order.items || []).map((item) => {
                                 const isSelected = diner.itemIds.includes(item.id)
                                 return (
                                   <Button

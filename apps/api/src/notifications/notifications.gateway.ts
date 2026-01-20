@@ -248,4 +248,55 @@ export class NotificationsGateway
       timestamp: Date.now(),
     });
   }
+
+  /**
+   * Emitir actualización de orden a todo el store
+   */
+  emitOrderUpdate(storeId: string, order: any) {
+    this.server.to(`store:${storeId}`).emit('order:update', {
+      order,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Emitir nueva orden a todo el store
+   */
+  emitOrderCreated(storeId: string, order: any) {
+    this.server.to(`store:${storeId}`).emit('order:created', {
+      order,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Emitir actualización de mesa a todo el store
+   */
+  emitTableUpdate(storeId: string, table: any) {
+    this.server.to(`store:${storeId}`).emit('table:update', {
+      table,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Emitir cambio de estado de mesa a todo el store
+   */
+  emitTableStatusChange(storeId: string, tableId: string, status: string) {
+    this.server.to(`store:${storeId}`).emit('table:status_change', {
+      table_id: tableId,
+      status,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Emitir actualización de cocina a todo el store
+   */
+  emitKitchenUpdate(storeId: string, order: any) {
+    this.server.to(`store:${storeId}`).emit('kitchen:order_update', {
+      order,
+      timestamp: Date.now(),
+    });
+  }
 }

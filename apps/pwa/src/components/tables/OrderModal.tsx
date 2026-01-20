@@ -101,6 +101,10 @@ export default function OrderModal({ isOpen, onClose, order, onOrderUpdated }: O
   }
 
   const totals = currentOrder ? calculateOrderTotal(currentOrder) : { bs: 0, usd: 0 }
+  
+  // Validaciones defensivas para evitar errores
+  const orderItems = currentOrder?.items || []
+  const orderPayments = currentOrder?.payments || []
 
   const addItemMutation = useMutation({
     mutationFn: (data: AddOrderItemRequest) => {
@@ -253,12 +257,12 @@ export default function OrderModal({ isOpen, onClose, order, onOrderUpdated }: O
 
   if (!isOpen || !currentOrder) return null
 
-  const canClose = currentOrder.status === 'open' && currentOrder.items.length > 0
+  const canClose = currentOrder.status === 'open' && orderItems.length > 0
   const canPause = currentOrder.status === 'open'
   const canResume = currentOrder.status === 'paused'
 
   // Convertir items de orden a items de carrito para CheckoutModal
-  const cartItems = currentOrder.items.map((item) => ({
+  const cartItems = orderItems.map((item) => ({
     id: item.id,
     product_id: item.product_id,
     variant_id: item.variant_id,
@@ -335,7 +339,7 @@ export default function OrderModal({ isOpen, onClose, order, onOrderUpdated }: O
               {/* Items de la orden */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-foreground">Items ({currentOrder.items.length})</h3>
+                  <h3 className="font-semibold text-foreground">Items ({orderItems.length})</h3>
                   {canPause && (
                     <Button
                       size="sm"
@@ -349,7 +353,7 @@ export default function OrderModal({ isOpen, onClose, order, onOrderUpdated }: O
                 </div>
                 <ScrollArea className="h-64 border border-border rounded-lg">
                   <div className="p-2">
-                    {currentOrder.items.length === 0 ? (
+                    {orderItems.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         No hay items en la orden
                       </div>
@@ -403,14 +407,14 @@ export default function OrderModal({ isOpen, onClose, order, onOrderUpdated }: O
               </div>
 
               {/* Pagos parciales */}
-              {currentOrder.payments.length > 0 && (
+              {orderPayments.length > 0 && (
                 <div>
                   <h3 className="font-semibold text-foreground mb-3">
-                    Pagos Parciales ({currentOrder.payments.length})
+                    Pagos Parciales ({orderPayments.length})
                   </h3>
                   <ScrollArea className="h-32 border border-border rounded-lg">
                     <div className="p-2">
-                      {currentOrder.payments.map((payment) => (
+                      {orderPayments.map((payment) => (
                         <div
                           key={payment.id}
                           className="flex items-center justify-between p-2 border-b border-border last:border-0"
@@ -472,7 +476,7 @@ export default function OrderModal({ isOpen, onClose, order, onOrderUpdated }: O
                   <Button
                     variant="outline"
                     onClick={() => setIsSplitBillModalOpen(true)}
-                    disabled={currentOrder.items.length === 0}
+                    disabled={orderItems.length === 0}
                   >
                     <Users className="w-4 h-4 mr-1" />
                     Dividir Cuenta

@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -9,6 +11,7 @@ import { Table, TableStatus } from '../database/entities/table.entity';
 import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
 import { QRCodesService } from './qr-codes.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { randomUUID } from 'crypto';
 
 /**
@@ -20,6 +23,8 @@ export class TablesService {
     @InjectRepository(Table)
     private tableRepository: Repository<Table>,
     private qrCodesService: QRCodesService,
+    @Inject(forwardRef(() => NotificationsGateway))
+    private notificationsGateway: NotificationsGateway,
   ) {}
 
   /**
@@ -59,9 +64,14 @@ export class TablesService {
     try {
       await this.qrCodesService.createOrUpdateQRCode(storeId, savedTable.id);
       // Recargar la mesa con el QR code
-      return this.getTableById(storeId, savedTable.id);
+      const tableWithQR = await this.getTableById(storeId, savedTable.id);
+      // Emitir evento WebSocket
+      this.notificationsGateway.emitTableUpdate(storeId, tableWithQR);
+      return tableWithQR;
     } catch (error) {
       // Si falla la generación del QR, la mesa se crea igual
+      // Emitir evento WebSocket
+      this.notificationsGateway.emitTableUpdate(storeId, savedTable);
       return savedTable;
     }
   }
@@ -145,7 +155,15 @@ export class TablesService {
 
     table.updated_at = new Date();
 
-    return this.tableRepository.save(table);
+    const savedTable = await this.tableRepository.save(table);
+    
+    // Emitir evento WebSocket
+    this.notificationsGateway.emitTableUpdate(storeId, savedTable);
+    if (dto.status !== undefined) {
+      this.notificationsGateway.emitTableStatusChange(storeId, tableId, dto.status);
+    }
+    
+    return savedTable;
   }
 
   /**
@@ -159,7 +177,13 @@ export class TablesService {
     const table = await this.getTableById(storeId, tableId);
     table.status = status;
     table.updated_at = new Date();
-    return this.tableRepository.save(table);
+    const savedTable = await this.tableRepository.save(table);
+    
+    // Emitir eventos WebSocket
+    this.notificationsGateway.emitTableUpdate(storeId, savedTable);
+    this.notificationsGateway.emitTableStatusChange(storeId, tableId, status);
+    
+    return savedTable;
   }
 
   /**
@@ -174,7 +198,13 @@ export class TablesService {
     table.current_order_id = orderId;
     table.status = orderId ? 'occupied' : 'available';
     table.updated_at = new Date();
-    return this.tableRepository.save(table);
+    const savedTable = await this.tableRepository.save(table);
+    
+    // Emitir eventos WebSocket
+    this.notificationsGateway.emitTableUpdate(storeId, savedTable);
+    this.notificationsGateway.emitTableStatusChange(storeId, tableId, savedTable.status);
+    
+    return savedTable;
   }
 
   /**

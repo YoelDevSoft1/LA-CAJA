@@ -9,12 +9,16 @@ import FloorPlanView from '@/components/tables/FloorPlanView'
 import OrderModal from '@/components/tables/OrderModal'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useRealtimeOrders } from '@/hooks/useRealtimeOrders'
 
 export default function TablesPage() {
   const queryClient = useQueryClient()
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'floor'>('grid')
+
+  // Escuchar actualizaciones en tiempo real
+  useRealtimeOrders()
 
   const { data: openOrders } = useQuery({
     queryKey: ['orders', 'open'],
@@ -45,10 +49,15 @@ export default function TablesPage() {
       if (order) {
         setSelectedOrder(order)
         setIsOrderModalOpen(true)
+      } else {
+        // Si hay current_order_id pero no encontramos la orden, solo mostrar la mesa
+        // No crear orden automáticamente
+        toast('Mesa ' + table.table_number + ' - Sin orden activa', { icon: 'ℹ️' })
       }
     } else {
-      // Si no tiene orden, crear una nueva
-      createOrderMutation.mutate(table.id)
+      // Si no tiene orden, NO crear automáticamente
+      // Solo mostrar información o permitir crear orden manualmente desde un botón
+      toast('Mesa ' + table.table_number + ' disponible. Usa "Nueva Orden" para crear una orden.', { icon: 'ℹ️' })
     }
   }
 

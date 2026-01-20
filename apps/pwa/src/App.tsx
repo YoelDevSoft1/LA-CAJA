@@ -77,6 +77,7 @@ const LotsPage = lazy(() => import('./pages/LotsPage'))
 const InvoiceSeriesPage = lazy(() => import('./pages/InvoiceSeriesPage'))
 const TablesPage = lazy(() => import('./pages/TablesPage'))
 const KitchenDisplayPage = lazy(() => import('./pages/KitchenDisplayPage'))
+const ReservationsPage = lazy(() => import('./pages/ReservationsPage'))
 const PeripheralsPage = lazy(() => import('./pages/PeripheralsPage'))
 const PriceListsPage = lazy(() => import('./pages/PriceListsPage'))
 const PromotionsPage = lazy(() => import('./pages/PromotionsPage'))
@@ -467,6 +468,14 @@ function AppRoutes() {
             element={
               <ProtectedRoute allowedRoles={['owner']}>
                 <KitchenDisplayPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="reservations"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <ReservationsPage />
               </ProtectedRoute>
             }
           />

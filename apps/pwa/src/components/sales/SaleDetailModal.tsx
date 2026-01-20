@@ -562,14 +562,28 @@ export default function SaleDetailModal({
                   }
                 }
 
-                // Mostrar si hay desglose y (método es SPLIT o currency es MIXED)
-                const shouldShow = splitBreakdown && (
-                  sale.payment.method === 'SPLIT' || 
-                  sale.currency === 'MIXED' ||
-                  (sale.payment.split_payments && sale.payment.split_payments.length > 0)
-                )
+                // Mostrar si currency es MIXED o método es SPLIT
+                const shouldShow = sale.currency === 'MIXED' || sale.payment.method === 'SPLIT'
 
-                if (!shouldShow || !splitBreakdown) return null
+                if (!shouldShow) return null
+
+                // Si no hay desglose pero debería mostrarse, mostrar mensaje
+                if (!splitBreakdown) {
+                  return (
+                    <Card className="bg-info/5 border-info/50">
+                      <CardHeader>
+                        <CardTitle className="text-sm sm:text-base text-info">
+                          Desglose de Pago Mixto
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground">
+                          No hay información de desglose disponible para esta venta.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )
+                }
 
                 const hasAnyAmount = 
                   (splitBreakdown.cash_bs && splitBreakdown.cash_bs > 0) ||
@@ -578,7 +592,22 @@ export default function SaleDetailModal({
                   (splitBreakdown.transfer_bs && splitBreakdown.transfer_bs > 0) ||
                   (splitBreakdown.other_bs && splitBreakdown.other_bs > 0)
 
-                if (!hasAnyAmount) return null
+                if (!hasAnyAmount) {
+                  return (
+                    <Card className="bg-info/5 border-info/50">
+                      <CardHeader>
+                        <CardTitle className="text-sm sm:text-base text-info">
+                          Desglose de Pago Mixto
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground">
+                          No se encontraron montos en el desglose de pago.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )
+                }
 
                 return (
                   <Card className="bg-info/5 border-info/50">

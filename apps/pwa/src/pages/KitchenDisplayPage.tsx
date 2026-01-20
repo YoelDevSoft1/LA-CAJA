@@ -5,8 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { useRealtimeOrders } from '@/hooks/useRealtimeOrders'
 
 export default function KitchenDisplayPage() {
+  // Escuchar actualizaciones en tiempo real
+  useRealtimeOrders()
   const { data: orders, isLoading } = useQuery({
     queryKey: ['kitchen-orders'],
     queryFn: () => kitchenService.getKitchenOrders(),

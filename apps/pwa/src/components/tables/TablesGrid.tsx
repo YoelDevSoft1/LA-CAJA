@@ -9,6 +9,8 @@ import {
   Users,
   Clock,
   DollarSign,
+  QrCode,
+  MoreVertical,
 } from 'lucide-react'
 import {
   tablesService,
@@ -20,6 +22,7 @@ import {
 import { ordersService, Order } from '@/services/orders.service'
 import toast from 'react-hot-toast'
 import TableModal from './TableModal'
+import TableQRCodeModal from './TableQRCodeModal'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -40,6 +43,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 const statusLabels: Record<TableStatus, string> = {
@@ -68,6 +78,7 @@ export default function TablesGrid({ onTableClick, onCreateOrder }: TablesGridPr
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [tableToDelete, setTableToDelete] = useState<Table | null>(null)
+  const [tableToShowQR, setTableToShowQR] = useState<Table | null>(null)
   const [statusFilter, setStatusFilter] = useState<TableStatus | 'all'>('all')
 
   const { data: tables, isLoading } = useQuery({
@@ -130,6 +141,10 @@ export default function TablesGrid({ onTableClick, onCreateOrder }: TablesGridPr
     e.stopPropagation()
     setSelectedTable(table)
     setIsModalOpen(true)
+  }
+
+  const handleShowQR = (table: Table) => {
+    setTableToShowQR(table)
   }
 
   const handleAdd = () => {
@@ -240,29 +255,58 @@ export default function TablesGrid({ onTableClick, onCreateOrder }: TablesGridPr
                           : 'border-border bg-card hover:border-primary/50'
                   )}
                 >
-                  {/* Botones de acción */}
-                  <div className="absolute top-2 right-2 flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => handleEdit(table, e)}
-                      className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
-                      title="Editar mesa"
-                    >
-                      <Edit className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setTableToDelete(table)
-                      }}
-                      className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      title="Eliminar mesa"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                  {/* Botones de acción - Menú desplegable */}
+                  <div className="absolute top-2 right-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleEdit(table, e as any)
+                          }}
+                          className="cursor-pointer"
+                        >
+                          <Edit className="w-4 h-4 mr-2" />
+                          Editar mesa
+                        </DropdownMenuItem>
+                        {table.qrCode && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleShowQR(table)
+                              }}
+                              className="cursor-pointer"
+                            >
+                              <QrCode className="w-4 h-4 mr-2" />
+                              Ver código QR
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setTableToDelete(table)
+                          }}
+                          className="cursor-pointer text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Eliminar mesa
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
 
                   {/* Contenido de la mesa */}
@@ -355,6 +399,15 @@ export default function TablesGrid({ onTableClick, onCreateOrder }: TablesGridPr
         onConfirm={handleConfirm}
         isLoading={createMutation.isPending || updateMutation.isPending}
       />
+
+      {/* Modal de código QR */}
+      {tableToShowQR && (
+        <TableQRCodeModal
+          isOpen={!!tableToShowQR}
+          onClose={() => setTableToShowQR(null)}
+          table={tableToShowQR}
+        />
+      )}
 
       {/* Dialog de eliminar */}
       <AlertDialog open={!!tableToDelete} onOpenChange={() => setTableToDelete(null)}>

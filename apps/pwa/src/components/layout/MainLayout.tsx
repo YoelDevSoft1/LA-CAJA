@@ -99,6 +99,7 @@ const navSections: NavSection[] = [
       { path: '/app/sales', label: 'Ventas', icon: FileText, badge: null },
       { path: '/app/tables', label: 'Mesas y Órdenes', icon: Square, badge: null },
       { path: '/app/kitchen', label: 'Cocina (KDS)', icon: UtensilsCrossed, badge: null },
+      { path: '/app/reservations', label: 'Reservas', icon: Calendar, badge: null },
     ],
   },
   {

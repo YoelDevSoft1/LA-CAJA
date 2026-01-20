@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import TableQRCodeModal from './TableQRCodeModal'
 
 const tableSchema = z.object({
   table_number: z.string().min(1, 'El número de mesa es requerido').max(20, 'Máximo 20 caracteres'),
@@ -56,6 +57,8 @@ export default function TableModal({
   onConfirm,
   isLoading,
 }: TableModalProps) {
+  const [showQRModal, setShowQRModal] = useState(false)
+  
   const {
     register,
     handleSubmit,
@@ -257,6 +260,15 @@ export default function TableModal({
             </div>
           </div>
         </form>
+
+        {/* Modal de código QR */}
+        {table && (
+          <TableQRCodeModal
+            isOpen={showQRModal}
+            onClose={() => setShowQRModal(false)}
+            table={table}
+          />
+        )}
       </DialogContent>
     </Dialog>
   )
