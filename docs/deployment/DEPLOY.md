@@ -66,9 +66,11 @@ netlify deploy --prod
    - "Add new site" → "Import an existing project"
    - Selecciona tu repositorio
    - Configura:
-     - **Base directory**: `apps/pwa`
-     - **Build command**: `npm run build`
+     - **Base directory**: `.` (raíz del proyecto)
+     - **Build command**: `npm install && npm run build:pwa`
      - **Publish directory**: `apps/pwa/dist`
+     
+   **Nota**: El comando `build:pwa` compila automáticamente los packages locales antes del PWA.
    - Click "Deploy site"
 
 4. **El archivo `netlify.toml` ya está configurado** ✅
@@ -90,7 +92,7 @@ netlify deploy --prod
 3. Conecta tu repositorio de GitHub
 4. Configura:
    - **Framework preset**: Vite
-   - **Build command**: `cd apps/pwa && npm run build`
+   - **Build command**: `npm install && npm run build:pwa`
    - **Build output directory**: `apps/pwa/dist`
 5. Click "Save and Deploy"
 

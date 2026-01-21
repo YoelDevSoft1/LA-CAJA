@@ -9,7 +9,7 @@
 **Solución Rápida**:
 
 1. **Root Directory**: Dejar VACÍO (no usar `apps/api`)
-2. **Build Command**: `npm install --include=dev && cd apps/api && npm run build`
+2. **Build Command**: `npm install --include=dev && npm run build:api`
 3. **Start Command**: `cd apps/api && npm run start:prod`
 
 **Importante**: Agrega `--include=dev` al comando `npm install` para instalar las devDependencies necesarias para compilar.
@@ -59,7 +59,7 @@ Si ves el error **"There's an error above. Please fix it to continue"**, el prob
 
 **Build Command:**
 ```
-npm install --include=dev && cd apps/api && npm run build
+npm install --include=dev && npm run build:api
 ```
 
 **Start Command:**
@@ -67,7 +67,9 @@ npm install --include=dev && cd apps/api && npm run build
 cd apps/api && npm run start:prod
 ```
 
-**Nota**: `--include=dev` es necesario porque `@nestjs/cli` está en `devDependencies` y se necesita para compilar.
+**Nota**: 
+- `--include=dev` es necesario porque `@nestjs/cli` está en `devDependencies` y se necesita para compilar.
+- `npm run build:api` compila automáticamente los packages (`@la-caja/domain`, `@la-caja/sync`, `@la-caja/application`) antes de compilar el backend.
 
 **Alternativa (si Root Directory está en `apps/api`):**
 - **Build Command**: `npm install && npm run build`

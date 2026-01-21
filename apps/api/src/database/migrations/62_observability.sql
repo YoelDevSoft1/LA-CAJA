@@ -45,7 +45,8 @@ CREATE INDEX IF NOT EXISTS idx_uptime_status ON uptime_records(status);
 CREATE INDEX IF NOT EXISTS idx_uptime_service_timestamp ON uptime_records(service_name, timestamp DESC);
 
 -- Índice compuesto para consultas de uptime por servicio y tiempo
-CREATE INDEX IF NOT EXISTS idx_uptime_service_time_range ON uptime_records(service_name, timestamp DESC) WHERE timestamp > NOW() - INTERVAL '30 days';
+-- Nota: No podemos usar NOW() en el predicado porque no es IMMUTABLE
+-- Las consultas pueden usar idx_uptime_service_timestamp y filtrar por timestamp en la query
 
 -- Comentarios
 COMMENT ON TABLE alerts IS 'Sistema de alertas para monitoreo de servicios';
