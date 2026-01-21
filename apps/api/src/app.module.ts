@@ -53,6 +53,9 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { AdminController } from './admin/admin.controller';
 import { AdminApiGuard } from './admin/admin-api.guard';
 import { LicenseWatcherService } from './admin/license-watcher.service';
+import { HealthModule } from './health/health.module';
+import { MetricsModule } from './metrics/metrics.module';
+import { ObservabilityModule } from './observability/observability.module';
 // Nota: LicenseWatcherService necesita NotificationsGateway, que está en NotificationsModule
 // Importar todas las entidades desde el índice centralizado
 // Esto reduce el tamaño del objeto serializado y mejora el rendimiento del bootstrap
@@ -61,6 +64,8 @@ import { LicenseGuard } from './auth/guards/license.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { DatabaseErrorInterceptor } from './common/interceptors/database-error.interceptor';
 import { APP_INTERCEPTOR } from '@nestjs/core';
+import { StoreIdValidationInterceptor } from './common/interceptors/store-id-validation.interceptor';
+import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
 
 @Module({
   imports: [
@@ -76,7 +81,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
       useFactory: (configService: ConfigService) => ({
         throttlers: [
           {
-            ttl: configService.get<number>('THROTTLE_TTL') || 60000, // 1 minuto
+            ttl: configService.get<number>('THROTTLE_TTL') || 60, // segundos
             limit: configService.get<number>('THROTTLE_LIMIT') || 100, // 100 requests por minuto
           },
         ],
@@ -227,6 +232,9 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     MenuModule, // ✅ Módulo de menú público QR
     KitchenDisplayModule, // ✅ Módulo de Kitchen Display System
     ReservationsModule, // ✅ Módulo de reservas
+    HealthModule, // ✅ Módulo de health checks
+    MetricsModule, // ✅ Módulo de métricas Prometheus
+    ObservabilityModule, // ✅ Módulo de observabilidad completo
   ],
   controllers: [AppController, AdminController],
   providers: [
@@ -248,6 +256,14 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     {
       provide: APP_INTERCEPTOR,
       useClass: DatabaseErrorInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: StoreIdValidationInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
     },
   ],
 })

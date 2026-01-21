@@ -98,6 +98,7 @@ const DemandPredictionsPage = lazy(() => import('./pages/DemandPredictionsPage')
 const DemandEvaluationPage = lazy(() => import('./pages/DemandEvaluationPage'))
 const AnomaliesPage = lazy(() => import('./pages/AnomaliesPage'))
 const RealtimeAnalyticsPage = lazy(() => import('./pages/RealtimeAnalyticsPage'))
+const ObservabilityPage = lazy(() => import('./pages/ObservabilityPage'))
 
 // Lazy loading - Páginas de administración
 const LicenseBlockedPage = lazy(() => import('./pages/LicenseBlockedPage'))
@@ -591,6 +592,14 @@ function AppRoutes() {
             element={
               <ProtectedRoute allowedRoles={['owner']}>
                 <RealtimeAnalyticsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="observability"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <ObservabilityPage />
               </ProtectedRoute>
             }
           />

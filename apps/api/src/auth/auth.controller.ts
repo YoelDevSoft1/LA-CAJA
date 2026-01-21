@@ -107,7 +107,7 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @Throttle({ default: { limit: 3, ttl: 60000 } }) // 3 intentos por minuto (más estricto que login)
+  @Throttle({ default: { limit: 3, ttl: 60 } }) // 3 intentos por minuto (más estricto que login)
   async register(
     @Body() dto: RegisterDto,
     @Request() req: any,
@@ -173,7 +173,7 @@ export class AuthController {
 
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 intentos por minuto
+  @Throttle({ default: { limit: 5, ttl: 60 } }) // 5 intentos por minuto
   async verifyEmail(@Body() body: { token: string }): Promise<{ verified: boolean; message: string }> {
     if (!body.token) {
       throw new BadRequestException('Token de verificación es requerido');
@@ -185,7 +185,7 @@ export class AuthController {
   @Post('resend-verification-email')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  @Throttle({ default: { limit: 3, ttl: 3600000 } }) // 3 intentos por hora
+  @Throttle({ default: { limit: 3, ttl: 3600 } }) // 3 intentos por hora
   async resendVerificationEmail(@Request() req: any): Promise<{ message: string }> {
     const userId = req.user?.sub;
     if (!userId) {
@@ -198,7 +198,7 @@ export class AuthController {
 
   @Post('forgot-pin')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 3, ttl: 3600000 } }) // 3 intentos por hora (muy estricto)
+  @Throttle({ default: { limit: 3, ttl: 3600 } }) // 3 intentos por hora (muy estricto)
   async forgotPin(
     @Body() dto: ForgotPinDto,
     @Request() req: any,
@@ -248,7 +248,7 @@ export class AuthController {
 
   @Post('reset-pin')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 intentos por minuto
+  @Throttle({ default: { limit: 5, ttl: 60 } }) // 5 intentos por minuto
   async resetPin(
     @Body() dto: ResetPinDto,
     @Request() req: any,
@@ -297,7 +297,7 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @UseGuards(LoginRateLimitGuard) // Bloqueo progresivo
-  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 intentos por minuto
+  @Throttle({ default: { limit: 5, ttl: 60 } }) // 5 intentos por minuto
   async login(
     @Body() body: any,
     @Request() req: any,
@@ -369,7 +369,7 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 intentos por minuto
+  @Throttle({ default: { limit: 10, ttl: 60 } }) // 10 intentos por minuto
   async refresh(
     @Body() dto: RefreshTokenDto,
     @Request() req: any,
