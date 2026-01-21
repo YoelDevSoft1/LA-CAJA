@@ -8,12 +8,14 @@ import { Customer } from '../database/entities/customer.entity';
 import { Sale } from '../database/entities/sale.entity';
 import { ExchangeModule } from '../exchange/exchange.module';
 import { AccountingModule } from '../accounting/accounting.module';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Debt, DebtPayment, Customer, Sale]),
     ExchangeModule,
     AccountingModule,
+    WhatsAppModule,
   ],
   controllers: [DebtsController],
   providers: [DebtsService],

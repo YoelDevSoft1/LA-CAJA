@@ -1,6 +1,115 @@
 /**
  * Utilidades para compartir contenido por WhatsApp
  */
+import { format } from 'date-fns'
+import type { Sale } from '@/services/sales.service'
+
+/**
+ * Formatea un valor de peso con su unidad
+ */
+function formatWeightValue(value: number, unit?: string | null): string {
+  const safeUnit = unit || 'kg'
+  const decimals = safeUnit === 'g' || safeUnit === 'oz' ? 0 : 3
+  const safeValue = Number.isFinite(value) ? value : 0
+  const fixed = safeValue.toFixed(decimals)
+  const trimmed = fixed.replace(/\.?0+$/, '')
+  return `${trimmed} ${safeUnit}`
+}
+
+/**
+ * Etiquetas de métodos de pago
+ */
+const paymentMethodLabels: Record<string, string> = {
+  CASH_BS: 'Efectivo Bs',
+  CASH_USD: 'Efectivo USD',
+  PAGO_MOVIL: 'Pago Móvil',
+  TRANSFER: 'Transferencia',
+  ZELLE: 'Zelle',
+  OTHER: 'Otro',
+  SPLIT: 'Mixto',
+  FIAO: 'Fiado',
+}
+
+/**
+ * Formatea un ticket de venta como texto para compartir por WhatsApp
+ */
+export function formatSaleForWhatsApp(sale: Sale, storeName: string = 'SISTEMA POS'): string {
+  const soldAt = format(new Date(sale.sold_at), 'dd/MM/yyyy HH:mm')
+  const saleId = sale.id.slice(0, 8).toUpperCase()
+  
+  let text = `🧾 *${storeName}*\n`
+  text += `📋 Venta #${saleId}\n`
+  text += `📅 ${soldAt}\n`
+  text += `\n`
+  
+  // Items
+  text += `*PRODUCTOS:*\n`
+  sale.items.forEach((item, index) => {
+    const qty = item.is_weight_product 
+      ? formatWeightValue(Number(item.qty), item.weight_unit)
+      : item.qty.toString()
+    const unitPrice = item.is_weight_product
+      ? Number(item.price_per_weight_usd ?? item.unit_price_usd).toFixed(2)
+      : Number(item.unit_price_usd).toFixed(2)
+    const lineTotal = (Number(item.qty) * Number(item.unit_price_usd) - Number(item.discount_usd || 0)).toFixed(2)
+    
+    text += `${index + 1}. ${item.product?.name || 'Producto'}\n`
+    text += `   ${qty} x $${unitPrice} = $${lineTotal}\n`
+    if (Number(item.discount_usd || 0) > 0) {
+      text += `   💰 Descuento: $${Number(item.discount_usd).toFixed(2)}\n`
+    }
+  })
+  
+  text += `\n`
+  text += `*TOTALES:*\n`
+  text += `Total Bs: ${Number(sale.totals.total_bs).toFixed(2)}\n`
+  text += `Total USD: $${Number(sale.totals.total_usd).toFixed(2)}\n`
+  text += `Tasa: ${Number(sale.exchange_rate || 0).toFixed(2)}\n`
+  
+  text += `\n`
+  text += `*PAGO:*\n`
+  text += `${paymentMethodLabels[sale.payment.method] || sale.payment.method}\n`
+  
+  if (sale.customer) {
+    text += `\n`
+    text += `*CLIENTE:*\n`
+    text += `${sale.customer.name || ''}\n`
+    if (sale.customer.document_id) {
+      text += `Cédula: ${sale.customer.document_id}\n`
+    }
+  }
+  
+  if (sale.invoice_full_number) {
+    text += `\n`
+    text += `📄 Factura: ${sale.invoice_full_number}\n`
+  }
+  
+  return text
+}
+
+/**
+ * Formatea un mensaje de venta con mensaje de agradecimiento personalizado
+ */
+export function formatSaleWithThankYou(
+  sale: Sale,
+  thankYouMessage: string | null,
+  storeName: string = 'SISTEMA POS'
+): string {
+  let message = ''
+  
+  if (thankYouMessage) {
+    message = thankYouMessage
+      .replace(/{storeName}/g, storeName)
+      .replace(/{customerName}/g, sale.customer?.name || 'Cliente')
+    message += '\n\n'
+  } else {
+    message = `¡Gracias por comprar en ${storeName}!\n\n`
+  }
+  
+  message += formatSaleForWhatsApp(sale, storeName)
+  
+  return message
+}
 
 /**
  * Codifica texto para URL de WhatsApp, preservando emojis Unicode

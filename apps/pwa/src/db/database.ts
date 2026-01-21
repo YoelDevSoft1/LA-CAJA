@@ -58,6 +58,19 @@ export interface LocalSale {
   cached_at: number;
 }
 
+export interface LocalWhatsAppConfig {
+  id: string;
+  store_id: string;
+  whatsapp_number: string | null;
+  thank_you_message: string | null;
+  enabled: boolean;
+  debt_notifications_enabled: boolean;
+  debt_reminders_enabled: boolean;
+  updated_at: number;
+  cached_at: number;
+  sync_status: 'pending' | 'synced' | 'failed';
+}
+
 export interface LocalConflict {
   id: string; // conflict_id del servidor
   event_id: string;
@@ -76,6 +89,7 @@ export class LaCajaDB extends Dexie {
   customers!: Table<LocalCustomer, string>;
   sales!: Table<LocalSale, string>;
   conflicts!: Table<LocalConflict, string>;
+  whatsappConfigs!: Table<LocalWhatsAppConfig, string>;
   kv!: Table<{ key: string; value: any }, string>;
 
   constructor() {
@@ -111,6 +125,17 @@ export class LaCajaDB extends Dexie {
       customers: 'id, store_id, name, document_id, [store_id+document_id]',
       sales: 'id, store_id, sold_at, customer_id, [store_id+sold_at]',
       conflicts: 'id, event_id, status, created_at, [status+created_at]',
+      kv: 'key',
+    });
+
+    // Versión 5: Agregar tabla de configuración de WhatsApp para offline-first
+    this.version(5).stores({
+      localEvents: '++id, event_id, store_id, device_id, seq, type, sync_status, created_at, [sync_status+created_at], [store_id+device_id+sync_status]',
+      products: 'id, store_id, name, category, barcode, sku, is_active, [store_id+is_active], [store_id+category]',
+      customers: 'id, store_id, name, document_id, [store_id+document_id]',
+      sales: 'id, store_id, sold_at, customer_id, [store_id+sold_at]',
+      conflicts: 'id, event_id, status, created_at, [status+created_at]',
+      whatsappConfigs: 'id, store_id, [store_id+sync_status]',
       kv: 'key',
     });
   }

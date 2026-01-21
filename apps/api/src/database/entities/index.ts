@@ -77,6 +77,10 @@ export { FiscalInvoice } from './fiscal-invoice.entity';
 export { FiscalInvoiceItem } from './fiscal-invoice-item.entity';
 export { FiscalConfig } from './fiscal-config.entity';
 
+// WhatsApp entities
+export { WhatsAppConfig } from './whatsapp-config.entity';
+export { WhatsAppMessageQueue } from './whatsapp-message-queue.entity';
+
 // Exchange entities
 export { ExchangeRate, ExchangeRateType } from './exchange-rate.entity';
 export { StoreRateConfig } from './store-rate-config.entity';
@@ -187,6 +191,8 @@ import { PurchaseOrderItem } from './purchase-order-item.entity';
 import { FiscalInvoice } from './fiscal-invoice.entity';
 import { FiscalInvoiceItem } from './fiscal-invoice-item.entity';
 import { FiscalConfig } from './fiscal-config.entity';
+import { WhatsAppConfig } from './whatsapp-config.entity';
+import { WhatsAppMessageQueue } from './whatsapp-message-queue.entity';
 import { DemandPrediction } from './demand-prediction.entity';
 import { ProductRecommendation } from './product-recommendation.entity';
 import { DetectedAnomaly } from './detected-anomaly.entity';
@@ -286,6 +292,8 @@ export const ALL_ENTITIES = [
   FiscalInvoice,
   FiscalInvoiceItem,
   FiscalConfig,
+  WhatsAppConfig,
+  WhatsAppMessageQueue,
   DemandPrediction,
   ProductRecommendation,
   DetectedAnomaly,

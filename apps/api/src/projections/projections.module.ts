@@ -9,6 +9,7 @@ import { CashSession } from '../database/entities/cash-session.entity';
 import { Customer } from '../database/entities/customer.entity';
 import { Debt } from '../database/entities/debt.entity';
 import { DebtPayment } from '../database/entities/debt-payment.entity';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { DebtPayment } from '../database/entities/debt-payment.entity';
       Debt,
       DebtPayment,
     ]),
+    WhatsAppModule,
   ],
   providers: [ProjectionsService],
   exports: [ProjectionsService],

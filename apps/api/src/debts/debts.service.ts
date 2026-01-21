@@ -13,6 +13,7 @@ import { Sale } from '../database/entities/sale.entity';
 import { CreateDebtPaymentDto } from './dto/create-debt-payment.dto';
 import { ExchangeService } from '../exchange/exchange.service';
 import { AccountingService } from '../accounting/accounting.service';
+import { WhatsAppMessagingService } from '../whatsapp/whatsapp-messaging.service';
 import { randomUUID } from 'crypto';
 
 @Injectable()
@@ -31,6 +32,7 @@ export class DebtsService {
     private dataSource: DataSource,
     private exchangeService: ExchangeService,
     private accountingService: AccountingService,
+    private whatsappMessagingService: WhatsAppMessagingService,
   ) {}
 
   async createDebtFromSale(
@@ -73,7 +75,17 @@ export class DebtsService {
       status: DebtStatus.OPEN,
     });
 
-    return this.debtRepository.save(debt);
+    const savedDebt = await this.debtRepository.save(debt);
+
+    // Enviar notificación de WhatsApp si está habilitado (offline-first)
+    try {
+      await this.whatsappMessagingService.sendDebtNotification(storeId, savedDebt.id);
+    } catch (error) {
+      // No fallar la creación de deuda si hay error en WhatsApp
+      this.logger.warn(`Error enviando notificación de WhatsApp para deuda ${savedDebt.id}:`, error);
+    }
+
+    return savedDebt;
   }
 
   async addPayment(
@@ -431,5 +443,21 @@ export class DebtsService {
     }
 
     return debt;
+  }
+
+  /**
+   * Envía recordatorio de deudas pendientes a un cliente por WhatsApp
+   */
+  async sendDebtReminder(
+    storeId: string,
+    customerId: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const result = await this.whatsappMessagingService.sendDebtReminder(storeId, customerId);
+      return { success: result.queued, error: result.error };
+    } catch (error: any) {
+      this.logger.error(`Error enviando recordatorio de deudas:`, error);
+      return { success: false, error: error.message || 'Error desconocido' };
+    }
   }
 }

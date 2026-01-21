@@ -12,6 +12,7 @@ import { Debt } from '../database/entities/debt.entity';
 import { DebtPayment } from '../database/entities/debt-payment.entity';
 import { DebtStatus } from '../database/entities/debt.entity';
 import { randomUUID } from 'crypto';
+import { WhatsAppMessagingService } from '../whatsapp/whatsapp-messaging.service';
 
 @Injectable()
 export class ProjectionsService {
@@ -35,6 +36,7 @@ export class ProjectionsService {
     @InjectRepository(DebtPayment)
     private debtPaymentRepository: Repository<DebtPayment>,
     private dataSource: DataSource,
+    private whatsappMessagingService: WhatsAppMessagingService,
   ) {}
 
   async projectEvent(event: Event): Promise<void> {
@@ -293,6 +295,26 @@ export class ProjectionsService {
         });
 
         await this.movementRepository.save(movement);
+      }
+    }
+
+    // Enviar notificación de WhatsApp si está habilitado (offline-first)
+    // El mensaje se agregará a la cola incluso si no hay conexión o el bot está desconectado
+    if (this.whatsappMessagingService) {
+      try {
+        // Obtener device_id y seq del evento si están disponibles (para tracking offline)
+        const deviceId = (event as any).device_id || undefined;
+        const seq = (event as any).seq || undefined;
+
+        await this.whatsappMessagingService.sendSaleNotification(
+          event.store_id,
+          payload.sale_id,
+          deviceId,
+          seq,
+        );
+      } catch (error) {
+        // No fallar la proyección si hay error en WhatsApp
+        this.logger.warn(`Error enviando notificación de WhatsApp para venta ${payload.sale_id}:`, error);
       }
     }
   }

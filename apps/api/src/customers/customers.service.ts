@@ -5,6 +5,7 @@ import { Customer } from '../database/entities/customer.entity';
 import { Sale } from '../database/entities/sale.entity';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { WhatsAppMessagingService } from '../whatsapp/whatsapp-messaging.service';
 import { randomUUID } from 'crypto';
 
 export interface CustomerPurchaseHistory {
@@ -32,6 +33,7 @@ export class CustomersService {
     @InjectRepository(Sale)
     private saleRepository: Repository<Sale>,
     private dataSource: DataSource,
+    private whatsappMessagingService: WhatsAppMessagingService,
   ) {}
 
   async create(storeId: string, dto: CreateCustomerDto): Promise<Customer> {
@@ -244,5 +246,34 @@ export class CustomersService {
       available_credit: Math.round(availableCredit * 100) / 100,
       message: 'Crédito disponible',
     };
+  }
+
+  /**
+   * Envía un mensaje personalizado a un cliente por WhatsApp
+   */
+  async sendWhatsAppMessage(
+    storeId: string,
+    customerId: string,
+    message: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Verificar que el cliente existe y pertenece a la tienda
+      const customer = await this.customerRepository.findOne({
+        where: { id: customerId, store_id: storeId },
+      });
+
+      if (!customer) {
+        return { success: false, error: 'Cliente no encontrado' };
+      }
+
+      const result = await this.whatsappMessagingService.sendCustomMessage(
+        storeId,
+        customerId,
+        message,
+      );
+      return { success: result.queued, error: result.error };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Error desconocido' };
+    }
   }
 }

@@ -90,6 +90,7 @@ const PurchaseOrdersPage = lazy(() => import('./pages/PurchaseOrdersPage'))
 const FiscalConfigPage = lazy(() => import('./pages/FiscalConfigPage'))
 const FiscalInvoicesPage = lazy(() => import('./pages/FiscalInvoicesPage'))
 const FiscalInvoiceDetailPage = lazy(() => import('./pages/FiscalInvoiceDetailPage'))
+const WhatsAppConfigPage = lazy(() => import('./pages/WhatsAppConfigPage'))
 
 // Lazy loading - Páginas de ML/Analytics (menos frecuentes)
 const MLDashboardPage = lazy(() => import('./pages/MLDashboardPage'))
@@ -540,6 +541,14 @@ function AppRoutes() {
             element={
               <ProtectedRoute allowedRoles={['owner']}>
                 <FiscalConfigPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="whatsapp-config"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <WhatsAppConfigPage />
               </ProtectedRoute>
             }
           />

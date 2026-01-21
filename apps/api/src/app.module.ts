@@ -48,6 +48,7 @@ import { LicensesModule } from './licenses/licenses.module';
 import { MenuModule } from './menu/menu.module';
 import { KitchenDisplayModule } from './kitchen/kitchen-display.module';
 import { ReservationsModule } from './reservations/reservations.module';
+import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { AdminController } from './admin/admin.controller';
 import { AdminApiGuard } from './admin/admin-api.guard';
 import { LicenseWatcherService } from './admin/license-watcher.service';
@@ -196,6 +197,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     MLModule,
     RealTimeAnalyticsModule,
     NotificationsModule,
+    WhatsAppModule,
     AccountingModule,
     SecurityModule, // ✅ Módulo de seguridad y auditoría
     SystemConfigModule, // ✅ Módulo de validación de configuración

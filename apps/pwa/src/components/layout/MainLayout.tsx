@@ -38,6 +38,7 @@ import {
   Activity,
   CreditCard,
   UtensilsCrossed,
+  MessageCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -131,6 +132,7 @@ const navSections: NavSection[] = [
       { path: '/app/invoice-series', label: 'Series de Factura', icon: Receipt, badge: null },
       { path: '/app/fiscal-config', label: 'Configuración Fiscal', icon: FileText, badge: null },
       { path: '/app/fiscal-invoices', label: 'Facturas Fiscales', icon: ReceiptText, badge: null },
+      { path: '/app/whatsapp-config', label: 'WhatsApp', icon: MessageCircle, badge: null },
       { path: '/app/peripherals', label: 'Periféricos', icon: Cpu, badge: null },
       { path: '/app/accounting', label: 'Contabilidad', icon: FileText, badge: null },
     ],

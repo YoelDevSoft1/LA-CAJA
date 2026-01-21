@@ -90,4 +90,13 @@ export class DebtsController {
     const storeId = req.user.store_id;
     return this.debtsService.findOne(storeId, id);
   }
+
+  @Post('customer/:customerId/send-reminder')
+  async sendDebtReminder(
+    @Param('customerId') customerId: string,
+    @Request() req: any,
+  ) {
+    const storeId = req.user.store_id;
+    return this.debtsService.sendDebtReminder(storeId, customerId);
+  }
 }
