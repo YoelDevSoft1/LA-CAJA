@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { readFileSync } from 'fs';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { SyncModule } from './sync/sync.module';
@@ -112,8 +113,25 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
         // En desarrollo, se puede usar DB_SSL_REJECT_UNAUTHORIZED=true para forzar verificacion
         const sslRejectUnauthorizedEnv =
           configService.get<string>('DB_SSL_REJECT_UNAUTHORIZED');
-        const sslRejectUnauthorized =
-          isProduction || sslRejectUnauthorizedEnv === 'true';
+        const allowInsecureDbSsl =
+          configService.get<string>('ALLOW_INSECURE_DB_SSL') === 'true';
+        const requestedRejectUnauthorized =
+          sslRejectUnauthorizedEnv === 'true'
+            ? true
+            : sslRejectUnauthorizedEnv === 'false'
+              ? false
+              : undefined;
+        const sslRejectUnauthorized = isProduction
+          ? !(requestedRejectUnauthorized === false && allowInsecureDbSsl)
+          : requestedRejectUnauthorized !== false;
+
+        const sslCaEnv = configService.get<string>('DB_SSL_CA');
+        const sslCaFile = configService.get<string>('DB_SSL_CA_FILE');
+        const sslCa = sslCaEnv
+          ? sslCaEnv.replace(/\\n/g, '\n')
+          : sslCaFile
+            ? readFileSync(sslCaFile, 'utf8')
+            : undefined;
         
         // Timeouts configurables: más largos en desarrollo local (útil para VPN)
         const connectionTimeoutEnv = configService.get<number>('DB_CONNECTION_TIMEOUT');
@@ -157,6 +175,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
           ssl: isCloudDatabase || isProduction
             ? {
                 rejectUnauthorized: sslRejectUnauthorized,
+                ...(sslCa ? { ca: sslCa } : {}),
               }
             : false,
         };
