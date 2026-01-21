@@ -2,7 +2,8 @@
   # Directorio base: raíz del proyecto (monorepo)
   base = "."
   # Comando para construir: instalar dependencias y compilar packages primero, luego PWA
-  command = "npm install && npm run build:pwa"
+  # Usar --legacy-peer-deps para evitar problemas de resolución de dependencias
+  command = "npm install --legacy-peer-deps && npm run build:pwa"
   # Directorio de publicación (relativo al base)
   publish = "apps/pwa/dist"
 

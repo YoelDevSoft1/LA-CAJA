@@ -377,6 +377,8 @@ export default defineConfig(({ mode }) => ({
       'react-hot-toast',
       'goober',
     ],
+    // Asegurar que react-is se resuelva correctamente desde node_modules
+    conditions: ['import', 'module', 'browser', 'default'],
   },
   optimizeDeps: {
     include: [
@@ -387,7 +389,12 @@ export default defineConfig(({ mode }) => ({
       'use-sync-external-store',
       'react-hot-toast',
       'goober',
+      'recharts',
     ],
+    // Asegurar que todas las dependencias de recharts se resuelvan
+    esbuildOptions: {
+      resolveExtensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs'],
+    },
   },
   define: {
     __PWA_BUILD_ID__: JSON.stringify(buildId),
@@ -398,10 +405,23 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     // Optimizaciones de bundle size
+    commonjsOptions: {
+      // Asegurar que react-is se resuelva correctamente
+      include: [/react-is/, /node_modules/],
+      transformMixedEsModules: true,
+    },
     rollupOptions: {
       // Cambiar a 'allow-extension' para permitir más flexibilidad en el orden
       // 'strict' puede causar problemas de inicialización con dependencias circulares
       preserveEntrySignatures: 'allow-extension',
+      // Asegurar que react-is se resuelva correctamente
+      external: (id) => {
+        // No externalizar react-is - debe estar en el bundle
+        if (id === 'react-is') {
+          return false;
+        }
+        return false; // No externalizar nada, todo debe estar en el bundle
+      },
       output: {
         // SOLUCIÓN FUNCIONAL: Agrupar TODO React y dependencias en react-vendor
         // Date-fns puede ir separado porque NO depende de React
@@ -414,6 +434,11 @@ export default defineConfig(({ mode }) => ({
           // Date-fns: biblioteca de fechas que NO depende de React (puede ir separada)
           if (id.includes('node_modules/date-fns')) {
             return 'date-fns-vendor';
+          }
+
+          // react-is debe estar en react-vendor para que recharts lo encuentre
+          if (id.includes('react-is')) {
+            return 'react-vendor';
           }
 
           // CRÍTICO: Todo lo demás (incluyendo React y todas sus dependencias) va a react-vendor
