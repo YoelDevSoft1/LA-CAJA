@@ -319,6 +319,64 @@ export class ProjectionsService {
       }
     }
 
+    // ⚠️ CRÍTICO: Si es venta FIAO, SIEMPRE crear la deuda automáticamente
+    // Esto es esencial para la trazabilidad - sin deuda, el sistema no puede rastrear quién debe qué
+    // La validación de crédito ya se hizo antes (en el servicio de ventas o en el frontend)
+    // Aquí solo creamos la deuda para mantener la integridad del sistema
+    if (payload.payment?.method === 'FIAO') {
+      if (!savedSale.customer_id) {
+        // Esto no debería pasar porque ya validamos arriba, pero registramos el error
+        this.logger.error(
+          `❌ CRÍTICO: Venta FIAO ${payload.sale_id} sin customer_id. NO se puede crear la deuda. Esto causará problemas de trazabilidad.`,
+        );
+      } else {
+        const customerId = savedSale.customer_id;
+        const totalUsd = Number(payload.totals?.total_usd || 0);
+        const totalBs = Number(payload.totals?.total_bs || 0);
+
+        // Verificar si ya existe una deuda para esta venta (idempotencia)
+        const existingDebt = await this.debtRepository.findOne({
+          where: { sale_id: savedSale.id, store_id: event.store_id },
+        });
+
+        if (existingDebt) {
+          this.logger.log(
+            `Deuda ya existe para venta FIAO ${payload.sale_id}: ${existingDebt.id}`,
+          );
+        } else {
+          // Crear la deuda - SIEMPRE, sin importar si el cliente tiene crédito o no
+          // La validación de crédito ya se hizo antes de crear la venta
+          const debt = this.debtRepository.create({
+            id: randomUUID(),
+            store_id: event.store_id,
+            sale_id: savedSale.id,
+            customer_id: customerId,
+            created_at: savedSale.sold_at,
+            amount_bs: totalBs,
+            amount_usd: totalUsd,
+            status: DebtStatus.OPEN,
+          });
+
+          await this.debtRepository.save(debt);
+          
+          // Log informativo
+          const customer = await this.customerRepository.findOne({
+            where: { id: customerId, store_id: event.store_id },
+          });
+          
+          if (customer) {
+            this.logger.log(
+              `✅ Deuda creada para venta FIAO ${payload.sale_id}: ${debt.id} - Cliente: ${customer.name} (${customerId}) - Monto: $${totalUsd} USD / ${totalBs} Bs`,
+            );
+          } else {
+            this.logger.warn(
+              `⚠️ Deuda creada para venta FIAO ${payload.sale_id}: ${debt.id} - Cliente ID: ${customerId} (cliente no encontrado en BD) - Monto: $${totalUsd} USD / ${totalBs} Bs`,
+            );
+          }
+        }
+      }
+    }
+
     // Enviar notificación de WhatsApp si está habilitado (offline-first)
     // El mensaje se agregará a la cola incluso si no hay conexión o el bot está desconectado
     if (this.whatsappMessagingService) {

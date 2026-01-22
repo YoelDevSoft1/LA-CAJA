@@ -166,6 +166,7 @@ export interface SaleCreatedPayload {
       other_bs: number;
     };
   };
+  customer_id?: string; // ID del cliente (para facilitar acceso directo en proyecciones)
   customer?: {
     customer_id: string | null;
   };
