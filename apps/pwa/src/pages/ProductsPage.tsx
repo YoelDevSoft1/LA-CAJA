@@ -422,31 +422,37 @@ export default function ProductsPage() {
       const csvHeaders = 'nombre,categoria,sku,codigo_barras,precio_bs,precio_usd,costo_bs,costo_usd,stock_minimo'
       
       const csvRows = allProducts.map((p) => {
-        const nombre = (p.name || '').replace(/"/g, '""')
-        const categoria = (p.category || '').replace(/"/g, '""')
-        const sku = (p.sku || '').replace(/"/g, '""')
-        const codigo_barras = (p.barcode || '').replace(/"/g, '""')
+        // Función para escapar valores CSV
+        const escapeCSVValue = (val: string | number): string => {
+          const str = String(val)
+          // Si contiene coma, comilla o salto de línea, envolver en comillas
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`
+          }
+          return str
+        }
+        
+        // Preparar valores asegurando que siempre tengan un valor válido
+        const nombre = escapeCSVValue(p.name || '')
+        const categoria = escapeCSVValue(p.category || '')
+        const sku = escapeCSVValue(p.sku || '')
+        const codigo_barras = escapeCSVValue(p.barcode || '')
+        
+        // Asegurar que los precios siempre tengan un valor numérico válido
         const precio_bs = Number(p.price_bs || 0).toFixed(2)
         const precio_usd = Number(p.price_usd || 0).toFixed(2)
         const costo_bs = p.cost_bs ? Number(p.cost_bs).toFixed(2) : '0.00'
         const costo_usd = p.cost_usd ? Number(p.cost_usd).toFixed(2) : '0.00'
-        const stock_minimo = String(stockByProductExport[p.id]?.low_stock_threshold ?? 10)
+        const stock_minimo = String(stockByProductExport[p.id]?.low_stock_threshold ?? p.low_stock_threshold ?? 10)
         
-        // Escapar valores que contengan comas o comillas
-        const escapeValue = (val: string) => {
-          if (val.includes(',') || val.includes('"') || val.includes('\n')) {
-            return `"${val.replace(/"/g, '""')}"`
-          }
-          return val
-        }
-        
+        // Construir la fila CSV con todos los campos en el orden correcto
         return [
-          escapeValue(nombre),
-          escapeValue(categoria),
-          escapeValue(sku),
-          escapeValue(codigo_barras),
-          precio_bs,
-          precio_usd,
+          nombre,
+          categoria,
+          sku,
+          codigo_barras,
+          precio_bs,  // precio_bs - REQUERIDO
+          precio_usd, // precio_usd - REQUERIDO
           costo_bs,
           costo_usd,
           stock_minimo,
