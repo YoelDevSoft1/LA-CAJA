@@ -704,6 +704,21 @@ export class FiscalInvoicesService {
   }
 
   /**
+   * Obtiene todas las facturas fiscales asociadas a una venta
+   * (puede incluir la factura original y notas de crédito)
+   */
+  async findAllBySale(
+    storeId: string,
+    saleId: string,
+  ): Promise<FiscalInvoice[]> {
+    return this.fiscalInvoiceRepository.find({
+      where: { sale_id: saleId, store_id: storeId },
+      relations: ['items', 'customer', 'invoice_series'],
+      order: { created_at: 'ASC' },
+    });
+  }
+
+  /**
    * Obtiene estadísticas de facturas fiscales
    */
   async getStatistics(

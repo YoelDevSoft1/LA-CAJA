@@ -156,7 +156,26 @@ Después de crear la nota de crédito:
 4. Confirma la emisión.
 5. La nota de crédito queda **emitida** y anula la factura original según normativa SENIAT.
 
-#### Paso 3: Reversión contable (si aplica)
+#### Paso 3: Anular la venta en el sistema
+
+**IMPORTANTE:** Después de emitir la nota de crédito, ahora puedes anular la venta duplicada:
+
+1. Ve a **Ventas** en el menú lateral.
+2. Busca la venta duplicada (puedes usar el buscador o filtrar por fecha).
+3. Haz clic en la venta para abrir su detalle.
+4. Verás un botón **"Anular Venta"** (solo visible para usuarios **owner**).
+5. Haz clic en **"Anular Venta"**.
+6. Opcional: Escribe un motivo, por ejemplo: *"Venta duplicada. Anulada después de emitir nota de crédito [número NC]."*
+7. Confirma la anulación.
+
+**Qué hace la anulación:**
+- Marca la venta como anulada (`voided_at`).
+- Devuelve el inventario (crea movimientos de ajuste para devolver los productos al stock).
+- Elimina la deuda asociada (si la venta era FIAO y no tenía pagos).
+
+**Nota:** El sistema ahora permite anular ventas con factura fiscal emitida **siempre que exista una nota de crédito emitida** que la anule. Si intentas anular antes de emitir la nota de crédito, verás un mensaje indicando que debes crear y emitir la nota primero.
+
+#### Paso 4: Reversión contable (si aplica)
 
 Si la factura original generó un asiento contable automático, ahora tienes dos opciones:
 
@@ -195,7 +214,8 @@ Si el sistema no genera asientos automáticos para notas de crédito, o si neces
 
 1. ✅ Crear nota de crédito: **Facturas Fiscales** → abrir factura → **Crear nota de crédito** → indicar motivo → confirmar.
 2. ✅ Emitir la nota de crédito: Revisar datos → **Emitir Factura**.
-3. ✅ Reversión contable: **Contabilidad** → revisar/crear asiento de reversión si aplica.
+3. ✅ Anular la venta: **Ventas** → abrir venta duplicada → **Anular Venta** → indicar motivo → confirmar.
+4. ✅ Reversión contable: **Contabilidad** → revisar/crear asiento de reversión si aplica.
 
 ---
 

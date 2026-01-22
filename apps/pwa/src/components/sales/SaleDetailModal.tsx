@@ -74,27 +74,34 @@ export default function SaleDetailModal({
   const isMobile = useMobileDetection()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [fiscalInvoice, setFiscalInvoice] = useState<FiscalInvoice | null>(null)
+  const [fiscalInvoices, setFiscalInvoices] = useState<FiscalInvoice[]>([])
   const [showVoidDialog, setShowVoidDialog] = useState(false)
   const [showReturnModal, setShowReturnModal] = useState(false)
   const [voidReason, setVoidReason] = useState('')
   const [voidedAt, setVoidedAt] = useState<string | null>(sale?.voided_at || null)
   const [voidedReason, setVoidedReason] = useState<string | null>(sale?.void_reason || null)
 
-  // Obtener factura fiscal si existe
-  const { data: fiscalInvoiceData, refetch: refetchFiscalInvoice } = useQuery({
-    queryKey: ['fiscal-invoices', 'by-sale', sale?.id],
-    queryFn: () => fiscalInvoicesService.findBySale(sale!.id),
+  // Obtener todas las facturas fiscales asociadas a la venta
+  const { data: fiscalInvoicesData, refetch: refetchFiscalInvoice } = useQuery({
+    queryKey: ['fiscal-invoices', 'all-by-sale', sale?.id],
+    queryFn: () => fiscalInvoicesService.findAllBySale(sale!.id),
     enabled: !!sale?.id && isOpen,
     staleTime: 1000 * 60 * 2, // 2 minutos
   })
 
   useEffect(() => {
-    if (fiscalInvoiceData) {
-      setFiscalInvoice(fiscalInvoiceData)
+    if (fiscalInvoicesData) {
+      setFiscalInvoices(fiscalInvoicesData)
+      // Mantener compatibilidad: usar la primera factura (original) si existe
+      const originalInvoice = fiscalInvoicesData.find(
+        (inv) => inv.invoice_type === 'invoice',
+      )
+      setFiscalInvoice(originalInvoice || fiscalInvoicesData[0] || null)
     } else {
+      setFiscalInvoices([])
       setFiscalInvoice(null)
     }
-  }, [fiscalInvoiceData])
+  }, [fiscalInvoicesData])
 
   useEffect(() => {
     setVoidedAt(sale?.voided_at || null)
@@ -121,12 +128,25 @@ export default function SaleDetailModal({
 
   const isOwner = user?.role === 'owner'
   const isVoided = Boolean(voidedAt)
-  const hasIssuedFiscal = fiscalInvoice?.status === 'issued'
+  
+  // Verificar si hay factura emitida (no nota de crédito)
+  const issuedInvoice = fiscalInvoices.find(
+    (inv) => inv.invoice_type === 'invoice' && inv.status === 'issued',
+  )
+  
+  // Verificar si hay nota de crédito emitida
+  const issuedCreditNote = fiscalInvoices.find(
+    (inv) => inv.invoice_type === 'credit_note' && inv.status === 'issued',
+  )
+  
+  // Solo bloquear si hay factura emitida PERO NO hay nota de crédito emitida
+  const hasIssuedFiscalWithoutCreditNote = Boolean(issuedInvoice && !issuedCreditNote)
+  
   const hasDebtPayments =
     sale.debt &&
     ((sale.debt.total_paid_bs || 0) > 0 || (sale.debt.total_paid_usd || 0) > 0)
-  const voidBlockReason = hasIssuedFiscal
-    ? 'Esta venta tiene una factura fiscal emitida.'
+  const voidBlockReason = hasIssuedFiscalWithoutCreditNote
+    ? 'Esta venta tiene una factura fiscal emitida. Debe crear y emitir una nota de crédito antes de anular la venta.'
     : hasDebtPayments
       ? 'Esta venta tiene pagos asociados.'
       : null

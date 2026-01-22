@@ -49,6 +49,7 @@ import { PriceListsService } from '../price-lists/price-lists.service';
 import { PromotionsService } from '../promotions/promotions.service';
 import { WarehousesService } from '../warehouses/warehouses.service';
 import { FiscalInvoicesService } from '../fiscal-invoices/fiscal-invoices.service';
+import { FiscalInvoice } from '../database/entities/fiscal-invoice.entity';
 import { AccountingService } from '../accounting/accounting.service';
 import { ConfigValidationService } from '../config/config-validation.service';
 import { SaleReturn } from '../database/entities/sale-return.entity';
@@ -1888,14 +1889,28 @@ export class SalesService {
         throw new BadRequestException('La venta ya fue anulada');
       }
 
-      const fiscalInvoice = await this.fiscalInvoicesService.findBySale(
-        storeId,
-        saleId,
+      // Verificar facturas fiscales asociadas a la venta
+      const fiscalInvoices = await manager.find(FiscalInvoice, {
+        where: { sale_id: saleId, store_id: storeId },
+      });
+      
+      // Buscar si hay una factura emitida (no nota de crédito)
+      const issuedInvoice = fiscalInvoices.find(
+        (inv) => inv.invoice_type === 'invoice' && inv.status === 'issued',
       );
-      if (fiscalInvoice && fiscalInvoice.status === 'issued') {
-        throw new BadRequestException(
-          'La venta tiene una factura fiscal emitida. Debe anularse con una nota de crédito.',
+      
+      if (issuedInvoice) {
+        // Si hay factura emitida, verificar si existe una nota de crédito emitida que la anule
+        const issuedCreditNote = fiscalInvoices.find(
+          (inv) =>
+            inv.invoice_type === 'credit_note' && inv.status === 'issued',
         );
+        
+        if (!issuedCreditNote) {
+          throw new BadRequestException(
+            'La venta tiene una factura fiscal emitida. Debe crear y emitir una nota de crédito antes de anular la venta.',
+          );
+        }
       }
 
       const debt = await manager.findOne(Debt, {
@@ -2052,14 +2067,28 @@ export class SalesService {
         throw new BadRequestException('La venta está anulada');
       }
 
-      const fiscalInvoice = await this.fiscalInvoicesService.findBySale(
-        storeId,
-        saleId,
+      // Verificar facturas fiscales asociadas a la venta
+      const fiscalInvoices = await manager.find(FiscalInvoice, {
+        where: { sale_id: saleId, store_id: storeId },
+      });
+      
+      // Buscar si hay una factura emitida (no nota de crédito)
+      const issuedInvoice = fiscalInvoices.find(
+        (inv) => inv.invoice_type === 'invoice' && inv.status === 'issued',
       );
-      if (fiscalInvoice && fiscalInvoice.status === 'issued') {
-        throw new BadRequestException(
-          'La venta tiene una factura fiscal emitida. Debe anularse con una nota de crédito.',
+      
+      if (issuedInvoice) {
+        // Si hay factura emitida, verificar si existe una nota de crédito emitida que la anule
+        const issuedCreditNote = fiscalInvoices.find(
+          (inv) =>
+            inv.invoice_type === 'credit_note' && inv.status === 'issued',
         );
+        
+        if (!issuedCreditNote) {
+          throw new BadRequestException(
+            'La venta tiene una factura fiscal emitida. Debe crear y emitir una nota de crédito antes de devolver items.',
+          );
+        }
       }
 
       const debt = await manager.findOne(Debt, {

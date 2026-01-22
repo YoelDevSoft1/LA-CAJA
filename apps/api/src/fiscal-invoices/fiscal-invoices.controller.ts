@@ -93,6 +93,13 @@ export class FiscalInvoicesController {
     return this.fiscalInvoicesService.findBySale(storeId, saleId);
   }
 
+  @Get('all-by-sale/:saleId')
+  @UseGuards(JwtAuthGuard)
+  async findAllBySale(@Param('saleId') saleId: string, @Request() req: any) {
+    const storeId = req.user.store_id;
+    return this.fiscalInvoicesService.findAllBySale(storeId, saleId);
+  }
+
   @Get('statistics')
   @UseGuards(JwtAuthGuard)
   async getStatistics(

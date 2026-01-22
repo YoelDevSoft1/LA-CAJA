@@ -179,6 +179,24 @@ export const fiscalInvoicesService = {
   },
 
   /**
+   * Obtiene todas las facturas fiscales asociadas a una venta
+   * (puede incluir la factura original y notas de crédito)
+   */
+  async findAllBySale(saleId: string): Promise<FiscalInvoice[]> {
+    try {
+      const response = await api.get<FiscalInvoice[]>(
+        `/fiscal-invoices/all-by-sale/${saleId}`,
+      )
+      return response.data
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return []
+      }
+      throw error
+    }
+  },
+
+  /**
    * Obtiene estadísticas de facturas fiscales
    */
   async getStatistics(
