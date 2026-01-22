@@ -127,6 +127,7 @@ export class HealthController {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LA CAJA - Health Dashboard</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     * {
       margin: 0;
       padding: 0;
@@ -134,11 +135,11 @@ export class HealthController {
     }
     
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, rgb(13, 129, 206) 0%, rgb(10, 103, 165) 100%);
       min-height: 100vh;
-      padding: 20px;
-      color: #333;
+      padding: 24px;
+      color: hsl(240, 10%, 4%);
     }
     
     .container {
@@ -148,46 +149,56 @@ export class HealthController {
     
     .header {
       background: white;
-      border-radius: 12px;
-      padding: 30px;
-      margin-bottom: 30px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      border-radius: 0.5rem;
+      padding: 40px 32px;
+      margin-bottom: 32px;
+      box-shadow: 0 10px 15px -3px rgba(13, 129, 206, 0.1), 0 4px 6px -4px rgba(13, 129, 206, 0.1);
       text-align: center;
+      border: 1px solid rgba(13, 129, 206, 0.1);
     }
     
     .header h1 {
-      color: #667eea;
-      font-size: 2.5em;
-      margin-bottom: 10px;
+      color: rgb(13, 129, 206);
+      font-size: 2.25rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
     }
     
     .header p {
-      color: #666;
-      font-size: 1.1em;
+      color: hsl(240, 5%, 35%);
+      font-size: 1rem;
+      font-weight: 400;
     }
     
     .status-badge {
-      display: inline-block;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-weight: bold;
-      font-size: 0.9em;
-      margin-top: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      margin-top: 16px;
+      transition: all 0.3s ease;
     }
     
     .status-badge.healthy {
-      background: #10b981;
+      background: #22c55e;
       color: white;
+      box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
     }
     
     .status-badge.unhealthy {
       background: #ef4444;
       color: white;
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
     }
     
     .status-badge.loading {
       background: #f59e0b;
       color: white;
+      box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
     }
     
     .grid {
@@ -199,15 +210,34 @@ export class HealthController {
     
     .card {
       background: white;
-      border-radius: 12px;
-      padding: 25px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      border-radius: 0.5rem;
+      padding: 24px;
+      box-shadow: 0 4px 6px -1px rgba(13, 129, 206, 0.1), 0 2px 4px -2px rgba(13, 129, 206, 0.1);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid rgba(13, 129, 206, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, rgb(13, 129, 206) 0%, rgb(10, 103, 165) 100%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
     }
     
     .card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+      transform: translateY(-4px);
+      box-shadow: 0 20px 25px -5px rgba(13, 129, 206, 0.15), 0 8px 10px -6px rgba(13, 129, 206, 0.1);
+    }
+    
+    .card:hover::before {
+      opacity: 1;
     }
     
     .card-header {
@@ -218,12 +248,13 @@ export class HealthController {
     }
     
     .card-title {
-      font-size: 1.3em;
+      font-size: 1.125rem;
       font-weight: 600;
-      color: #333;
+      color: hsl(240, 10%, 4%);
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
+      letter-spacing: -0.01em;
     }
     
     .status-indicator {
@@ -235,8 +266,8 @@ export class HealthController {
     }
     
     .status-indicator.up {
-      background: #10b981;
-      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      background: #22c55e;
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
     }
     
     .status-indicator.down {
@@ -251,58 +282,77 @@ export class HealthController {
     }
     
     @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-      70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+      70% { box-shadow: 0 0 0 12px rgba(34, 197, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
     }
     
     @keyframes pulse-red {
       0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-      70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+      70% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
       100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
     }
     
     @keyframes pulse-orange {
       0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
-      70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
+      70% { box-shadow: 0 0 0 12px rgba(245, 158, 11, 0); }
       100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
     }
     
     .card-content {
-      color: #666;
+      color: hsl(240, 5%, 35%);
+      font-size: 0.875rem;
+      line-height: 1.5;
     }
     
     .card-content strong {
-      color: #333;
+      color: hsl(240, 10%, 4%);
+      font-weight: 600;
     }
     
     .error-message {
       color: #ef4444;
       font-weight: 600;
-      margin-top: 10px;
+      margin-top: 12px;
+      font-size: 0.875rem;
+      padding: 8px 12px;
+      background: rgba(239, 68, 68, 0.1);
+      border-radius: 0.375rem;
+      border-left: 3px solid #ef4444;
     }
     
     .refresh-btn {
-      background: #667eea;
+      background: linear-gradient(135deg, rgb(13, 129, 206) 0%, rgb(10, 103, 165) 100%);
       color: white;
       border: none;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-size: 1em;
+      padding: 12px 32px;
+      border-radius: 0.5rem;
+      font-size: 0.9375rem;
+      font-weight: 600;
       cursor: pointer;
-      transition: background 0.3s ease;
-      margin-top: 20px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      margin-top: 24px;
+      box-shadow: 0 4px 6px -1px rgba(13, 129, 206, 0.2), 0 2px 4px -2px rgba(13, 129, 206, 0.1);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
     }
     
     .refresh-btn:hover {
-      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(13, 129, 206, 0.3), 0 4px 6px -4px rgba(13, 129, 206, 0.2);
+    }
+    
+    .refresh-btn:active {
+      transform: translateY(0);
     }
     
     .last-update {
       text-align: center;
-      color: white;
-      margin-top: 20px;
-      font-size: 0.9em;
+      color: rgba(255, 255, 255, 0.9);
+      margin-top: 32px;
+      font-size: 0.875rem;
+      font-weight: 500;
     }
     
     .loading-spinner {
@@ -325,6 +375,9 @@ export class HealthController {
     <div class="header">
       <h1>🏥 Health Dashboard</h1>
       <p>Monitoreo en tiempo real del sistema LA CAJA</p>
+      <div style="margin-top: 16px; font-size: 0.75rem; color: hsl(240, 5%, 35%);">
+        Sistema POS Offline-First para Venezuela
+      </div>
       <div id="overall-status" class="status-badge loading">
         <span class="loading-spinner"></span> Cargando...
       </div>
