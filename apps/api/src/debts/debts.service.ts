@@ -416,6 +416,10 @@ export class DebtsService {
   }
 
   async findAll(storeId: string, status?: DebtStatus): Promise<Debt[]> {
+    // ⚠️ CRÍTICO: Antes de listar deudas, crear las faltantes para ventas FIAO sin deuda
+    // Esto asegura que todas las ventas FIAO tengan su deuda asociada
+    await this.createMissingDebtsForFIAOSales(storeId);
+
     const query = this.debtRepository
       .createQueryBuilder('debt')
       .where('debt.store_id = :storeId', { storeId });
@@ -430,6 +434,94 @@ export class DebtsService {
       .leftJoinAndSelect('debt.payments', 'payments');
 
     return query.getMany();
+  }
+
+  /**
+   * Crea deudas faltantes para ventas FIAO que no tienen deuda asociada
+   * Esto es crítico para mantener la integridad del sistema
+   */
+  private async createMissingDebtsForFIAOSales(storeId: string): Promise<void> {
+    try {
+      // Buscar ventas FIAO sin deuda asociada
+      const fiaoSalesWithoutDebt = await this.dataSource.query(
+        `
+        SELECT s.id, s.store_id, s.customer_id, s.sold_at, s.totals, s.payment
+        FROM sales s
+        LEFT JOIN debts d ON d.sale_id = s.id AND d.store_id = s.store_id
+        WHERE s.store_id = $1
+          AND s.payment->>'method' = 'FIAO'
+          AND s.customer_id IS NOT NULL
+          AND d.id IS NULL
+        ORDER BY s.sold_at DESC
+        LIMIT 100
+        `,
+        [storeId],
+      );
+
+      if (fiaoSalesWithoutDebt.length === 0) {
+        return; // No hay ventas FIAO sin deuda
+      }
+
+      this.logger.log(
+        `Encontradas ${fiaoSalesWithoutDebt.length} ventas FIAO sin deuda. Creando deudas faltantes...`,
+      );
+
+      for (const sale of fiaoSalesWithoutDebt) {
+        try {
+          const totals = typeof sale.totals === 'string' ? JSON.parse(sale.totals) : sale.totals;
+          const totalUsd = Number(totals?.total_usd || 0);
+          const totalBs = Number(totals?.total_bs || 0);
+
+          if (totalUsd <= 0 && totalBs <= 0) {
+            this.logger.warn(
+              `Venta FIAO ${sale.id} tiene totales inválidos. Saltando creación de deuda.`,
+            );
+            continue;
+          }
+
+          // Verificar que el cliente existe
+          const customer = await this.customerRepository.findOne({
+            where: { id: sale.customer_id, store_id: storeId },
+          });
+
+          if (!customer) {
+            this.logger.warn(
+              `Cliente ${sale.customer_id} no encontrado para venta FIAO ${sale.id}. Saltando creación de deuda.`,
+            );
+            continue;
+          }
+
+          // Crear la deuda
+          const debt = this.debtRepository.create({
+            id: randomUUID(),
+            store_id: storeId,
+            sale_id: sale.id,
+            customer_id: sale.customer_id,
+            created_at: sale.sold_at,
+            amount_bs: totalBs,
+            amount_usd: totalUsd,
+            status: DebtStatus.OPEN,
+          });
+
+          await this.debtRepository.save(debt);
+          this.logger.log(
+            `✅ Deuda creada para venta FIAO ${sale.id}: ${debt.id} - Cliente: ${customer.name} - Monto: $${totalUsd} USD`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Error creando deuda para venta FIAO ${sale.id}:`,
+            error instanceof Error ? error.message : String(error),
+          );
+          // Continuar con la siguiente venta
+        }
+      }
+    } catch (error) {
+      // No fallar si hay error - solo loguear
+      this.logger.error(
+        `Error en createMissingDebtsForFIAOSales:`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   }
 
   async findOne(storeId: string, debtId: string): Promise<Debt> {

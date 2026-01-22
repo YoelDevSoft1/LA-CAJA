@@ -1614,15 +1614,42 @@ export class SalesService {
       saleIds.length > 0
         ? await this.debtRepository.find({
             where: { sale_id: In(saleIds) },
+            relations: ['payments'],
             select: ['id', 'sale_id', 'status', 'amount_bs', 'amount_usd'],
           } as any)
         : [];
 
-    // Mapear deudas por sale_id
+    // Mapear deudas por sale_id y calcular montos pendientes
     const debtsBySaleId = new Map<string, any>();
     for (const debt of debts) {
       if (debt.sale_id) {
-        debtsBySaleId.set(debt.sale_id, debt);
+        // Calcular montos pagados
+        const payments = (debt as any).payments || [];
+        const totalPaidBs = payments.reduce(
+          (sum: number, p: any) => sum + Number(p.amount_bs || 0),
+          0,
+        );
+        const totalPaidUsd = payments.reduce(
+          (sum: number, p: any) => sum + Number(p.amount_usd || 0),
+          0,
+        );
+
+        // Calcular montos pendientes
+        const debtAmountBs = Number(debt.amount_bs || 0);
+        const debtAmountUsd = Number(debt.amount_usd || 0);
+        const remainingBs = debtAmountBs - totalPaidBs;
+        const remainingUsd = debtAmountUsd - totalPaidUsd;
+
+        // Agregar información calculada a la deuda
+        const debtWithCalculations = {
+          ...debt,
+          total_paid_bs: totalPaidBs,
+          total_paid_usd: totalPaidUsd,
+          remaining_bs: remainingBs,
+          remaining_usd: remainingUsd,
+        };
+
+        debtsBySaleId.set(debt.sale_id, debtWithCalculations);
       }
     }
 

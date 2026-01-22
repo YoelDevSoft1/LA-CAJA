@@ -13,6 +13,7 @@ import { DebtPayment } from '../database/entities/debt-payment.entity';
 import { DebtStatus } from '../database/entities/debt.entity';
 import { randomUUID } from 'crypto';
 import { WhatsAppMessagingService } from '../whatsapp/whatsapp-messaging.service';
+import { FiscalInvoicesService } from '../fiscal-invoices/fiscal-invoices.service';
 
 @Injectable()
 export class ProjectionsService {
@@ -37,6 +38,7 @@ export class ProjectionsService {
     private debtPaymentRepository: Repository<DebtPayment>,
     private dataSource: DataSource,
     private whatsappMessagingService: WhatsAppMessagingService,
+    private fiscalInvoicesService: FiscalInvoicesService,
   ) {}
 
   async projectEvent(event: Event): Promise<void> {
@@ -375,6 +377,51 @@ export class ProjectionsService {
           }
         }
       }
+    }
+
+    // ⚠️ CRÍTICO: Generar factura fiscal automáticamente (igual que en sales.service.ts)
+    // Esto es esencial para mantener la funcionalidad original del sistema
+    try {
+      const hasFiscalConfig =
+        await this.fiscalInvoicesService.hasActiveFiscalConfig(event.store_id);
+      if (hasFiscalConfig) {
+        const existingInvoice = await this.fiscalInvoicesService.findBySale(
+          event.store_id,
+          savedSale.id,
+        );
+        if (existingInvoice) {
+          if (existingInvoice.status === 'draft') {
+            // Emitir factura si está en draft
+            await this.fiscalInvoicesService.issue(
+              event.store_id,
+              existingInvoice.id,
+            );
+            this.logger.log(
+              `✅ Factura fiscal emitida automáticamente para venta ${payload.sale_id}: ${existingInvoice.invoice_number}`,
+            );
+          }
+        } else {
+          // Crear y emitir factura fiscal automáticamente
+          const createdInvoice = await this.fiscalInvoicesService.createFromSale(
+            event.store_id,
+            savedSale.id,
+            event.actor_user_id || null,
+          );
+          const issuedInvoice = await this.fiscalInvoicesService.issue(
+            event.store_id,
+            createdInvoice.id,
+          );
+          this.logger.log(
+            `✅ Factura fiscal creada y emitida automáticamente para venta ${payload.sale_id}: ${issuedInvoice.invoice_number}`,
+          );
+        }
+      }
+    } catch (error) {
+      // No fallar la proyección si hay error en factura fiscal
+      this.logger.warn(
+        `Error generando factura fiscal automática para venta ${payload.sale_id}:`,
+        error instanceof Error ? error.message : String(error),
+      );
     }
 
     // Enviar notificación de WhatsApp si está habilitado (offline-first)

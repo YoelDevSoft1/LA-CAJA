@@ -10,6 +10,7 @@ import { Customer } from '../database/entities/customer.entity';
 import { Debt } from '../database/entities/debt.entity';
 import { DebtPayment } from '../database/entities/debt-payment.entity';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
+import { FiscalInvoicesModule } from '../fiscal-invoices/fiscal-invoices.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { WhatsAppModule } from '../whatsapp/whatsapp.module';
       DebtPayment,
     ]),
     WhatsAppModule,
+    FiscalInvoicesModule,
   ],
   providers: [ProjectionsService],
   exports: [ProjectionsService],
