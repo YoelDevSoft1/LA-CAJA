@@ -17,6 +17,8 @@ export class ExternalApisHealthIndicator extends HealthIndicator {
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
     const checks: Record<string, any> = {};
     let allHealthy = true;
+    const requireHealthy =
+      this.configService.get<string>('EXTERNAL_APIS_HEALTH_REQUIRED') === 'true';
 
     // Verificar API de tasas de cambio (BCV)
     try {
@@ -27,13 +29,13 @@ export class ExternalApisHealthIndicator extends HealthIndicator {
       });
       const responseTime = Date.now() - startTime;
       checks.bcv = {
-        status: response.status < 500 ? 'reachable' : 'unreachable',
+        status: response.status < 500 ? 'up' : 'down',
         responseTime: `${responseTime}ms`,
       };
       if (response.status >= 500) allHealthy = false;
     } catch (error) {
       checks.bcv = {
-        status: 'unreachable',
+        status: 'down',
         error: error instanceof Error ? error.message : 'Unknown error',
       };
       allHealthy = false;
@@ -51,20 +53,20 @@ export class ExternalApisHealthIndicator extends HealthIndicator {
         });
         const responseTime = Date.now() - startTime;
         checks.resend = {
-          status: response.status === 200 ? 'connected' : 'error',
+          status: response.status === 200 ? 'up' : 'down',
           responseTime: `${responseTime}ms`,
         };
         if (response.status !== 200) allHealthy = false;
       } catch (error) {
         checks.resend = {
-          status: 'error',
+          status: 'down',
           error: error instanceof Error ? error.message : 'Unknown error',
         };
         allHealthy = false;
       }
     } else {
       checks.resend = {
-        status: 'not_configured',
+        status: 'skipped',
       };
     }
 
@@ -72,22 +74,25 @@ export class ExternalApisHealthIndicator extends HealthIndicator {
     const whatsappEnabled = this.configService.get<string>('WHATSAPP_ENABLED') === 'true';
     if (whatsappEnabled) {
       checks.whatsapp = {
-        status: 'configured',
+        status: 'up',
         // Nota: Verificación real requeriría acceso al servicio de WhatsApp
       };
     } else {
       checks.whatsapp = {
-        status: 'not_configured',
+        status: 'skipped',
       };
     }
 
-    if (!allHealthy) {
+    if (!allHealthy && requireHealthy) {
       throw new HealthCheckError(
         'Some external APIs are unhealthy',
         this.getStatus(key, false, checks),
       );
     }
 
-    return this.getStatus(key, true, checks);
+    return this.getStatus(key, true, {
+      degraded: !allHealthy,
+      checks,
+    });
   }
 }

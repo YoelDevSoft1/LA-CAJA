@@ -127,7 +127,29 @@ export class HealthController {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LA CAJA - Health Dashboard</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    
+    :root {
+      --primary: hsl(221, 83%, 53%);
+      --primary-foreground: hsl(0, 0%, 100%);
+      --secondary: hsl(210, 40%, 96%);
+      --muted: hsl(210, 40%, 96%);
+      --muted-foreground: hsl(215, 16%, 47%);
+      --accent: hsl(210, 40%, 96%);
+      --destructive: hsl(0, 84%, 60%);
+      --destructive-foreground: hsl(0, 0%, 100%);
+      --success: hsl(142, 76%, 36%);
+      --warning: hsl(38, 92%, 50%);
+      --border: hsl(214, 32%, 91%);
+      --input: hsl(214, 32%, 91%);
+      --ring: hsl(221, 83%, 53%);
+      --background: hsl(0, 0%, 100%);
+      --foreground: hsl(222, 47%, 11%);
+      --card: hsl(0, 0%, 100%);
+      --card-foreground: hsl(222, 47%, 11%);
+      --radius: 0.5rem;
+    }
+    
     * {
       margin: 0;
       padding: 0;
@@ -135,88 +157,141 @@ export class HealthController {
     }
     
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: linear-gradient(135deg, rgb(13, 129, 206) 0%, rgb(10, 103, 165) 100%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, hsl(221, 83%, 53%) 0%, hsl(221, 83%, 45%) 50%, hsl(221, 83%, 40%) 100%);
+      background-attachment: fixed;
       min-height: 100vh;
-      padding: 24px;
-      color: hsl(240, 10%, 4%);
+      padding: 2rem 1rem;
+      color: var(--foreground);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
     
     .container {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
     }
     
     .header {
-      background: white;
-      border-radius: 0.5rem;
-      padding: 40px 32px;
-      margin-bottom: 32px;
-      box-shadow: 0 10px 15px -3px rgba(13, 129, 206, 0.1), 0 4px 6px -4px rgba(13, 129, 206, 0.1);
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 3rem 2.5rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+      border: 1px solid var(--border);
       text-align: center;
-      border: 1px solid rgba(13, 129, 206, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--primary) 0%, hsl(221, 83%, 45%) 100%);
+    }
+    
+    .header-content {
+      position: relative;
+      z-index: 1;
+    }
+    
+    .header-icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 1.5rem;
+      background: linear-gradient(135deg, var(--primary) 0%, hsl(221, 83%, 45%) 100%);
+      border-radius: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.3);
     }
     
     .header h1 {
-      color: rgb(13, 129, 206);
-      font-size: 2.25rem;
-      font-weight: 700;
-      margin-bottom: 8px;
-      letter-spacing: -0.02em;
+      color: var(--foreground);
+      font-size: 2.5rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.025em;
+      background: linear-gradient(135deg, var(--foreground) 0%, hsl(215, 16%, 47%) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
     
     .header p {
-      color: hsl(240, 5%, 35%);
-      font-size: 1rem;
+      color: var(--muted-foreground);
+      font-size: 1.125rem;
       font-weight: 400;
+      margin-bottom: 0.75rem;
+    }
+    
+    .header-subtitle {
+      color: var(--muted-foreground);
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-top: 1rem;
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      background: var(--muted);
+      border-radius: 9999px;
     }
     
     .status-badge {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 10px 20px;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
       border-radius: 9999px;
       font-weight: 600;
       font-size: 0.875rem;
-      margin-top: 16px;
-      transition: all 0.3s ease;
+      margin-top: 1.5rem;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     }
     
     .status-badge.healthy {
-      background: #22c55e;
+      background: var(--success);
       color: white;
-      box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+      border-color: hsl(142, 76%, 30%);
     }
     
     .status-badge.unhealthy {
-      background: #ef4444;
+      background: var(--destructive);
       color: white;
-      box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+      border-color: hsl(0, 84%, 55%);
     }
     
     .status-badge.loading {
-      background: #f59e0b;
+      background: var(--warning);
       color: white;
-      box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+      border-color: hsl(38, 92%, 45%);
     }
     
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 20px;
-      margin-bottom: 30px;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
     }
     
     .card {
-      background: white;
-      border-radius: 0.5rem;
-      padding: 24px;
-      box-shadow: 0 4px 6px -1px rgba(13, 129, 206, 0.1), 0 2px 4px -2px rgba(13, 129, 206, 0.1);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      border: 1px solid rgba(13, 129, 206, 0.1);
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid var(--border);
       position: relative;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
     
     .card::before {
@@ -226,14 +301,15 @@ export class HealthController {
       left: 0;
       right: 0;
       height: 3px;
-      background: linear-gradient(90deg, rgb(13, 129, 206) 0%, rgb(10, 103, 165) 100%);
+      background: linear-gradient(90deg, var(--primary) 0%, hsl(221, 83%, 45%) 100%);
       opacity: 0;
-      transition: opacity 0.3s ease;
+      transition: opacity 0.2s ease;
     }
     
     .card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 20px 25px -5px rgba(13, 129, 206, 0.15), 0 8px 10px -6px rgba(13, 129, 206, 0.1);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+      border-color: var(--primary);
     }
     
     .card:hover::before {
@@ -242,144 +318,301 @@ export class HealthController {
     
     .card-header {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
-      margin-bottom: 20px;
+      margin-bottom: 1rem;
+      gap: 1rem;
+    }
+    
+    .card-title-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex: 1;
+    }
+    
+    .card-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      background: var(--muted);
+      flex-shrink: 0;
     }
     
     .card-title {
       font-size: 1.125rem;
       font-weight: 600;
-      color: hsl(240, 10%, 4%);
+      color: var(--card-foreground);
+      letter-spacing: -0.01em;
+      line-height: 1.4;
+    }
+    
+    .card-description {
+      font-size: 0.75rem;
+      color: var(--muted-foreground);
+      margin-top: 0.25rem;
+    }
+    
+    .status-indicator-wrapper {
       display: flex;
       align-items: center;
-      gap: 12px;
-      letter-spacing: -0.01em;
+      gap: 0.5rem;
+      flex-shrink: 0;
     }
     
     .status-indicator {
-      width: 16px;
-      height: 16px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       display: inline-block;
-      animation: pulse 2s infinite;
+      position: relative;
     }
     
     .status-indicator.up {
-      background: #22c55e;
+      background: var(--success);
       box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+      animation: pulse-success 2s infinite;
     }
     
     .status-indicator.down {
-      background: #ef4444;
+      background: var(--destructive);
       box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
-      animation: pulse-red 2s infinite;
+      animation: pulse-destructive 2s infinite;
     }
     
     .status-indicator.loading {
-      background: #f59e0b;
-      animation: pulse-orange 2s infinite;
+      background: var(--warning);
+      animation: pulse-warning 2s infinite;
     }
     
-    @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
-      70% { box-shadow: 0 0 0 12px rgba(34, 197, 94, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    @keyframes pulse-success {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+      50% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
     }
     
-    @keyframes pulse-red {
-      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-      70% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    @keyframes pulse-destructive {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
     }
     
-    @keyframes pulse-orange {
-      0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
-      70% { box-shadow: 0 0 0 12px rgba(245, 158, 11, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+    @keyframes pulse-warning {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+      50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+    }
+    
+    .status-badge-small {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.25rem 0.625rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1px solid transparent;
+    }
+    
+    .status-badge-small.up {
+      background: hsl(142, 76%, 95%);
+      color: var(--success);
+      border-color: hsl(142, 76%, 85%);
+    }
+    
+    .status-badge-small.down {
+      background: hsl(0, 84%, 95%);
+      color: var(--destructive);
+      border-color: hsl(0, 84%, 85%);
     }
     
     .card-content {
-      color: hsl(240, 5%, 35%);
+      color: var(--muted-foreground);
       font-size: 0.875rem;
-      line-height: 1.5;
+      line-height: 1.6;
+      flex: 1;
     }
     
     .card-content strong {
-      color: hsl(240, 10%, 4%);
+      color: var(--card-foreground);
       font-weight: 600;
+    }
+    
+    .components-list {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    
+    .component-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0;
+      font-size: 0.8125rem;
+    }
+    
+    .component-status {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    
+    .component-status.up {
+      background: var(--success);
+    }
+    
+    .component-status.down {
+      background: var(--destructive);
     }
     
     .error-message {
-      color: #ef4444;
-      font-weight: 600;
-      margin-top: 12px;
-      font-size: 0.875rem;
-      padding: 8px 12px;
-      background: rgba(239, 68, 68, 0.1);
+      color: var(--destructive);
+      font-weight: 500;
+      margin-top: 1rem;
+      font-size: 0.8125rem;
+      padding: 0.75rem;
+      background: hsl(0, 84%, 97%);
       border-radius: 0.375rem;
-      border-left: 3px solid #ef4444;
+      border-left: 3px solid var(--destructive);
+    }
+    
+    .actions {
+      text-align: center;
+      margin: 2rem 0;
     }
     
     .refresh-btn {
-      background: linear-gradient(135deg, rgb(13, 129, 206) 0%, rgb(10, 103, 165) 100%);
-      color: white;
+      background: var(--primary);
+      color: var(--primary-foreground);
       border: none;
-      padding: 12px 32px;
-      border-radius: 0.5rem;
+      padding: 0.75rem 2rem;
+      border-radius: var(--radius);
       font-size: 0.9375rem;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      margin-top: 24px;
-      box-shadow: 0 4px 6px -1px rgba(13, 129, 206, 0.2), 0 2px 4px -2px rgba(13, 129, 206, 0.1);
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 0.5rem;
+      font-family: inherit;
     }
     
     .refresh-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 15px -3px rgba(13, 129, 206, 0.3), 0 4px 6px -4px rgba(13, 129, 206, 0.2);
+      background: hsl(221, 83%, 48%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
     }
     
     .refresh-btn:active {
       transform: translateY(0);
     }
     
+    .refresh-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    
     .last-update {
       text-align: center;
-      color: rgba(255, 255, 255, 0.9);
-      margin-top: 32px;
+      color: rgba(255, 255, 255, 0.95);
+      margin-top: 2rem;
       font-size: 0.875rem;
       font-weight: 500;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     }
     
     .loading-spinner {
       display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 3px solid rgba(255,255,255,.3);
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
       border-radius: 50%;
       border-top-color: white;
-      animation: spin 1s ease-in-out infinite;
+      animation: spin 0.8s linear infinite;
     }
     
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      text-align: center;
+    }
+    
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 0.25rem;
+    }
+    
+    .stat-label {
+      font-size: 0.875rem;
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 500;
+    }
+    
+    @media (max-width: 768px) {
+      .header {
+        padding: 2rem 1.5rem;
+      }
+      
+      .header h1 {
+        font-size: 2rem;
+      }
+      
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>🏥 Health Dashboard</h1>
-      <p>Monitoreo en tiempo real del sistema LA CAJA</p>
-      <div style="margin-top: 16px; font-size: 0.75rem; color: hsl(240, 5%, 35%);">
-        Sistema POS Offline-First para Venezuela
+      <div class="header-content">
+        <div class="header-icon">🏥</div>
+        <h1>Health Dashboard</h1>
+        <p>Monitoreo en tiempo real del sistema LA CAJA</p>
+        <div class="header-subtitle">Sistema POS Offline-First para Venezuela</div>
+        <div id="overall-status" class="status-badge loading">
+          <span class="loading-spinner"></span>
+          <span>Cargando servicios...</span>
+        </div>
       </div>
-      <div id="overall-status" class="status-badge loading">
-        <span class="loading-spinner"></span> Cargando...
+    </div>
+    
+    <div class="stats-grid" id="stats-grid" style="display: none;">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-healthy">-</div>
+        <div class="stat-label">Operacionales</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-down">-</div>
+        <div class="stat-label">No disponibles</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-total">-</div>
+        <div class="stat-label">Total servicios</div>
       </div>
     </div>
     
@@ -387,9 +620,12 @@ export class HealthController {
       <!-- Los servicios se cargarán aquí dinámicamente -->
     </div>
     
-    <div style="text-align: center;">
-      <button class="refresh-btn" onclick="loadHealthStatus()">
-        🔄 Actualizar
+    <div class="actions">
+      <button class="refresh-btn" onclick="loadHealthStatus()" id="refresh-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+        </svg>
+        Actualizar
       </button>
     </div>
     
@@ -425,23 +661,27 @@ export class HealthController {
     }
     
     async function checkService(service) {
+      const startTime = performance.now();
       try {
         const response = await fetch(service.endpoint);
         const data = await response.json();
+        const responseTime = Math.round(performance.now() - startTime);
         const isHealthy = response.status === 200 && data.status === 'ok';
         
         return {
           ...service,
           status: isHealthy ? 'up' : 'down',
           data: data,
-          error: null
+          error: null,
+          responseTime: responseTime
         };
       } catch (error) {
         return {
           ...service,
           status: 'down',
           data: null,
-          error: error.message
+          error: error.message,
+          responseTime: null
         };
       }
     }
@@ -449,20 +689,30 @@ export class HealthController {
     function renderService(serviceStatus) {
       const statusClass = serviceStatus.status === 'up' ? 'up' : 'down';
       const statusText = serviceStatus.status === 'up' ? 'Operacional' : 'No disponible';
-      const statusColor = serviceStatus.status === 'up' ? '#10b981' : '#ef4444';
       
-      let content = \`<strong>Estado:</strong> \${statusText}\`;
+      let content = \`<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+        <strong>Estado:</strong>
+        <span class="status-badge-small \${statusClass}">\${statusText}</span>
+        \${serviceStatus.responseTime ? \`<span style="color: var(--muted-foreground); font-size: 0.75rem;">(\${serviceStatus.responseTime}ms)</span>\` : ''}
+      </div>\`;
       
       if (serviceStatus.data && serviceStatus.data.details) {
         const details = serviceStatus.data.details;
         const detailKeys = Object.keys(details);
         if (detailKeys.length > 0) {
-          content += '<br><br><strong>Componentes:</strong><br>';
+          content += '<div class="components-list"><strong style="display: block; margin-bottom: 0.5rem;">Componentes:</strong>';
           detailKeys.forEach(key => {
             const detail = details[key];
-            const detailStatus = detail.status === 'up' ? '✅' : '❌';
-            content += \`\${detailStatus} \${key}<br>\`;
+            const detailStatus = detail.status === 'up' ? 'up' : 'down';
+            const detailIcon = detail.status === 'up' ? '✓' : '✗';
+            content += \`
+              <div class="component-item">
+                <span class="component-status \${detailStatus}"></span>
+                <span>\${key}</span>
+              </div>
+            \`;
           });
+          content += '</div>';
         }
       }
       
@@ -473,11 +723,16 @@ export class HealthController {
       return \`
         <div class="card">
           <div class="card-header">
-            <div class="card-title">
-              <span>\${serviceStatus.icon}</span>
-              <span>\${serviceStatus.name}</span>
+            <div class="card-title-wrapper">
+              <div class="card-icon">\${serviceStatus.icon}</div>
+              <div>
+                <div class="card-title">\${serviceStatus.name}</div>
+                <div class="card-description">\${serviceStatus.description}</div>
+              </div>
             </div>
-            <span class="status-indicator \${statusClass}"></span>
+            <div class="status-indicator-wrapper">
+              <span class="status-indicator \${statusClass}"></span>
+            </div>
           </div>
           <div class="card-content">
             \${content}
@@ -486,50 +741,86 @@ export class HealthController {
       \`;
     }
     
+    function updateStats(results) {
+      const healthy = results.filter(r => r.status === 'up').length;
+      const down = results.filter(r => r.status === 'down').length;
+      const total = results.length;
+      
+      document.getElementById('stat-healthy').textContent = healthy;
+      document.getElementById('stat-down').textContent = down;
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stats-grid').style.display = 'grid';
+    }
+    
     async function loadHealthStatus() {
       const grid = document.getElementById('services-grid');
       const overallStatus = document.getElementById('overall-status');
+      const refreshBtn = document.getElementById('refresh-btn');
+      
+      refreshBtn.disabled = true;
+      refreshBtn.innerHTML = '<span class="loading-spinner"></span> Actualizando...';
       
       // Mostrar estado de carga
       grid.innerHTML = services.map(s => \`
         <div class="card">
           <div class="card-header">
-            <div class="card-title">
-              <span>\${s.icon}</span>
-              <span>\${s.name}</span>
+            <div class="card-title-wrapper">
+              <div class="card-icon">\${s.icon}</div>
+              <div>
+                <div class="card-title">\${s.name}</div>
+                <div class="card-description">\${s.description}</div>
+              </div>
             </div>
-            <span class="status-indicator loading"></span>
+            <div class="status-indicator-wrapper">
+              <span class="status-indicator loading"></span>
+            </div>
           </div>
-          <div class="card-content">Cargando...</div>
+          <div class="card-content">Verificando estado...</div>
         </div>
       \`).join('');
       
-      overallStatus.innerHTML = '<span class="loading-spinner"></span> Verificando servicios...';
+      overallStatus.innerHTML = '<span class="loading-spinner"></span><span>Verificando servicios...</span>';
       overallStatus.className = 'status-badge loading';
       
-      // Verificar todos los servicios
-      const results = await Promise.all(services.map(checkService));
-      
-      // Renderizar resultados
-      grid.innerHTML = results.map(renderService).join('');
-      
-      // Actualizar estado general
-      const allHealthy = results.every(r => r.status === 'up');
-      const allDown = results.every(r => r.status === 'down');
-      
-      if (allHealthy) {
-        overallStatus.textContent = '✅ Todos los servicios operacionales';
-        overallStatus.className = 'status-badge healthy';
-      } else if (allDown) {
-        overallStatus.textContent = '❌ Todos los servicios no disponibles';
-        overallStatus.className = 'status-badge unhealthy';
-      } else {
+      try {
+        // Verificar todos los servicios
+        const results = await Promise.all(services.map(checkService));
+        
+        // Renderizar resultados
+        grid.innerHTML = results.map(renderService).join('');
+        
+        // Actualizar estadísticas
+        updateStats(results);
+        
+        // Actualizar estado general
+        const allHealthy = results.every(r => r.status === 'up');
+        const allDown = results.every(r => r.status === 'down');
         const healthyCount = results.filter(r => r.status === 'up').length;
-        overallStatus.textContent = \`⚠️ \${healthyCount}/\${results.length} servicios operacionales\`;
+        
+        if (allHealthy) {
+          overallStatus.innerHTML = '<span>✓</span><span>Todos los servicios operacionales</span>';
+          overallStatus.className = 'status-badge healthy';
+        } else if (allDown) {
+          overallStatus.innerHTML = '<span>✗</span><span>Todos los servicios no disponibles</span>';
+          overallStatus.className = 'status-badge unhealthy';
+        } else {
+          overallStatus.innerHTML = \`<span>⚠</span><span>\${healthyCount}/\${results.length} servicios operacionales</span>\`;
+          overallStatus.className = 'status-badge unhealthy';
+        }
+        
+        updateLastUpdate();
+      } catch (error) {
+        overallStatus.innerHTML = '<span>✗</span><span>Error al verificar servicios</span>';
         overallStatus.className = 'status-badge unhealthy';
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = \`
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          </svg>
+          Actualizar
+        \`;
       }
-      
-      updateLastUpdate();
     }
     
     // Cargar estado inicial
