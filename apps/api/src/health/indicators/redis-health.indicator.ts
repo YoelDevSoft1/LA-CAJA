@@ -69,7 +69,7 @@ export class RedisHealthIndicator extends HealthIndicator {
         const usedMemory = memoryMatch ? parseInt(memoryMatch[1], 10) : 0;
 
         return this.getStatus(key, true, {
-          status: 'connected',
+          connection: 'connected',
           responseTime: `${responseTime}ms`,
           usedMemory: `${(usedMemory / 1024 / 1024).toFixed(2)}MB`,
         });

@@ -39,7 +39,7 @@ export class WebSocketHealthIndicator extends HealthIndicator {
 
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
     return this.getStatus(key, true, {
-      status: 'operational',
+      connection: 'operational',
       activeConnections: this.activeConnections,
       totalConnections: this.totalConnections,
     });

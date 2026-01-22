@@ -23,7 +23,7 @@ export class BullMQHealthIndicator extends HealthIndicator {
       const isHealthy = true; // Consideramos saludable si podemos obtener las métricas
 
       return this.getStatus(key, isHealthy, {
-        status: 'connected',
+        connection: 'connected',
         queues: {
           notifications: {
             waiting,
