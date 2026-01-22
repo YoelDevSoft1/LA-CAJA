@@ -419,21 +419,56 @@ export default function ProductsPage() {
 
       // Exportar con los campos exactos que requiere la importación CSV
       // Orden: nombre, categoria, sku, codigo_barras, precio_bs, precio_usd, costo_bs, costo_usd, stock_minimo
-      exportToCSV(
-        allProducts,
-        [
-          { header: 'nombre', accessor: 'name' },
-          { header: 'categoria', accessor: (p) => p.category || '' },
-          { header: 'sku', accessor: (p) => p.sku || '' },
-          { header: 'codigo_barras', accessor: (p) => p.barcode || '' },
-          { header: 'precio_bs', accessor: (p) => Number(p.price_bs).toFixed(2) },
-          { header: 'precio_usd', accessor: (p) => Number(p.price_usd).toFixed(2) },
-          { header: 'costo_bs', accessor: (p) => p.cost_bs ? Number(p.cost_bs).toFixed(2) : '0.00' },
-          { header: 'costo_usd', accessor: (p) => p.cost_usd ? Number(p.cost_usd).toFixed(2) : '0.00' },
-          { header: 'stock_minimo', accessor: (p) => stockByProductExport[p.id]?.low_stock_threshold ?? 10 },
-        ],
-        { filename: `Productos_${timestamp}` }
-      )
+      // IMPORTANTE: Los headers deben coincidir exactamente con los que espera la importación
+      const csvHeaders = 'nombre,categoria,sku,codigo_barras,precio_bs,precio_usd,costo_bs,costo_usd,stock_minimo'
+      
+      const csvRows = allProducts.map((p) => {
+        const nombre = (p.name || '').replace(/"/g, '""')
+        const categoria = (p.category || '').replace(/"/g, '""')
+        const sku = (p.sku || '').replace(/"/g, '""')
+        const codigo_barras = (p.barcode || '').replace(/"/g, '""')
+        const precio_bs = Number(p.price_bs || 0).toFixed(2)
+        const precio_usd = Number(p.price_usd || 0).toFixed(2)
+        const costo_bs = p.cost_bs ? Number(p.cost_bs).toFixed(2) : '0.00'
+        const costo_usd = p.cost_usd ? Number(p.cost_usd).toFixed(2) : '0.00'
+        const stock_minimo = String(stockByProductExport[p.id]?.low_stock_threshold ?? 10)
+        
+        // Escapar valores que contengan comas o comillas
+        const escapeValue = (val: string) => {
+          if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+            return `"${val.replace(/"/g, '""')}"`
+          }
+          return val
+        }
+        
+        return [
+          escapeValue(nombre),
+          escapeValue(categoria),
+          escapeValue(sku),
+          escapeValue(codigo_barras),
+          precio_bs,
+          precio_usd,
+          costo_bs,
+          costo_usd,
+          stock_minimo,
+        ].join(',')
+      })
+      
+      // Crear CSV sin BOM para evitar problemas de lectura
+      const csvContent = [csvHeaders, ...csvRows].join('\n')
+      
+      // Crear blob y descargar
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      
+      const link = document.createElement('a')
+      link.setAttribute('href', url)
+      link.setAttribute('download', `Productos_${timestamp}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
 
       toast.success(`${allProducts.length} productos exportados a Excel`, { id: 'export-products' })
     } catch (error: any) {
