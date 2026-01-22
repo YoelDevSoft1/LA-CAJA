@@ -462,7 +462,7 @@ export default function LoginPage() {
                     type="password"
                     id="pin"
                     placeholder="••••"
-                    maxLength={6}
+                    maxLength={8}
                     className={cn(
                       'h-14 text-center text-2xl tracking-[0.5em] font-semibold border-2 transition-all duration-200',
                       'focus:ring-0 focus:ring-offset-0 focus:outline-none focus-visible:outline-none',

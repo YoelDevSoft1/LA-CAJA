@@ -63,7 +63,9 @@ export default function ImportCSVModal({ isOpen, onClose, onSuccess }: ImportCSV
 
     try {
       const text = await file.text()
-      const lines = text.split('\n').filter(line => line.trim())
+      // Remover BOM (Byte Order Mark) si está presente
+      const textWithoutBOM = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text
+      const lines = textWithoutBOM.split('\n').filter(line => line.trim())
 
       if (lines.length < 2) {
         toast.error('El archivo CSV está vacío o no tiene datos')
@@ -71,8 +73,9 @@ export default function ImportCSVModal({ isOpen, onClose, onSuccess }: ImportCSV
         return
       }
 
-      // Parsear header
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+      // Parsear header - asegurar que se lean correctamente
+      const headerLine = lines[0].trim()
+      const headers = headerLine.split(',').map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''))
 
       // Validar headers requeridos
       const requiredHeaders = ['nombre', 'precio_bs', 'precio_usd']

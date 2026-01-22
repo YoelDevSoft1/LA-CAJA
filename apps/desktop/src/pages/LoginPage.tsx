@@ -11,7 +11,7 @@ import { Loader2, Store, Lock, User } from 'lucide-react'
 
 const loginSchema = z.object({
   store_id: z.string().uuid('Selecciona una tienda'),
-  pin: z.string().min(4, 'El PIN debe tener al menos 4 dígitos').max(6, 'El PIN debe tener máximo 6 dígitos'),
+  pin: z.string().min(4, 'El PIN debe tener al menos 4 dígitos').max(8, 'El PIN debe tener máximo 8 dígitos'),
 })
 
 type LoginForm = z.infer<typeof loginSchema>
@@ -222,7 +222,7 @@ export default function LoginPage() {
                 type="password"
                 {...register('pin')}
                 placeholder="••••"
-                maxLength={6}
+                maxLength={8}
                 autoComplete="off"
                 className="w-full px-4 py-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-3xl tracking-[0.5em] font-mono bg-gray-50"
               />
@@ -232,7 +232,7 @@ export default function LoginPage() {
                 </p>
               )}
               <p className="mt-2 text-xs text-gray-500 text-center">
-                PIN de seguridad (4-6 dígitos)
+                PIN de seguridad (4-8 dígitos)
               </p>
             </div>
           )}
