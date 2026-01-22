@@ -802,13 +802,13 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Top 10 Productos de la Semana - Grid con Gráfico y Tabla */}
+          {/* Top 10 Productos de la Semana - Grid con Gráficos Separados */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {/* Gráfico de Barras Horizontal */}
+            {/* Gráfico: Productos por Peso */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-base sm:text-lg">
-                  Top Productos por Ingresos
+                  Top Productos por Peso
                 </CardTitle>
                 <Badge variant="outline" className="text-xs">
                   {chartCurrency}
@@ -816,14 +816,35 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <TopProductsChart
-                  data={trends.top_products_trend}
+                  data={trends.top_products_trend.filter(p => p.is_weight_product)}
                   currency={chartCurrency}
                   limit={10}
                 />
               </CardContent>
             </Card>
 
-            {/* Tabla Detallada */}
+            {/* Gráfico: Productos por Cantidad */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-base sm:text-lg">
+                  Top Productos por Cantidad
+                </CardTitle>
+                <Badge variant="outline" className="text-xs">
+                  {chartCurrency}
+                </Badge>
+              </CardHeader>
+              <CardContent>
+                <TopProductsChart
+                  data={trends.top_products_trend.filter(p => !p.is_weight_product)}
+                  currency={chartCurrency}
+                  limit={10}
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Tabla Detallada */}
+          <div className="grid grid-cols-1 gap-6 mt-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-base sm:text-lg">
@@ -853,6 +874,11 @@ export default function DashboardPage() {
                           {(() => {
                             const weightProducts = trends.top_products_trend
                               .filter(p => p.is_weight_product)
+                              .sort((a, b) => {
+                                const revenueA = chartCurrency === 'BS' ? a.revenue_bs : a.revenue_usd
+                                const revenueB = chartCurrency === 'BS' ? b.revenue_bs : b.revenue_usd
+                                return revenueB - revenueA // Orden descendente
+                              })
                               .slice(0, 10)
                             return weightProducts.length > 0 ? (
                               weightProducts.map((product, index) => (
@@ -924,6 +950,11 @@ export default function DashboardPage() {
                           {(() => {
                             const unitProducts = trends.top_products_trend
                               .filter(p => !p.is_weight_product)
+                              .sort((a, b) => {
+                                const revenueA = chartCurrency === 'BS' ? a.revenue_bs : a.revenue_usd
+                                const revenueB = chartCurrency === 'BS' ? b.revenue_bs : b.revenue_usd
+                                return revenueB - revenueA // Orden descendente
+                              })
                               .slice(0, 10)
                             return unitProducts.length > 0 ? (
                               unitProducts.map((product, index) => (

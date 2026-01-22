@@ -118,7 +118,14 @@ export default function TopProductsChart({
   const colors = useMemo(() => getColors(), [])
   
   const chartData = useMemo(() => {
-    return data.slice(0, limit).map((item, index) => ({
+    // Ordenar por ingresos descendente (mayor a menor)
+    const sortedData = [...data].sort((a, b) => {
+      const revenueA = currency === 'BS' ? a.revenue_bs : a.revenue_usd
+      const revenueB = currency === 'BS' ? b.revenue_bs : b.revenue_usd
+      return revenueB - revenueA // Orden descendente
+    })
+    
+    return sortedData.slice(0, limit).map((item, index) => ({
       name: item.product_name.length > 20
         ? `${item.product_name.substring(0, 20)}...`
         : item.product_name,
