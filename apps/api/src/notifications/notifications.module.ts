@@ -78,34 +78,8 @@ import { MLNotificationsController } from './ml-notifications.controller';
       },
       inject: [ConfigService],
     }),
-    // BullMQ para procesamiento asíncrono
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => {
-        const redisUrl = configService.get<string>('REDIS_URL');
-
-        // Si existe REDIS_URL (ej: de Render), úsala directamente
-        if (redisUrl) {
-          return {
-            connection: {
-              url: redisUrl,
-              maxRetriesPerRequest: null, // Requerido para BullMQ
-            },
-          };
-        }
-
-        // Fallback a configuración por componentes (desarrollo local)
-        return {
-          connection: {
-            host: configService.get<string>('REDIS_HOST') || 'localhost',
-            port: configService.get<number>('REDIS_PORT') || 6379,
-            password: configService.get<string>('REDIS_PASSWORD'),
-            maxRetriesPerRequest: null,
-          },
-        };
-      },
-      inject: [ConfigService],
-    }),
+    // ⚡ OPTIMIZACIÓN: Usar conexión Redis compartida de AppModule
+    // Solo registrar la cola, NO crear nueva conexión
     BullModule.registerQueue({
       name: 'notifications',
     }),

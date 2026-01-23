@@ -182,6 +182,7 @@ export class SalesService {
     dto: CreateSaleDto,
     userId?: string,
   ): Promise<void> {
+    const validateStart = Date.now();
     // Determinar bodega de venta
     let warehouseId: string | null = null;
     if (dto.warehouse_id) {
@@ -195,47 +196,59 @@ export class SalesService {
       warehouseId = defaultWarehouse.id;
     }
 
-    // ⚡ OPTIMIZACIÓN: Batch queries para productos, variantes, lotes y seriales
+    // ⚡ OPTIMIZACIÓN CRÍTICA: Batch queries para productos, variantes, lotes y seriales
     const productIds = dto.items.map(item => item.product_id);
     const variantIds = dto.items
       .map(item => item.variant_id)
       .filter((id): id is string => !!id);
-
-    const products = await this.productRepository.find({
-      where: {
-        id: In(productIds),
-        store_id: storeId,
-        is_active: true,
-      },
-    });
-
-    const productMap = new Map<string, Product>();
-    for (const product of products) {
-      productMap.set(product.id, product);
-    }
-
-    const variantMap = new Map<string, ProductVariant>();
-    if (variantIds.length > 0) {
-      const variants = await this.dataSource.getRepository(ProductVariant).find({
-        where: { id: In(variantIds) },
-      });
-      for (const variant of variants) {
-        variantMap.set(variant.id, variant);
-      }
-    }
-
-    // Batch query para lotes
-    const allLots = await this.dataSource.getRepository(ProductLot).find({
-      where: { product_id: In(productIds) },
-    });
-    const lotsMap = new Map<string, ProductLot[]>();
-    for (const lot of allLots) {
-      const existing = lotsMap.get(lot.product_id) || [];
-      existing.push(lot);
-      lotsMap.set(lot.product_id, existing);
-    }
-
-    // Batch query para seriales (solo productos que no son por peso)
+    
+    // ⚡ OPTIMIZACIÓN CRÍTICA: Ejecutar queries independientes en paralelo
+    const [
+      stockRecords,
+      products,
+      variants,
+      allLots,
+    ] = await Promise.all([
+      // 1. Batch query de stocks para todos los productos de una vez
+      // ⚡ OPTIMIZACIÓN: Usar formato de array PostgreSQL nativo para mejor rendimiento
+      warehouseId
+        ? this.dataSource.query(
+            `SELECT product_id, variant_id, stock, reserved
+             FROM warehouse_stock
+             WHERE warehouse_id = $1
+               AND product_id = ANY($2::uuid[])`,
+            [warehouseId, productIds],
+          )
+        : this.dataSource.query(
+            `SELECT ws.product_id, ws.variant_id, COALESCE(SUM(ws.stock - COALESCE(ws.reserved, 0)), 0) as stock, 0 as reserved
+             FROM warehouse_stock ws
+             INNER JOIN warehouses w ON ws.warehouse_id = w.id
+             WHERE w.store_id = $1
+               AND ws.product_id = ANY($2::uuid[])
+             GROUP BY ws.product_id, ws.variant_id`,
+            [storeId, productIds],
+          ),
+      // 2. Batch query de productos
+      this.productRepository.find({
+        where: {
+          id: In(productIds),
+          store_id: storeId,
+          is_active: true,
+        },
+      }),
+      // 3. Batch query de variantes (solo si hay)
+      variantIds.length > 0
+        ? this.dataSource.getRepository(ProductVariant).find({
+            where: { id: In(variantIds) },
+          })
+        : Promise.resolve([]),
+      // 4. Batch query para lotes
+      this.dataSource.getRepository(ProductLot).find({
+        where: { product_id: In(productIds) },
+      }),
+    ]);
+    
+    // 5. Batch query para seriales (después de obtener productos para saber cuáles no son por peso)
     const productsWithSerials = products
       .filter(p => !p.is_weight_product)
       .map(p => p.id);
@@ -244,6 +257,32 @@ export class SalesService {
           where: { product_id: In(productsWithSerials) },
         })
       : [];
+    
+    // Crear mapa de stocks para acceso O(1)
+    const stockMap = new Map<string, number>();
+    for (const record of stockRecords) {
+      const key = `${record.product_id}:${record.variant_id || 'null'}`;
+      const availableStock = Number(record.stock || 0) - Number(record.reserved || 0);
+      stockMap.set(key, Math.max(0, availableStock));
+    }
+
+    const productMap = new Map<string, Product>();
+    for (const product of products) {
+      productMap.set(product.id, product);
+    }
+
+    const variantMap = new Map<string, ProductVariant>();
+    for (const variant of variants) {
+      variantMap.set(variant.id, variant);
+    }
+
+    const lotsMap = new Map<string, ProductLot[]>();
+    for (const lot of allLots) {
+      const existing = lotsMap.get(lot.product_id) || [];
+      existing.push(lot);
+      lotsMap.set(lot.product_id, existing);
+    }
+
     const serialsMap = new Map<string, ProductSerial[]>();
     for (const serial of allSerials) {
       const existing = serialsMap.get(serial.product_id) || [];
@@ -327,19 +366,9 @@ export class SalesService {
           );
         }
       } else {
-        // Producto sin lotes: validar stock normal
-        const currentStock = warehouseId
-          ? await this.warehousesService.getStockQuantity(
-              storeId,
-              warehouseId,
-              product.id,
-              variant?.id || null,
-            )
-          : await this.warehousesService.getTotalStockQuantity(
-              storeId,
-              product.id,
-              variant?.id || null,
-            );
+        // Producto sin lotes: validar stock normal usando el mapa pre-cargado
+        const stockKey = `${product.id}:${variant?.id || 'null'}`;
+        const currentStock = stockMap.get(stockKey) || 0;
 
         if (currentStock < requestedQty) {
           const variantInfo = variant
@@ -368,6 +397,9 @@ export class SalesService {
         }
       }
     }
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:371',message:'VALIDATE_STOCK_AVAILABILITY_COMPLETE',data:{duration:Date.now()-validateStart,itemsCount:dto.items?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'validate-stock',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
   }
 
   /**
@@ -382,6 +414,7 @@ export class SalesService {
     variantId: string | null,
     requestedQty: number,
   ): Promise<number> {
+    const lockStart = Date.now();
     // ⚡ OPTIMIZACIÓN CRÍTICA: Separar la lógica para usar índices de manera más eficiente
     // En lugar de usar OR (que puede causar table scans), separamos los casos
     // Si variantId es NULL, buscamos explícitamente variant_id IS NULL
@@ -425,6 +458,9 @@ export class SalesService {
     }
 
     const availableStock = Number(result[0].stock || 0) - Number(result[0].reserved || 0);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:428',message:'VALIDATE_AND_LOCK_STOCK_COMPLETE',data:{duration:Date.now()-lockStart,productId,warehouseId,variantId:variantId||'null'},timestamp:Date.now(),sessionId:'debug-session',runId:'lock-stock',hypothesisId:'L'})}).catch(()=>{});
+    // #endregion
     return Math.max(0, availableStock);
   }
 
@@ -648,14 +684,23 @@ export class SalesService {
   ): Promise<Sale> {
     const startTime = Date.now();
     const effectiveUserRole = userRole || 'cashier';
+    const runId = `run-${Date.now()}`;
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:649',message:'SALE_CREATE_START',data:{storeId,userId,itemsCount:dto.items?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     
     this.logger.log(
       `[SALE_CREATE] Iniciando creación de venta - Store: ${storeId}, User: ${userId}, Items: ${dto.items?.length || 0}`,
     );
     // ⚙️ VALIDAR CONFIGURACIÓN DEL SISTEMA ANTES DE GENERAR VENTA
+    const configStart = Date.now();
     const canGenerate = await this.configValidationService.canGenerateSale(
       storeId,
     );
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:656',message:'CONFIG_VALIDATION',data:{duration:Date.now()-configStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
 
     if (!canGenerate) {
       const errorMessage =
@@ -731,6 +776,7 @@ export class SalesService {
     }
 
     // Validar que exista una sesión de caja abierta
+    const cashSessionStart = Date.now();
     const openSessionWhere: Record<string, any> = {
       store_id: storeId,
       closed_at: IsNull(),
@@ -742,6 +788,9 @@ export class SalesService {
     const openSession = await this.cashSessionRepository.findOne({
       where: openSessionWhere,
     });
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:742',message:'CASH_SESSION_QUERY',data:{duration:Date.now()-cashSessionStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
 
     if (!openSession) {
       throw new BadRequestException(
@@ -765,11 +814,16 @@ export class SalesService {
 
     // ⚠️ VALIDACIÓN INICIAL DE STOCK (antes de la transacción para rechazar rápidamente)
     // Esta es una validación rápida sin locks. La validación definitiva con locks se hace dentro de la transacción.
+    const stockValidationStart = Date.now();
     await this.validateStockAvailability(storeId, dto, userId);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:768',message:'STOCK_VALIDATION_PRE_TX',data:{duration:Date.now()-stockValidationStart,itemsCount:dto.items?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
 
     // ⚠️ VALIDACIÓN DE CRÉDITO FIAO (antes de la transacción)
     // Calcular total aproximado para validación (sin descuentos de promoción aún)
     if (dto.payment_method === 'FIAO') {
+      const fiaoValidationStart = Date.now();
       // ⚡ OPTIMIZACIÓN: Batch query en lugar de N+1 queries
       const productIds = dto.items.map(item => item.product_id);
       const products = await this.productRepository.find({
@@ -797,11 +851,19 @@ export class SalesService {
         }
       }
       await this.validateFIAOCredit(storeId, dto, approximateTotalUsd);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:799',message:'FIAO_VALIDATION_PRE_TX',data:{duration:Date.now()-fiaoValidationStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
     }
 
     // Usar transacción con retry logic para deadlocks
+    const transactionStart = Date.now();
     const saleWithDebt = await this.transactionWithRetry(async (manager) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:803',message:'TRANSACTION_START',data:{},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
       // Manejar información del cliente (opcional para todas las ventas)
+      const customerStart = Date.now();
       let finalCustomerId: string | null = null;
 
       // Si se proporciona customer_id, usarlo directamente
@@ -886,10 +948,14 @@ export class SalesService {
           );
         }
       }
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:889',message:'CUSTOMER_HANDLING',data:{duration:Date.now()-customerStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'G'})}).catch(()=>{});
+      // #endregion
       const saleId = randomUUID();
       const soldAt = new Date();
 
       // Determinar bodega de venta
+      const warehouseStart = Date.now();
       let warehouseId: string | null = null;
       if (dto.warehouse_id) {
         // Validar que la bodega existe y pertenece a la tienda
@@ -901,8 +967,12 @@ export class SalesService {
           await this.warehousesService.getDefaultOrFirst(storeId);
         warehouseId = defaultWarehouse.id;
       }
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:903',message:'WAREHOUSE_DETERMINATION',data:{duration:Date.now()-warehouseStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H'})}).catch(()=>{});
+      // #endregion
 
       // ⚡ OPTIMIZACIÓN: Obtener todos los productos en una sola query batch
+      const productsQueryStart = Date.now();
       const productIds = dto.items.map((item) => item.product_id);
       const variantIds = dto.items
         .map((item) => item.variant_id)
@@ -916,6 +986,9 @@ export class SalesService {
           is_active: true,
         },
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:912',message:'PRODUCTS_BATCH_QUERY',data:{duration:Date.now()-productsQueryStart,productsCount:products.length},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'I'})}).catch(()=>{});
+      // #endregion
 
       // Crear mapa de productos para acceso O(1)
       const productMap = new Map<string, Product>();
@@ -936,21 +1009,27 @@ export class SalesService {
         }
       }
 
-      // ⚡ OPTIMIZACIÓN: Batch queries para seriales y lotes (evita N+1)
+      // ⚡ OPTIMIZACIÓN CRÍTICA: Batch queries para seriales y lotes en paralelo (evita N+1)
+      const serialsLotsStart = Date.now();
       const productsWithSerials = productIds.filter(id => {
         const product = productMap.get(id);
         return product && !product.is_weight_product;
       });
       
-      const allSerials = productsWithSerials.length > 0
-        ? await manager.find(ProductSerial, {
-            where: { product_id: In(productsWithSerials) },
-          })
-        : [];
-
-      const allLots = await manager.find(ProductLot, {
-        where: { product_id: In(productIds) },
-      });
+      // ⚡ OPTIMIZACIÓN: Ejecutar queries de seriales y lotes en paralelo
+      const [allSerials, allLots] = await Promise.all([
+        productsWithSerials.length > 0
+          ? manager.find(ProductSerial, {
+              where: { product_id: In(productsWithSerials) },
+            })
+          : Promise.resolve([]),
+        manager.find(ProductLot, {
+          where: { product_id: In(productIds) },
+        }),
+      ]);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:951',message:'SERIALS_LOTS_BATCH_QUERY',data:{duration:Date.now()-serialsLotsStart,serialsCount:allSerials.length,lotsCount:allLots.length},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'J'})}).catch(()=>{});
+      // #endregion
 
       // Crear mapas para acceso rápido
       const serialsMap = new Map<string, ProductSerial[]>();
@@ -1064,6 +1143,7 @@ export class SalesService {
           // ⚡ OPTIMIZACIÓN: Bloquear lotes con SELECT FOR UPDATE SKIP LOCKED
           // SKIP LOCKED evita deadlocks al saltar filas ya bloqueadas por otras transacciones
           // Esto permite que múltiples ventas procesen lotes diferentes en paralelo
+          const lotsLockStart = Date.now();
           const lockedLots = await manager
             .createQueryBuilder(ProductLot, 'lot')
             .where('lot.product_id = :productId', { productId: product.id })
@@ -1071,6 +1151,9 @@ export class SalesService {
             .orderBy('lot.expiration_date', 'ASC', 'NULLS LAST') // FIFO: lotes más antiguos primero
             .setLock('pessimistic_write', undefined, ['SKIP LOCKED'])
             .getMany();
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1067',message:'LOTS_FIFO_LOCK',data:{duration:Date.now()-lotsLockStart,productId:product.id,lockedLotsCount:lockedLots.length},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'K'})}).catch(()=>{});
+          // #endregion
 
           if (lockedLots.length === 0) {
             throw new BadRequestException(
@@ -1114,6 +1197,7 @@ export class SalesService {
         } else {
           // ⚠️ VALIDACIÓN CON LOCK: Verificar stock normal con SELECT FOR UPDATE para evitar race conditions
           // Esta validación se hace DENTRO de la transacción con lock para garantizar atomicidad
+          const stockLockStart = Date.now();
           const currentStock = warehouseId
             ? await this.validateAndLockStock(
                 manager,
@@ -1130,6 +1214,9 @@ export class SalesService {
                 variant?.id || null,
                 requestedQty,
               );
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1117',message:'STOCK_LOCK_QUERY',data:{duration:Date.now()-stockLockStart,productId:product.id,warehouseId,variantId:variant?.id||null},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'L'})}).catch(()=>{});
+          // #endregion
 
           if (currentStock < requestedQty) {
             const variantInfo = variant
@@ -1444,6 +1531,7 @@ export class SalesService {
       await this.validatePaymentAuthorization(storeId, dto, userRole);
 
       // Generar número de factura automáticamente
+      const invoiceNumberStart = Date.now();
       let invoiceSeriesId: string | null = null;
       let invoiceNumber: string | null = null;
       let invoiceFullNumber: string | null = null;
@@ -1457,6 +1545,9 @@ export class SalesService {
         invoiceSeriesId = invoiceData.series.id;
         invoiceNumber = invoiceData.invoice_number;
         invoiceFullNumber = invoiceData.invoice_full_number;
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1451',message:'INVOICE_NUMBER_GENERATION',data:{duration:Date.now()-invoiceNumberStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'M'})}).catch(()=>{});
+        // #endregion
       } catch (error) {
         // Si no hay series configuradas, la venta se crea sin número de factura
         // Esto permite que el sistema funcione aunque no se hayan configurado series
@@ -1466,7 +1557,11 @@ export class SalesService {
         );
       }
 
+      const saleNumberStart = Date.now();
       const saleNumber = await this.getNextSaleNumber(manager, storeId);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1469',message:'SALE_NUMBER_GENERATION',data:{duration:Date.now()-saleNumberStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'N'})}).catch(()=>{});
+      // #endregion
 
       // Crear la venta
       const sale = manager.create(Sale, {
@@ -1503,10 +1598,18 @@ export class SalesService {
         invoice_full_number: invoiceFullNumber,
       });
 
+      const saveSaleStart = Date.now();
       const savedSale = await manager.save(Sale, sale);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1506',message:'SAVE_SALE',data:{duration:Date.now()-saveSaleStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'O'})}).catch(()=>{});
+      // #endregion
 
       // Guardar items
+      const saveItemsStart = Date.now();
       await manager.save(SaleItem, items);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1509',message:'SAVE_SALE_ITEMS',data:{duration:Date.now()-saveItemsStart,itemsCount:items.length},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'P'})}).catch(()=>{});
+      // #endregion
 
       if (discountBs > 0 || discountUsd > 0) {
         await this.securityAuditService.log({
@@ -1584,16 +1687,24 @@ export class SalesService {
 
       // ⚡ OPTIMIZACIÓN: Batch save de movimientos
       if (movementsToCreate.length > 0) {
+        const saveMovementsStart = Date.now();
         await manager.save(InventoryMovement, movementsToCreate);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1587',message:'SAVE_INVENTORY_MOVEMENTS',data:{duration:Date.now()-saveMovementsStart,movementsCount:movementsToCreate.length},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'Q'})}).catch(()=>{});
+        // #endregion
       }
 
       // ⚡ OPTIMIZACIÓN CRÍTICA: Batch update de stocks (reduce de N queries a 1-2 queries)
       if (warehouseId && stockUpdates.length > 0) {
+        const updateStockBatchStart = Date.now();
         await this.warehousesService.updateStockBatch(
           warehouseId,
           stockUpdates,
           storeId,
         );
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1592',message:'UPDATE_STOCK_BATCH',data:{duration:Date.now()-updateStockBatchStart,updatesCount:stockUpdates.length},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'R'})}).catch(()=>{});
+        // #endregion
       }
 
       // ⚠️ VALIDACIÓN CRÍTICA: Si es venta FIAO, DEBE haber un cliente válido
@@ -1662,6 +1773,7 @@ export class SalesService {
 
       // ⚡ OPTIMIZACIÓN: Query simplificada con todos los datos necesarios en una sola query
       // Incluir payments en el JOIN para evitar query adicional
+      const finalQueryStart = Date.now();
       const savedSaleWithItems = await manager
         .createQueryBuilder(Sale, 'sale')
         .leftJoinAndSelect('sale.items', 'items')
@@ -1681,6 +1793,9 @@ export class SalesService {
         ])
         .where('sale.id = :saleId', { saleId })
         .getOne();
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1665',message:'FINAL_SALE_QUERY',data:{duration:Date.now()-finalQueryStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'S'})}).catch(()=>{});
+      // #endregion
 
       if (!savedSaleWithItems) {
         throw new Error('Error al recuperar la venta creada');
@@ -1724,6 +1839,9 @@ export class SalesService {
 
       return saleWithDebt;
     });
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1726',message:'TRANSACTION_COMPLETE',data:{duration:Date.now()-transactionStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'T'})}).catch(()=>{});
+    // #endregion
 
     // ⚡ OPTIMIZACIÓN: Encolar tareas post-venta de forma asíncrona
     // Esto permite retornar la respuesta inmediatamente sin esperar
@@ -1769,6 +1887,9 @@ export class SalesService {
     saleWithDebt.fiscal_invoice = null; // Se agregará cuando se procese en background
 
     const duration = Date.now() - startTime;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1771',message:'SALE_CREATE_COMPLETE',data:{duration,totalDuration:duration,itemsCount:dto.items?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'U'})}).catch(()=>{});
+    // #endregion
     this.logger.log(
       `[SALE_CREATE] ✅ Venta creada exitosamente - ID: ${saleWithDebt.id}, Duración: ${duration}ms, Items: ${dto.items?.length || 0}`,
     );

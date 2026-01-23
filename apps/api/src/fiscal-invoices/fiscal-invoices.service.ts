@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import {
   FiscalInvoice,
   FiscalInvoiceStatus,
@@ -27,6 +27,10 @@ import { randomUUID } from 'crypto';
 @Injectable()
 export class FiscalInvoicesService {
   private readonly logger = new Logger(FiscalInvoicesService.name);
+  
+  // ⚡ OPTIMIZACIÓN: Cache para configuración fiscal activa
+  private fiscalConfigCache = new Map<string, { result: boolean; timestamp: number }>();
+  private readonly FISCAL_CONFIG_CACHE_TTL = 60000; // 60 segundos
 
   constructor(
     @InjectRepository(FiscalInvoice)
@@ -215,12 +219,20 @@ export class FiscalInvoicesService {
 
       const savedInvoice = await manager.save(FiscalInvoice, fiscalInvoice);
 
-      // Crear items
+      // ⚡ OPTIMIZACIÓN CRÍTICA: Batch query de productos para evitar N+1
+      const productIds = sale.items.map(item => item.product_id);
+      const products = await manager.find(Product, {
+        where: { id: In(productIds) },
+      });
+      const productMap = new Map<string, Product>();
+      for (const product of products) {
+        productMap.set(product.id, product);
+      }
+
+      // ⚡ OPTIMIZACIÓN CRÍTICA: Crear todos los items y guardarlos en batch
       const items: FiscalInvoiceItem[] = [];
       for (const saleItem of sale.items) {
-        const product = await this.productRepository.findOne({
-          where: { id: saleItem.product_id },
-        });
+        const product = productMap.get(saleItem.product_id);
 
         const itemSubtotalBs =
           saleItem.unit_price_bs * saleItem.qty - (saleItem.discount_bs || 0);
@@ -250,20 +262,34 @@ export class FiscalInvoicesService {
           tax_rate: taxRate,
         });
 
-        const savedItem = await manager.save(FiscalInvoiceItem, item);
-        items.push(savedItem);
+        items.push(item);
       }
 
-      savedInvoice.items = items;
+      // ⚡ OPTIMIZACIÓN: Guardar todos los items en batch (una sola query)
+      const savedItems = await manager.save(FiscalInvoiceItem, items);
+      savedInvoice.items = savedItems;
       return savedInvoice;
     });
   }
 
   async hasActiveFiscalConfig(storeId: string): Promise<boolean> {
+    // ⚡ OPTIMIZACIÓN: Cache para evitar queries repetidas
+    const cached = this.fiscalConfigCache.get(storeId);
+    const now = Date.now();
+    
+    if (cached && (now - cached.timestamp) < this.FISCAL_CONFIG_CACHE_TTL) {
+      return cached.result;
+    }
+    
     const config = await this.fiscalConfigRepository.findOne({
       where: { store_id: storeId, is_active: true },
     });
-    return !!config;
+    const result = !!config;
+    
+    // Cachear resultado
+    this.fiscalConfigCache.set(storeId, { result, timestamp: now });
+    
+    return result;
   }
 
   /**

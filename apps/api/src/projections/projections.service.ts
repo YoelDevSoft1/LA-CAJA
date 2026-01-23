@@ -382,24 +382,24 @@ export class ProjectionsService {
 
     // ⚠️ CRÍTICO: Generar factura fiscal automáticamente (igual que en sales.service.ts)
     // Esto es esencial para mantener la funcionalidad original del sistema
+    // ⚡ OPTIMIZACIÓN: Ejecutar verificación de factura fiscal en paralelo con otras operaciones
     try {
       this.logger.log(
         `Verificando configuración fiscal para venta ${payload.sale_id} (store: ${event.store_id})`,
       );
       
-      const hasFiscalConfig =
-        await this.fiscalInvoicesService.hasActiveFiscalConfig(event.store_id);
+      // ⚡ OPTIMIZACIÓN: Verificar configuración fiscal y factura existente en paralelo
+      const [hasFiscalConfig, existingInvoice] = await Promise.all([
+        this.fiscalInvoicesService.hasActiveFiscalConfig(event.store_id),
+        this.fiscalInvoicesService.findBySale(event.store_id, savedSale.id),
+      ]);
       
       this.logger.log(
         `Configuración fiscal para store ${event.store_id}: ${hasFiscalConfig ? 'ACTIVA' : 'INACTIVA'}`,
       );
       
       if (hasFiscalConfig) {
-        // Verificar si ya existe una factura para esta venta
-        const existingInvoice = await this.fiscalInvoicesService.findBySale(
-          event.store_id,
-          savedSale.id,
-        );
+        // existingInvoice ya fue obtenido en paralelo arriba
         
         if (existingInvoice) {
           this.logger.log(

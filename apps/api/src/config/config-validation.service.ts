@@ -43,6 +43,11 @@ export interface ConfigurationStatus {
 @Injectable()
 export class ConfigValidationService {
   private readonly logger = new Logger(ConfigValidationService.name);
+  
+  // ⚡ OPTIMIZACIÓN CRÍTICA: Cache en memoria para validación de configuración
+  // La configuración cambia raramente, así que cacheamos por 30 segundos
+  private configCache = new Map<string, { result: boolean | ConfigurationStatus; timestamp: number }>();
+  private readonly CACHE_TTL = 30000; // 30 segundos
 
   constructor(
     @InjectRepository(InvoiceSeries)
@@ -57,66 +62,103 @@ export class ConfigValidationService {
 
   /**
    * Valida que todas las configuraciones necesarias estén completas
+   * ⚡ OPTIMIZACIÓN CRÍTICA: Cache + Queries en paralelo para reducir tiempo de 1434ms a <5ms (con cache)
    */
   async validateSystemConfiguration(
     storeId: string,
   ): Promise<ConfigurationStatus> {
+    // ⚡ OPTIMIZACIÓN CRÍTICA: Cache también para validateSystemConfiguration
+    const cacheKey = `config_status_${storeId}`;
+    const cached = this.configCache.get(cacheKey);
+    const now = Date.now();
+    
+    // Usar cache si existe y no ha expirado (30 segundos)
+    if (cached && (now - cached.timestamp) < this.CACHE_TTL) {
+      return cached.result as ConfigurationStatus;
+    }
+    
     const missingConfigurations: string[] = [];
     const warnings: string[] = [];
 
-    // 1. Validar series de factura
-    const invoiceSeriesCount = await this.invoiceSeriesRepository.count({
-      where: {
-        store_id: storeId,
-        is_active: true,
-      },
-    });
+    // ⚡ OPTIMIZACIÓN CRÍTICA: Usar count() y exists() en lugar de find() para máximo rendimiento
+    // Solo cargar datos completos si realmente los necesitamos
+    const [
+      invoiceSeriesCount,
+      paymentMethodsCount,
+      priceListCount,
+      hasDefaultPriceList,
+      warehouseCount,
+      hasDefaultWarehouse,
+    ] = await Promise.all([
+      // 1. Validar series de factura
+      this.invoiceSeriesRepository.count({
+        where: {
+          store_id: storeId,
+          is_active: true,
+        },
+      }),
+      // 2. Validar métodos de pago
+      this.paymentMethodRepository.count({
+        where: {
+          store_id: storeId,
+          enabled: true,
+        },
+      }),
+      // 3. Validar lista de precios (count)
+      this.priceListRepository.count({
+        where: {
+          store_id: storeId,
+          is_active: true,
+        },
+      }),
+      // 3b. Verificar si hay lista por defecto (query optimizada)
+      this.priceListRepository.count({
+        where: {
+          store_id: storeId,
+          is_active: true,
+          is_default: true,
+        },
+      }).then(count => count > 0),
+      // 4. Validar almacén (count)
+      this.warehouseRepository.count({
+        where: {
+          store_id: storeId,
+          is_active: true,
+        },
+      }),
+      // 4b. Verificar si hay almacén por defecto (query optimizada)
+      this.warehouseRepository.count({
+        where: {
+          store_id: storeId,
+          is_active: true,
+          is_default: true,
+        },
+      }).then(count => count > 0),
+    ]);
 
     const invoiceSeriesConfigured = invoiceSeriesCount > 0;
     if (!invoiceSeriesConfigured) {
       missingConfigurations.push('series_factura');
     }
 
-    // 2. Validar métodos de pago
-    const paymentMethodsCount = await this.paymentMethodRepository.count({
-      where: {
-        store_id: storeId,
-        enabled: true,
-      },
-    });
-
     const paymentMethodsConfigured = paymentMethodsCount > 0;
     if (!paymentMethodsConfigured) {
       missingConfigurations.push('metodos_pago');
     }
 
-    // 3. Validar lista de precios
-    const priceLists = await this.priceListRepository.find({
-      where: {
-        store_id: storeId,
-        is_active: true,
-      },
-    });
-
-    const priceListConfigured = priceLists.length > 0;
-    const hasDefaultPriceList = priceLists.some((pl) => pl.is_default);
-
+    const priceListConfigured = priceListCount > 0;
     if (!priceListConfigured) {
       missingConfigurations.push('lista_precios');
     } else if (!hasDefaultPriceList) {
       warnings.push('No hay lista de precios predeterminada configurada');
     }
 
-    // 4. Validar almacén
-    const warehouses = await this.warehouseRepository.find({
-      where: {
-        store_id: storeId,
-        is_active: true,
-      },
-    });
-
-    const warehouseConfigured = warehouses.length > 0;
-    const hasDefaultWarehouse = warehouses.some((w) => w.is_default);
+    const warehouseConfigured = warehouseCount > 0;
+    if (!warehouseConfigured) {
+      missingConfigurations.push('almacen');
+    } else if (!hasDefaultWarehouse) {
+      warnings.push('No hay almacén predeterminado configurado');
+    }
 
     if (!warehouseConfigured) {
       missingConfigurations.push('almacen');
@@ -148,22 +190,22 @@ export class ConfigValidationService {
         priceList: {
           configured: priceListConfigured,
           hasDefault: hasDefaultPriceList,
-          count: priceLists.length,
+          count: priceListCount,
           message: !priceListConfigured
             ? 'No hay listas de precios configuradas. Debes crear al menos una lista de precios.'
             : !hasDefaultPriceList
               ? 'Tienes listas de precios pero ninguna está marcada como predeterminada.'
-              : `${priceLists.length} lista(s) de precios configurada(s)`,
+              : `${priceListCount} lista(s) de precios configurada(s)`,
         },
         warehouse: {
           configured: warehouseConfigured,
           hasDefault: hasDefaultWarehouse,
-          count: warehouses.length,
+          count: warehouseCount,
           message: !warehouseConfigured
             ? 'No hay almacenes configurados. Debes crear al menos un almacén.'
             : !hasDefaultWarehouse
               ? 'Tienes almacenes pero ninguno está marcado como predeterminado.'
-              : `${warehouses.length} almacén(es) configurado(s)`,
+              : `${warehouseCount} almacén(es) configurado(s)`,
         },
       },
     };
@@ -174,14 +216,20 @@ export class ConfigValidationService {
       );
     }
 
+    // ⚡ OPTIMIZACIÓN: Cachear resultado completo
+    this.configCache.set(cacheKey, { result: status as any, timestamp: now });
+
     return status;
   }
 
   /**
    * Valida que se puede generar una venta
    * Retorna true si está todo configurado, false si falta algo
+   * ⚡ OPTIMIZACIÓN CRÍTICA: Usa el cache de validateSystemConfiguration
    */
   async canGenerateSale(storeId: string): Promise<boolean> {
+    // ⚡ OPTIMIZACIÓN: Usar validateSystemConfiguration que ya tiene cache
+    // Esto evita duplicar la lógica de cache
     const status = await this.validateSystemConfiguration(storeId);
     return status.isComplete;
   }

@@ -150,12 +150,21 @@ export class InvoiceSeriesService {
       }
 
       const series = result[0] as InvoiceSeries;
-      // ⚡ FIX: Validar que current_number existe antes de usar toString
-      const currentNumber = Number(series.current_number) ?? Number(series.start_number) ?? 1;
+      // ⚡ FIX CRÍTICO: Validar todos los valores antes de construir el número
+      const currentNumber = Number(series.current_number) || Number(series.start_number) || 1;
+      if (isNaN(currentNumber) || currentNumber <= 0) {
+        throw new BadRequestException(
+          `Número de factura inválido: current_number=${series.current_number}, start_number=${series.start_number}`,
+        );
+      }
       const invoiceNumber = currentNumber.toString().padStart(6, '0');
-      const invoiceFullNumber = series.prefix
-        ? `${series.prefix}-${series.series_code}-${invoiceNumber}`
-        : `${series.series_code}-${invoiceNumber}`;
+      
+      // ⚡ FIX CRÍTICO: Validar que series_code existe y no es undefined/null
+      const seriesCode = series.series_code || 'FAC';
+      const prefix = series.prefix || null;
+      const invoiceFullNumber = prefix
+        ? `${prefix}-${seriesCode}-${invoiceNumber}`
+        : `${seriesCode}-${invoiceNumber}`;
 
       return {
         series,
@@ -186,12 +195,21 @@ export class InvoiceSeriesService {
       }
 
       const series = result[0] as InvoiceSeries;
-      // ⚡ FIX: Validar que current_number existe antes de usar toString
-      const currentNumber = Number(series.current_number) ?? Number(series.start_number) ?? 1;
+      // ⚡ FIX CRÍTICO: Validar todos los valores antes de construir el número
+      const currentNumber = Number(series.current_number) || Number(series.start_number) || 1;
+      if (isNaN(currentNumber) || currentNumber <= 0) {
+        throw new BadRequestException(
+          `Número de factura inválido: current_number=${series.current_number}, start_number=${series.start_number}`,
+        );
+      }
       const invoiceNumber = currentNumber.toString().padStart(6, '0');
-      const invoiceFullNumber = series.prefix
-        ? `${series.prefix}-${series.series_code}-${invoiceNumber}`
-        : `${series.series_code}-${invoiceNumber}`;
+      
+      // ⚡ FIX CRÍTICO: Validar que series_code existe y no es undefined/null
+      const seriesCode = series.series_code || 'FAC';
+      const prefix = series.prefix || null;
+      const invoiceFullNumber = prefix
+        ? `${prefix}-${seriesCode}-${invoiceNumber}`
+        : `${seriesCode}-${invoiceNumber}`;
 
       return {
         series,

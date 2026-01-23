@@ -66,6 +66,7 @@ import { DatabaseErrorInterceptor } from './common/interceptors/database-error.i
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { StoreIdValidationInterceptor } from './common/interceptors/store-id-validation.interceptor';
 import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
+import { BullModule } from '@nestjs/bullmq';
 
 @Module({
   imports: [
@@ -74,6 +75,40 @@ import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
       envFilePath: '.env',
       ignoreEnvFile: false, // Intentar leer .env si existe
       // En producción (Render), las variables vienen de process.env automáticamente
+    }),
+    // ⚡ CRÍTICO: Conexión Redis compartida globalmente para BullMQ
+    // Esto evita crear múltiples conexiones Redis (cada una consume un cliente)
+    // El plan gratuito de Redis Cloud tiene límite de ~10-30 conexiones
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => {
+        const redisUrl = configService.get<string>('REDIS_URL');
+
+        if (redisUrl) {
+          return {
+            connection: {
+              url: redisUrl,
+              maxRetriesPerRequest: null, // Requerido para BullMQ
+              // ⚡ OPTIMIZACIÓN: Limitar conexiones para evitar "max number of clients reached"
+              lazyConnect: false,
+              // Pool de conexiones compartido
+              enableOfflineQueue: false, // No acumular comandos cuando está offline
+            },
+          };
+        }
+
+        // Fallback a configuración por componentes (desarrollo local)
+        return {
+          connection: {
+            host: configService.get<string>('REDIS_HOST') || 'localhost',
+            port: configService.get<number>('REDIS_PORT') || 6379,
+            password: configService.get<string>('REDIS_PASSWORD'),
+            maxRetriesPerRequest: null,
+            enableOfflineQueue: false,
+          },
+        };
+      },
+      inject: [ConfigService],
     }),
     // Rate limiting global
     ThrottlerModule.forRootAsync({
