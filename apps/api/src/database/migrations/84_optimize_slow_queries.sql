@@ -20,6 +20,19 @@ CREATE INDEX IF NOT EXISTS idx_warehouse_stock_no_variant_fast
   ON warehouse_stock(warehouse_id, product_id) 
   WHERE variant_id IS NULL;
 
+-- ⚡ CRÍTICO: Índice específico para la query SELECT FOR UPDATE que está tomando 4-20 segundos
+-- Esta query usa: WHERE warehouse_id = $1 AND product_id = $2 
+--   AND (($3::uuid IS NULL AND variant_id IS NULL) OR variant_id = $3::uuid)
+-- El índice único ya existe, pero PostgreSQL puede no usarlo eficientemente con la condición OR
+-- Agregamos índices parciales para ambos casos
+CREATE INDEX IF NOT EXISTS idx_warehouse_stock_for_update_with_variant 
+  ON warehouse_stock(warehouse_id, product_id, variant_id) 
+  WHERE variant_id IS NOT NULL;
+
+-- Índice para el caso variant_id IS NULL (ya existe arriba pero lo reforzamos)
+-- Este índice ya está cubierto por idx_warehouse_stock_no_variant_fast, pero lo mantenemos
+-- para claridad y porque puede ayudar en el plan de ejecución
+
 -- ============================================
 -- PARTE 2: ÍNDICES PARA invoice_series
 -- ============================================

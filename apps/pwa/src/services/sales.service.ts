@@ -720,7 +720,10 @@ export const salesService = {
       // El interceptor de axios ya rechaza si está offline, así que esto solo se ejecuta si está online
       logger.debug('Iniciando llamada HTTP')
 
-      const response = await api.post<Sale>('/sales', cleanedData).then((res) => {
+      // ⚡ OPTIMIZACIÓN: Timeout más largo para creación de ventas (60s) ya que puede tener muchos items
+      const response = await api.post<Sale>('/sales', cleanedData, {
+        timeout: 60000, // 60 segundos para ventas (más que el timeout global de 30s)
+      }).then((res) => {
         logger.debug('Respuesta HTTP recibida exitosamente')
         return res
       }).catch((err) => {

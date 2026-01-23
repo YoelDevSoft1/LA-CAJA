@@ -457,7 +457,9 @@ export default function SaleDetailModal({
               {(() => {
                 // #region agent log
                 // Log para debug: verificar datos de pago
-                if (sale.currency === 'MIXED' || sale.payment.method === 'SPLIT') {
+                // ⚡ FIX: Solo ejecutar en desarrollo local (no en producción)
+                if (import.meta.env.DEV && window.location.hostname === 'localhost' && 
+                    (sale.currency === 'MIXED' || sale.payment.method === 'SPLIT')) {
                   fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

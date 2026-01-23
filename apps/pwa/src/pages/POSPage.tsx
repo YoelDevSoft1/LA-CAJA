@@ -899,8 +899,10 @@ export default function POSPage() {
   
   // #region agent log
   // Log para debug: verificar tasa de cambio y totales
+  // ⚡ FIX: Solo ejecutar en desarrollo local (no en producción)
   useEffect(() => {
-    if (items.length > 0) {
+    // Solo ejecutar si estamos en localhost (desarrollo)
+    if (import.meta.env.DEV && window.location.hostname === 'localhost' && items.length > 0) {
       fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1878,7 +1880,8 @@ export default function POSPage() {
                     
                     // #region agent log
                     // Log para debug: verificar cálculo de línea
-                    if (items.indexOf(item) === 0) {
+                    // ⚡ FIX: Solo ejecutar en desarrollo local (no en producción)
+                    if (import.meta.env.DEV && window.location.hostname === 'localhost' && items.indexOf(item) === 0) {
                       fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
