@@ -80,7 +80,7 @@ export default function DebtDetailModal({
   // Obtener la venta completa cuando se abre el modal de venta
   const { data: fullSale } = useQuery({
     queryKey: ['sale', debt.sale_id],
-    queryFn: () => salesService.findOne(debt.sale_id!),
+    queryFn: () => salesService.getById(debt.sale_id!),
     enabled: !!debt.sale_id && showSaleModal,
   })
 
@@ -274,10 +274,10 @@ export default function DebtDetailModal({
                   <CardContent className="p-4">
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">
-                        ID: {debt.sale.id.substring(0, 8)}... •{' '}
-                        {format(new Date(debt.sale.sold_at), "dd/MM/yyyy HH:mm", { locale: es })}
+                        ID: {debt.sale?.id?.substring(0, 8)}... •{' '}
+                        {debt.sale?.sold_at && format(new Date(debt.sale.sold_at), "dd/MM/yyyy HH:mm", { locale: es })}
                       </p>
-                      {debt.sale.totals && (
+                      {debt.sale?.totals && (
                         <p className="text-sm font-semibold text-foreground">
                           Total: ${Number(debt.sale.totals.total_usd).toFixed(2)} / {Number(debt.sale.totals.total_bs).toFixed(2)} Bs
                         </p>
@@ -287,7 +287,7 @@ export default function DebtDetailModal({
                 </Card>
 
                 {/* Artículos de la Venta */}
-                {hasSaleItems && (
+                {hasSaleItems && debt.sale && (
                   <Card className="border-border">
                     <CardHeader className="bg-muted/50">
                       <CardTitle className="text-sm flex items-center">
