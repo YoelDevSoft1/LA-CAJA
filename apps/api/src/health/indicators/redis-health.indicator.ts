@@ -13,7 +13,7 @@ export class RedisHealthIndicator extends HealthIndicator implements OnModuleDes
     // Esto evita crear conexiones Redis innecesarias que consumen el límite de clientes
   }
 
-  private getRedisClient(): Redis {
+  private getRedisClient(): Redis | null {
     // ⚡ OPTIMIZACIÓN: Crear conexión solo cuando se necesite (lazy)
     if (!this.redisClient) {
       try {
@@ -47,6 +47,7 @@ export class RedisHealthIndicator extends HealthIndicator implements OnModuleDes
         });
       } catch (error) {
         // Error manejado en isHealthy
+        return null;
       }
     }
     return this.redisClient;
