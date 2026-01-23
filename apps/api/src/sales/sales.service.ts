@@ -1701,6 +1701,7 @@ export class SalesService {
           warehouseId,
           stockUpdates,
           storeId,
+          manager,
         );
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1592',message:'UPDATE_STOCK_BATCH',data:{duration:Date.now()-updateStockBatchStart,updatesCount:stockUpdates.length},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'R'})}).catch(()=>{});

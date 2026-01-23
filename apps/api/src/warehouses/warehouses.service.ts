@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, EntityManager } from 'typeorm';
 import { Warehouse } from '../database/entities/warehouse.entity';
 import { WarehouseStock } from '../database/entities/warehouse-stock.entity';
 import { Product } from '../database/entities/product.entity';
@@ -554,10 +554,14 @@ export class WarehousesService {
       qty_delta: number;
     }>,
     storeId?: string,
+    manager?: EntityManager,
   ): Promise<Map<string, WarehouseStock>> {
     if (updates.length === 0) {
       return new Map();
     }
+
+    const queryExecutor: { query: (query: string, parameters?: any[]) => Promise<any> } =
+      manager ?? this.dataSource;
 
     // ⚡ OPTIMIZACIÓN: Usar UPDATE con VALUES para actualizar múltiples stocks en una sola query
     // Esto es 10-100x más rápido que hacer N queries individuales
@@ -587,7 +591,7 @@ export class WarehousesService {
       RETURNING ws.id, ws.warehouse_id, ws.product_id, ws.variant_id, ws.stock, ws.reserved, ws.updated_at
     `;
 
-    const updatedResults = await this.dataSource.query(updateQuery, params);
+    const updatedResults = await queryExecutor.query(updateQuery, params);
     const resultMap = new Map<string, WarehouseStock>();
 
     // Procesar resultados actualizados
@@ -615,7 +619,7 @@ export class WarehousesService {
       // Esto es más eficiente que queries complejas con subqueries
       const insertedResults: any[] = [];
       for (const update of missingUpdates) {
-        const insertResult = await this.dataSource.query(
+        const insertResult = await queryExecutor.query(
           `INSERT INTO warehouse_stock (id, warehouse_id, product_id, variant_id, stock, reserved, updated_at)
            VALUES (gen_random_uuid(), $1, $2, $3, GREATEST(0, $4), 0, NOW())
            ON CONFLICT (warehouse_id, product_id, COALESCE(variant_id, '00000000-0000-0000-0000-000000000000'::uuid))
