@@ -356,7 +356,12 @@ export class DebtsService {
       .leftJoinAndSelect('debt.sale', 'sale')
       .where('debt.store_id = :storeId', { storeId })
       .andWhere('debt.customer_id = :customerId', { customerId })
-      .andWhere('(sale.id IS NULL OR sale.voided_at IS NULL)'); // Excluir deudas de ventas anuladas
+      .andWhere(
+        `(debt.sale_id IS NULL OR NOT EXISTS (
+          SELECT 1 FROM sales s 
+          WHERE s.id = debt.sale_id AND s.voided_at IS NOT NULL
+        ))`,
+      ); // Excluir deudas de ventas anuladas
 
     if (!includePaid) {
       query.andWhere('debt.status = :status', { status: DebtStatus.OPEN });
@@ -375,7 +380,12 @@ export class DebtsService {
       .leftJoinAndSelect('debt.sale', 'sale')
       .where('debt.store_id = :storeId', { storeId })
       .andWhere('debt.customer_id = :customerId', { customerId })
-      .andWhere('(sale.id IS NULL OR sale.voided_at IS NULL)')
+      .andWhere(
+        `(debt.sale_id IS NULL OR NOT EXISTS (
+          SELECT 1 FROM sales s 
+          WHERE s.id = debt.sale_id AND s.voided_at IS NOT NULL
+        ))`,
+      )
       .getMany();
 
     let totalDebtBs = 0;
@@ -431,7 +441,12 @@ export class DebtsService {
       .leftJoinAndSelect('debt.payments', 'payments')
       .leftJoinAndSelect('debt.sale', 'sale')
       .where('debt.store_id = :storeId', { storeId })
-      .andWhere('(sale.id IS NULL OR sale.voided_at IS NULL)'); // Excluir deudas de ventas anuladas
+      .andWhere(
+        `(debt.sale_id IS NULL OR NOT EXISTS (
+          SELECT 1 FROM sales s 
+          WHERE s.id = debt.sale_id AND s.voided_at IS NOT NULL
+        ))`,
+      ); // Excluir deudas de ventas anuladas
 
     if (status) {
       query.andWhere('debt.status = :status', { status });
