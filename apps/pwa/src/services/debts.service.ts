@@ -34,6 +34,27 @@ export interface Debt {
       total_bs: number
       total_usd: number
     }
+    items?: Array<{
+      id: string
+      product_id: string
+      product?: {
+        id: string
+        name: string
+        sku?: string | null
+      }
+      variant?: {
+        id: string
+        name: string
+      } | null
+      qty: number
+      unit_price_bs: number
+      unit_price_usd: number
+      discount_bs: number
+      discount_usd: number
+      is_weight_product?: boolean
+      weight_unit?: string | null
+      weight_value?: number | null
+    }>
   }
 }
 

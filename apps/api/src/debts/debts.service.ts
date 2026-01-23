@@ -549,7 +549,7 @@ export class DebtsService {
   async findOne(storeId: string, debtId: string): Promise<Debt> {
     const debt = await this.debtRepository.findOne({
       where: { id: debtId, store_id: storeId },
-      relations: ['customer', 'sale', 'payments'],
+      relations: ['customer', 'sale', 'sale.items', 'sale.items.product', 'sale.items.variant', 'payments'],
     });
 
     if (!debt) {
