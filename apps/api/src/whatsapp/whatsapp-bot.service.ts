@@ -158,8 +158,20 @@ export class WhatsAppBotService implements OnModuleDestroy {
 
       // Manejar actualización de credenciales
       socket.ev.on('creds.update', async () => {
-        await saveCreds();
-        this.logger.log(`Credenciales actualizadas para tienda ${storeId}`);
+        try {
+          await saveCreds();
+          this.logger.log(`Credenciales actualizadas para tienda ${storeId}`);
+        } catch (e: any) {
+          // ENOENT: la carpeta de sesión fue eliminada (p. ej. clearSession) mientras saveCreds
+          // se ejecutaba; ignorar para no tumbar el proceso en producción (Render, etc.)
+          if (e?.code === 'ENOENT') {
+            this.logger.warn(
+              `saveCreds ENOENT para tienda ${storeId} (sesión ya limpiada), ignorando`,
+            );
+            return;
+          }
+          throw e;
+        }
       });
 
       // Manejar QR code
@@ -415,11 +427,14 @@ export class WhatsAppBotService implements OnModuleDestroy {
    */
   async clearSession(storeId: string): Promise<void> {
     const sessionPath = join(this.sessionsDir, storeId);
-    
+
     // Desconectar bot si existe
     await this.disconnect(storeId);
-    
-    // Eliminar archivos de sesión
+
+    // Dar tiempo a que cualquier saveCreds en curso termine antes de borrar la carpeta
+    // (evita ENOENT si creds.update se disparó justo antes de disconnect)
+    await new Promise((r) => setTimeout(r, 500));
+
     if (existsSync(sessionPath)) {
       try {
         rmSync(sessionPath, { recursive: true, force: true });

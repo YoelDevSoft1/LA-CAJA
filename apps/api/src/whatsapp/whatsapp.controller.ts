@@ -94,24 +94,24 @@ export class WhatsAppController {
       // Obtener el nuevo QR
       qrCode = await this.whatsappBotService.getQRCode(storeId);
       
-      // Si aún no hay QR después de reinicializar, puede que haya sesión guardada corrupta
-      // En ese caso, limpiar la sesión y reinicializar de nuevo
+      // Si aún no hay QR: comprobar si ya conectó (con sesión guardada no hay QR, va a 'open')
+      if (!qrCode && this.whatsappBotService.isConnected(storeId)) {
+        return { qrCode: null, isConnected: true };
+      }
+      // Si no hay QR ni conexión, puede haber sesión corrupta: limpiar y reintentar
       if (!qrCode) {
-        this.logger.warn(`No se generó QR después de reinicializar para tienda ${storeId}. Limpiando sesión y reintentando...`);
-        
-        // Limpiar sesión guardada
+        this.logger.warn(
+          `No se generó QR después de reinicializar para tienda ${storeId}. Limpiando sesión y reintentando...`,
+        );
+
         await this.whatsappBotService.clearSession(storeId);
-        
-        // Esperar un momento
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Reinicializar de nuevo (ahora sin sesión, debería generar QR)
+
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
         await this.whatsappBotService.initializeBot(storeId, true);
-        
-        // Esperar para que se genere el QR
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Obtener el nuevo QR
+
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+
         qrCode = await this.whatsappBotService.getQRCode(storeId);
       }
     } else {
