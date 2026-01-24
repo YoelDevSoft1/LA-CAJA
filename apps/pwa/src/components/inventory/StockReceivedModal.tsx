@@ -190,6 +190,11 @@ export default function StockReceivedModal({
         defaultCostBs = fullProduct?.cost_bs ? Number(fullProduct.cost_bs) : 0
       }
 
+      // Si USD es 0 pero Bs > 0, derivar USD desde la tasa para no guardar 0
+      if (defaultCostUsd === 0 && defaultCostBs > 0 && exchangeRate > 0) {
+        defaultCostUsd = Math.round((defaultCostBs / exchangeRate) * 1000000) / 1000000
+      }
+
       return [
         {
           id: `item-${Date.now()}`,
@@ -251,6 +256,11 @@ export default function StockReceivedModal({
       // Producto normal
       defaultCostUsd = Number(product.cost_usd) || 0
       defaultCostBs = Number(product.cost_bs) || 0
+    }
+
+    // Si USD es 0 pero Bs > 0, derivar USD desde la tasa para no guardar 0
+    if (defaultCostUsd === 0 && defaultCostBs > 0 && exchangeRate > 0) {
+      defaultCostUsd = Math.round((defaultCostBs / exchangeRate) * 1000000) / 1000000
     }
 
     const newItem: ProductItem = {
@@ -384,22 +394,28 @@ export default function StockReceivedModal({
       return
     }
 
-    // Crear las peticiones
-    const requests: StockReceivedRequest[] = productItems.map((item) => ({
-      product_id: item.product_id,
-      qty: item.qty,
-      unit_cost_bs: item.unit_cost_bs,
-      unit_cost_usd: item.unit_cost_usd,
-      note: note || undefined,
-      warehouse_id: warehouseId || undefined,
-      ref:
-        supplier || invoice
-          ? {
-              supplier: supplier || undefined,
-              invoice: invoice || undefined,
-            }
-          : undefined,
-    }))
+    // Crear las peticiones; si USD=0 y Bs>0, derivar USD desde la tasa para no guardar 0
+    const requests: StockReceivedRequest[] = productItems.map((item) => {
+      let unitCostUsd = item.unit_cost_usd
+      if (Number(unitCostUsd) === 0 && Number(item.unit_cost_bs) > 0 && exchangeRate > 0) {
+        unitCostUsd = Math.round((item.unit_cost_bs / exchangeRate) * 1000000) / 1000000
+      }
+      return {
+        product_id: item.product_id,
+        qty: item.qty,
+        unit_cost_bs: item.unit_cost_bs,
+        unit_cost_usd: unitCostUsd,
+        note: note || undefined,
+        warehouse_id: warehouseId || undefined,
+        ref:
+          supplier || invoice
+            ? {
+                supplier: supplier || undefined,
+                invoice: invoice || undefined,
+              }
+            : undefined,
+      }
+    })
 
     stockReceivedMutation.mutate(requests)
   }

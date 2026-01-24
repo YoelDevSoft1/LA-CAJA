@@ -127,17 +127,20 @@ export class InventoryService {
       throw new NotFoundException('Producto no encontrado');
     }
 
-    // Determinar bodega destino
+    // Determinar bodega destino (obligatoria: el stock se envía siempre a una bodega)
     let warehouseId: string | null = null;
     if (dto.warehouse_id) {
-      // Validar que la bodega existe y pertenece a la tienda
       await this.warehousesService.findOne(storeId, dto.warehouse_id);
       warehouseId = dto.warehouse_id;
     } else {
-      // Usar bodega por defecto si no se especifica
       const defaultWarehouse =
         await this.warehousesService.getDefaultOrFirst(storeId);
       warehouseId = defaultWarehouse.id;
+    }
+    if (!warehouseId) {
+      throw new BadRequestException(
+        'No se pudo determinar la bodega de destino. Crea al menos una bodega activa en la tienda.',
+      );
     }
 
     const unitCostBs = this.roundToTwoDecimals(dto.unit_cost_bs);
@@ -207,7 +210,17 @@ export class InventoryService {
     }
     await this.productRepository.save(product);
 
-    // Crear movimiento de inventario
+    // 1) Actualizar stock en bodega ANTES de guardar el movimiento.
+    //    Si falla, no persistimos el movimiento y el usuario recibe error.
+    await this.warehousesService.updateStock(
+      warehouseId,
+      dto.product_id,
+      null, // variant_id: productos sin variantes
+      dto.qty,
+      storeId,
+    );
+
+    // 2) Crear y guardar el movimiento (solo si la bodega se actualizó bien)
     const movement = this.movementRepository.create({
       id: randomUUID(),
       store_id: storeId,
@@ -226,20 +239,7 @@ export class InventoryService {
       approved_at: role === 'owner' ? new Date() : null,
     });
 
-    const savedMovement = await this.movementRepository.save(movement);
-
-    // Actualizar stock de la bodega si se especificó
-    if (warehouseId) {
-      await this.warehousesService.updateStock(
-        warehouseId,
-        dto.product_id,
-        null, // variant_id se puede obtener del ref si es necesario
-        dto.qty,
-        storeId,
-      );
-    }
-
-    return savedMovement;
+    return this.movementRepository.save(movement);
   }
 
   async stockAdjusted(

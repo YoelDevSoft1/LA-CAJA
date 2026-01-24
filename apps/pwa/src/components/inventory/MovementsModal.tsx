@@ -195,28 +195,32 @@ export default function MovementsModal({
                           {/* Costos - Unitario y Total */}
                           {movement.movement_type === 'received' &&
                             (Number(movement.unit_cost_bs) > 0 ||
-                              Number(movement.unit_cost_usd) > 0) && (
-                              <Card className="mt-2 bg-info/5 border-info/50">
-                                <CardContent className="p-2">
-                                  <div className="text-xs sm:text-sm space-y-1">
-                                    <div className="flex justify-between items-center">
-                                      <span className="text-muted-foreground">Costo unitario:</span>
-                                      <span className="font-semibold text-foreground">
-                                        ${Number(movement.unit_cost_usd).toFixed(2)} USD / Bs.{' '}
-                                        {Number(movement.unit_cost_bs).toFixed(2)}
-                                      </span>
+                              Number(movement.unit_cost_usd) > 0) && (() => {
+                              const uUsd = Number(movement.unit_cost_usd)
+                              const uBs = Number(movement.unit_cost_bs)
+                              const qty = Math.abs(movement.qty_delta)
+                              const sinUsd = uUsd === 0 && uBs > 0
+                              return (
+                                <Card className="mt-2 bg-info/5 border-info/50">
+                                  <CardContent className="p-2">
+                                    <div className="text-xs sm:text-sm space-y-1">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-muted-foreground">Costo unitario:</span>
+                                        <span className="font-semibold text-foreground">
+                                          {sinUsd ? '—' : `$${uUsd.toFixed(2)} USD`} / Bs. {uBs.toFixed(2)}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between items-center border-t border-info/50 pt-1">
+                                        <span className="text-foreground font-medium">Costo total:</span>
+                                        <span className="font-bold text-info">
+                                          {sinUsd ? '—' : `$${(uUsd * qty).toFixed(2)} USD`} / Bs. {(uBs * qty).toFixed(2)}
+                                        </span>
+                                      </div>
                                     </div>
-                                    <div className="flex justify-between items-center border-t border-info/50 pt-1">
-                                      <span className="text-foreground font-medium">Costo total:</span>
-                                      <span className="font-bold text-info">
-                                        ${(Number(movement.unit_cost_usd) * Math.abs(movement.qty_delta)).toFixed(2)} USD / Bs.{' '}
-                                        {(Number(movement.unit_cost_bs) * Math.abs(movement.qty_delta)).toFixed(2)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            )}
+                                  </CardContent>
+                                </Card>
+                              )
+                            })()}
 
                           {movement.ref && (
                             <div className="mt-2 text-xs text-muted-foreground space-y-1">
