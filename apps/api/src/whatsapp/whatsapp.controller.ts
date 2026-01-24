@@ -69,16 +69,20 @@ export class WhatsAppController {
 
     // Obtener QR actual antes de decidir si reinicializar
     let qrCode = await this.whatsappBotService.getQRCode(storeId);
-    
-    // Si no hay QR disponible, forzar reinicialización del bot
+
+    // Si no hay QR: puede que ya esté conectado (Baileys quita el QR al conectar).
+    // Comprobar PRIMERO para no llamar a disconnect() y cortar la conexión recién hecha.
+    if (!qrCode && this.whatsappBotService.isConnected(storeId)) {
+      return { qrCode: null, isConnected: true };
+    }
+
+    // Si no hay QR y no está conectado, forzar reinicialización del bot
     if (!qrCode) {
       this.logger.log(`No hay QR disponible para tienda ${storeId}, reinicializando bot...`);
-      
-      // Desconectar bot existente si existe
+
       try {
         await this.whatsappBotService.disconnect(storeId);
       } catch (error) {
-        // Ignorar errores si no existe
         this.logger.debug(`Error al desconectar bot (puede que no exista):`, error);
       }
       

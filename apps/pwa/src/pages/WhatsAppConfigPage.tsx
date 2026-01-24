@@ -90,20 +90,30 @@ export default function WhatsAppConfigPage() {
 
     let qrInterval: NodeJS.Timeout
     let statusInterval: NodeJS.Timeout
-    
+
+    const closeAndRefresh = () => {
+      setIsAuthModalOpen(false)
+      setQrCode(null)
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-status'] })
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-config'] })
+      toast.success('WhatsApp conectado exitosamente')
+    }
+
     const fetchQR = async () => {
       try {
         const response = await whatsappConfigService.getQRCode()
         setQrCode(response.qrCode)
-        
-        // Si está conectado, cerrar el modal
+
         if (response.isConnected) {
-          setIsAuthModalOpen(false)
-          setQrCode(null)
-          // Invalidar queries para refrescar datos
-          queryClient.invalidateQueries({ queryKey: ['whatsapp-status'] })
-          queryClient.invalidateQueries({ queryKey: ['whatsapp-config'] })
-          toast.success('WhatsApp conectado exitosamente')
+          closeAndRefresh()
+          return
+        }
+        // Si QR es null (ej. Baileys ya lo quitó al conectar), comprobar status de inmediato
+        if (!response.qrCode) {
+          const st = await whatsappConfigService.getStatus()
+          if (st.isConnected) {
+            closeAndRefresh()
+          }
         }
       } catch (error) {
         console.error('[WhatsApp] Error obteniendo QR:', error)
@@ -113,29 +123,19 @@ export default function WhatsAppConfigPage() {
     const checkStatus = async () => {
       try {
         const currentStatus = await whatsappConfigService.getStatus()
-        
-        // Si está conectado, cerrar el modal y actualizar
         if (currentStatus.isConnected) {
-          setIsAuthModalOpen(false)
-          setQrCode(null)
-          // Invalidar queries para refrescar datos
-          queryClient.invalidateQueries({ queryKey: ['whatsapp-status'] })
-          queryClient.invalidateQueries({ queryKey: ['whatsapp-config'] })
-          toast.success('WhatsApp conectado exitosamente')
+          closeAndRefresh()
         }
       } catch (error) {
         console.error('[WhatsApp] Error verificando estado:', error)
       }
     }
 
-    // Obtener QR inmediatamente
     fetchQR()
-    
-    // Polling de QR cada 2 segundos
+
     qrInterval = setInterval(fetchQR, 2000)
-    
-    // Polling de estado cada 1 segundo (más frecuente para detectar conexión rápida)
-    statusInterval = setInterval(checkStatus, 1000)
+    // Más frecuente al esperar conexión (p. ej. tras escanear)
+    statusInterval = setInterval(checkStatus, 600)
 
     return () => {
       if (qrInterval) clearInterval(qrInterval)
@@ -444,7 +444,10 @@ export default function WhatsAppConfigPage() {
               <div className="flex flex-col items-center gap-4">
                 <Loader2 className="w-12 h-12 animate-spin text-primary" />
                 <p className="text-sm text-muted-foreground">
-                  Generando código QR...
+                  Verificando conexión...
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Si acaba de escanear el QR, espere un momento.
                 </p>
               </div>
             )}

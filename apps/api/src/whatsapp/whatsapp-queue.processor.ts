@@ -233,11 +233,16 @@ export class WhatsAppQueueProcessor implements OnModuleInit {
           return;
         }
       } else {
-        // Log más visible cuando hay mensajes pero bot no conectado
-        this.logger.warn(
-          `⚠️ Bot no conectado para tienda ${storeId} (hasBot: ${hasBot}, hasSession: ${hasSession}), ` +
-          `omitiendo ${messages.length} mensajes. Inicializa el bot desde la configuración de WhatsApp.`
-        );
+        const hasQR = this.whatsappBotService.hasActiveQR(storeId);
+        const hint = hasQR
+          ? `Escanee el código QR en la configuración de WhatsApp para conectar.`
+          : `Inicialice el bot o escanee el QR desde la configuración de WhatsApp.`;
+        const msg = `Bot no conectado para tienda ${storeId} (hasBot: ${hasBot}, hasSession: ${hasSession}, esperando QR: ${hasQR}). Omitiendo ${messages.length} mensajes. ${hint}`;
+        if (hasQR) {
+          this.logger.debug(msg);
+        } else {
+          this.logger.warn(`⚠️ ${msg}`);
+        }
         return;
       }
     }
