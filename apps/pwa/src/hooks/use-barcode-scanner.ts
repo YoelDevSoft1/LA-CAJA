@@ -7,8 +7,8 @@ interface BarcodeScannerOptions {
   onScan: (barcode: string) => void
   /**
    * Tiempo máximo entre caracteres para considerar entrada de scanner (ms)
-   * Los escáneres típicos envían caracteres cada 10-50ms
-   * Default: 50ms
+   * Los escáneres típicos envían caracteres cada 10-50ms; algunos van hasta 80-100ms
+   * Default: 80ms
    */
   maxIntervalMs?: number
   /**
@@ -61,7 +61,7 @@ interface BarcodeScannerOptions {
  */
 export function useBarcodeScanner({
   onScan,
-  maxIntervalMs = 50,
+  maxIntervalMs = 80,
   minLength = 4,
   maxLength = 50,
   endKey = 'Enter',
@@ -106,106 +106,100 @@ export function useBarcodeScanner({
       return
     }
 
+    /** Si no fue un escaneo válido y habíamos interceptado en un input, devolver el texto. */
+    const releaseToInput = (text: string) => {
+      if (!text) return
+      const el = document.activeElement
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+        const start = el.selectionStart ?? el.value.length
+        const end = el.selectionEnd ?? el.value.length
+        const next = el.value.slice(0, start) + text + el.value.slice(end)
+        el.value = next
+        el.setSelectionRange(start + text.length, start + text.length)
+        el.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+    }
+
+    const scheduleClear = () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      timeoutRef.current = setTimeout(() => {
+        const buf = bufferRef.current
+        clearBuffer()
+        if (buf) releaseToInput(buf)
+      }, 500)
+    }
+
     const handleKeyDown = (event: KeyboardEvent) => {
       const now = Date.now()
       const timeSinceLastKey = now - lastKeyTimeRef.current
       const key = event.key
 
-      // Si el usuario está escribiendo en un input, textarea o select,
-      // NO procesamos (a menos que sea muy rápido, típico de scanner)
       const activeElement = document.activeElement
       const isInputElement =
         activeElement instanceof HTMLInputElement ||
         activeElement instanceof HTMLTextAreaElement ||
         activeElement instanceof HTMLSelectElement
 
-      // Si es la tecla de fin (Enter) y tenemos un buffer válido
+      // Enter: escaneo completo o devolver buffer al input
       if (key === endKey) {
         if (bufferRef.current.length >= minLength && isScanningRef.current) {
-          // Es un escaneo completo
           if (preventDefault) {
             event.preventDefault()
             event.stopPropagation()
           }
           processBarcode(bufferRef.current)
           return
-        } else {
-          // No es un escaneo válido, limpiar
-          clearBuffer()
-          return
         }
-      }
-
-      // Solo aceptar caracteres alfanuméricos y algunos símbolos comunes en códigos de barras
-      if (key.length !== 1) {
-        // Teclas especiales (Shift, Ctrl, etc.) - ignorar pero no limpiar
-        return
-      }
-
-      // Verificar si es un caracter válido para código de barras
-      if (!/^[a-zA-Z0-9\-_\.\/\+\=]$/.test(key)) {
-        // Caracter no válido para código de barras, limpiar
+        releaseToInput(bufferRef.current)
         clearBuffer()
         return
       }
 
-      // Determinar si es entrada de scanner (muy rápida) o humana (lenta)
+      if (key.length !== 1) return
+      if (!/^[a-zA-Z0-9\-_\.\/\+\=]$/.test(key)) {
+        clearBuffer()
+        return
+      }
+
       const isRapidInput = timeSinceLastKey < maxIntervalMs
 
       if (bufferRef.current.length === 0) {
-        // Primer caracter - iniciar buffer
         bufferRef.current = key
         lastKeyTimeRef.current = now
-        isScanningRef.current = false // Aún no sabemos si es scanner
-
-        // Configurar timeout para limpiar si no se completa
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current)
+        isScanningRef.current = false
+        // Interceptar también el primer carácter si está en input (siempre priorizar scanner)
+        if (isInputElement && preventDefault) {
+          event.preventDefault()
+          event.stopPropagation()
         }
-        timeoutRef.current = setTimeout(() => {
-          clearBuffer()
-        }, 500) // 500ms timeout para completar escaneo
-
+        scheduleClear()
         return
       }
 
       if (isRapidInput) {
-        // Entrada rápida - probablemente scanner
         bufferRef.current += key
         lastKeyTimeRef.current = now
-        isScanningRef.current = true // Ahora sí creemos que es scanner
-
-        // Si el usuario está en un input y detectamos escaneo, prevenir que se escriba
-        if (isInputElement && isScanningRef.current && preventDefault) {
+        isScanningRef.current = true
+        if (isInputElement && preventDefault) {
           event.preventDefault()
+          event.stopPropagation()
         }
-
-        // Renovar timeout
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current)
-        }
-        timeoutRef.current = setTimeout(() => {
-          clearBuffer()
-        }, 500)
-
-        // Verificar si excedemos longitud máxima
-        if (bufferRef.current.length > maxLength) {
-          clearBuffer()
-        }
+        scheduleClear()
+        if (bufferRef.current.length > maxLength) clearBuffer()
       } else {
-        // Entrada lenta - es humano escribiendo, limpiar y empezar de nuevo
+        // Entrada lenta: no es escaneo. Devolver lo que habíamos interceptado al input antes de resetear.
+        releaseToInput(bufferRef.current)
         clearBuffer()
         bufferRef.current = key
         lastKeyTimeRef.current = now
-
-        // Nuevo timeout
-        timeoutRef.current = setTimeout(() => {
-          clearBuffer()
-        }, 500)
+        if (isInputElement && preventDefault) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+        scheduleClear()
       }
     }
 
-    // Usar capture phase para interceptar antes que otros handlers
     window.addEventListener('keydown', handleKeyDown, { capture: true })
 
     return () => {

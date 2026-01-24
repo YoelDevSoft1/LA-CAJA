@@ -755,15 +755,19 @@ export default function POSPage() {
 
   // Handler para escaneo de código de barras
   const handleBarcodeScan = useCallback(async (barcode: string) => {
+    // Limpiar búsqueda y quitar foco al instante para feedback visual y que no quede el código en el input
+    setSearchQuery('')
+    setShowSuggestions(false)
+    searchInputRef.current?.blur()
+
     setLastScannedBarcode(barcode)
     setScannerStatus('scanning')
 
     try {
-      // Buscar producto por código de barras exacto
       const result = await productsService.search({
         q: barcode,
         is_active: true,
-        limit: 10,
+        limit: 5,
       }, user?.store_id)
 
       // Buscar coincidencia exacta por barcode
@@ -793,13 +797,7 @@ export default function POSPage() {
         playScanTone('success')
       }
 
-      // Usar handleProductClick para manejar variantes, productos por peso, etc.
       await handleProductClick(product)
-
-      // Limpiar búsqueda y quitar foco del input para que el scanner funcione desde cualquier vista
-      setSearchQuery('')
-      setShowSuggestions(false)
-      searchInputRef.current?.blur()
 
       // Limpiar estado después de agregar
       setTimeout(() => {
@@ -817,13 +815,13 @@ export default function POSPage() {
     }
   }, [user?.store_id, handleProductClick, scannerSoundEnabled, playScanTone])
 
-  // Integrar scanner de código de barras
+  // Integrar scanner de código de barras (siempre activo: busca, carrito, etc.)
   useBarcodeScanner({
     onScan: handleBarcodeScan,
-    enabled: true, // Siempre habilitado en POS
+    enabled: true,
     minLength: 4,
     maxLength: 50,
-    maxIntervalMs: 50,
+    maxIntervalMs: 100, // Tolerar escáneres más lentos; siempre interceptar en inputs
   })
 
   // Handler para confirmar peso de producto
