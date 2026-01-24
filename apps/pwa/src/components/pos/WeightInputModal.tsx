@@ -67,15 +67,15 @@ export default function WeightInputModal({
 
   if (!product) return null
 
-  const weightValue = parseFloat(weightInput) || 0
+  const weightValue = (() => { const n = parseFloat(weightInput); return Number.isFinite(n) ? n : 0 })()
   const unit = product.weight_unit || 'kg'
-  const pricePerWeightUsd = Number(product.price_per_weight_usd) || 0
-  const pricePerWeightBs = Number(product.price_per_weight_bs) || 0
+  const pricePerWeightUsd = (() => { const n = Number(product.price_per_weight_usd); return Number.isFinite(n) ? n : 0 })()
+  const pricePerWeightBs = (() => { const n = Number(product.price_per_weight_bs); return Number.isFinite(n) ? n : 0 })()
   const unitPriceDecimals = unit === 'g' || unit === 'oz' ? 4 : 2
 
-  // Calcular totales
-  const totalUsd = weightValue * pricePerWeightUsd
-  const totalBs = weightValue * pricePerWeightBs
+  // Calcular totales: peso × precio por unidad de peso
+  const totalUsd = Math.round(weightValue * pricePerWeightUsd * 100) / 100
+  const totalBs = Math.round(weightValue * pricePerWeightBs * 100) / 100
 
   // Validar peso
   const validateWeight = (value: number): string | null => {
@@ -99,7 +99,7 @@ export default function WeightInputModal({
     const formatted = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : sanitized
     setWeightInput(formatted)
 
-    const numValue = parseFloat(formatted) || 0
+    const numValue = (() => { const n = parseFloat(formatted); return Number.isFinite(n) ? n : 0 })()
     if (numValue > 0) {
       setError(validateWeight(numValue))
     } else {
@@ -113,12 +113,15 @@ export default function WeightInputModal({
       setError(validationError)
       return
     }
-    onConfirm(weightValue)
+    // Redondear a 4 decimales (suficiente para g/oz) para evitar ruido de float
+    const rounded = Math.round(weightValue * 10000) / 10000
+    onConfirm(rounded)
     onClose()
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && weightValue > 0 && !error) {
+    const canSubmit = weightValue > 0 && !error && (pricePerWeightUsd > 0 || pricePerWeightBs > 0)
+    if (e.key === 'Enter' && canSubmit) {
       handleConfirm()
     }
   }
@@ -133,7 +136,7 @@ export default function WeightInputModal({
     : [1, 2, 4, 8] // oz
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -239,7 +242,7 @@ export default function WeightInputModal({
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={weightValue <= 0 || !!error}
+            disabled={weightValue <= 0 || !!error || (pricePerWeightUsd <= 0 && pricePerWeightBs <= 0)}
           >
             Agregar al Carrito
           </Button>

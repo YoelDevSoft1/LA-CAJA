@@ -826,33 +826,51 @@ export default function POSPage() {
 
   // Handler para confirmar peso de producto
   const handleWeightConfirm = (weightValue: number) => {
-    if (!selectedWeightProduct) return
+    if (!selectedWeightProduct) {
+      toast.error('Producto no seleccionado')
+      return
+    }
 
-    const unitLabel = selectedWeightProduct.weight_unit === 'g' ? 'g' :
-                      selectedWeightProduct.weight_unit === 'kg' ? 'kg' :
-                      selectedWeightProduct.weight_unit === 'lb' ? 'lb' : 'oz'
+    const nBs = Number(selectedWeightProduct.price_per_weight_bs)
+    const nUsd = Number(selectedWeightProduct.price_per_weight_usd)
+    const pricePerWeightBs = Number.isFinite(nBs) ? nBs : 0
+    const pricePerWeightUsd = Number.isFinite(nUsd) ? nUsd : 0
 
-    // Convertir a números (PostgreSQL devuelve NUMERIC como string)
-    const pricePerWeightBs = Number(selectedWeightProduct.price_per_weight_bs) || 0
-    const pricePerWeightUsd = Number(selectedWeightProduct.price_per_weight_usd) || 0
+    if (pricePerWeightBs <= 0 && pricePerWeightUsd <= 0) {
+      toast.error('Este producto por peso no tiene precio configurado')
+      return
+    }
 
-    // Agregar al carrito con qty = peso y unit_price = precio por unidad de peso
-    addItem({
-      product_id: selectedWeightProduct.id,
-      product_name: `${selectedWeightProduct.name} (${weightValue} ${unitLabel})`,
-      qty: weightValue,
-      unit_price_bs: pricePerWeightBs,
-      unit_price_usd: pricePerWeightUsd,
-      // Guardar info de peso para el backend
-      is_weight_product: true,
-      weight_unit: selectedWeightProduct.weight_unit,
-      weight_value: weightValue,
-      price_per_weight_bs: pricePerWeightBs,
-      price_per_weight_usd: pricePerWeightUsd,
-    })
+    const w = Number.isFinite(weightValue) && weightValue > 0 ? weightValue : 0
+    if (w <= 0) {
+      toast.error('El peso debe ser mayor a 0')
+      return
+    }
 
-    toast.success(`${selectedWeightProduct.name} (${weightValue} ${unitLabel}) agregado al carrito`)
-    setSelectedWeightProduct(null)
+    const unit = selectedWeightProduct.weight_unit || 'kg'
+    const unitLabel = unit === 'g' ? 'g' : unit === 'kg' ? 'kg' : unit === 'lb' ? 'lb' : 'oz'
+
+    try {
+      addItem({
+        product_id: selectedWeightProduct.id,
+        product_name: `${selectedWeightProduct.name} (${w} ${unitLabel})`,
+        qty: w,
+        unit_price_bs: pricePerWeightBs,
+        unit_price_usd: pricePerWeightUsd,
+        is_weight_product: true,
+        weight_unit: selectedWeightProduct.weight_unit,
+        weight_value: w,
+        price_per_weight_bs: pricePerWeightBs,
+        price_per_weight_usd: pricePerWeightUsd,
+      })
+      triggerCartPulse()
+      toast.success(`${selectedWeightProduct.name} (${w} ${unitLabel}) agregado al carrito`)
+      setSelectedWeightProduct(null)
+    } catch (e) {
+      console.error('[POS] Error al agregar producto por peso:', e)
+      toast.error('No se pudo agregar al carrito. Intenta de nuevo.')
+      throw e
+    }
   }
 
   const handleVariantSelect = (variant: ProductVariant | null) => {
@@ -1184,10 +1202,10 @@ export default function POSPage() {
         is_weight_product: isWeightProduct,
         ...(isWeightProduct
           ? {
-              weight_unit: item.weight_unit || null,
-              weight_value: item.weight_value || null,
-              price_per_weight_bs: item.price_per_weight_bs || null,
-              price_per_weight_usd: item.price_per_weight_usd || null,
+              weight_unit: item.weight_unit ?? null,
+              weight_value: item.weight_value != null ? item.weight_value : null,
+              price_per_weight_bs: item.price_per_weight_bs != null ? item.price_per_weight_bs : null,
+              price_per_weight_usd: item.price_per_weight_usd != null ? item.price_per_weight_usd : null,
             }
           : {}),
       }
