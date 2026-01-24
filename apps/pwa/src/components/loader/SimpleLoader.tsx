@@ -241,51 +241,10 @@ export default function SimpleLoader({
                     LA CAJA
                   </motion.h2>
 
-                  {/* Barra de progreso moderna */}
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="relative w-56 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                      {/* Shimmer effect */}
-                      <motion.div
-                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
-                        animate={{ x: ['-100%', '200%'] }}
-                        transition={{
-                          duration: 1.5,
-                          repeat: Infinity,
-                          ease: 'easeInOut',
-                        }}
-                      />
-                      {/* Progress bar */}
-                      <motion.div
-                        className="h-full rounded-full relative"
-                        style={{
-                          width: `${progress}%`,
-                          background: colors.gradients.primary,
-                        }}
-                        transition={{ duration: 0.1 }}
-                      >
-                        {/* Glow tip */}
-                        <motion.div
-                          className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full"
-                          style={{
-                            background: colors.brand.primary,
-                            boxShadow: colors.shadows.glow,
-                          }}
-                          animate={{
-                            scale: [1, 1.3, 1],
-                            opacity: [0.8, 1, 0.8],
-                          }}
-                          transition={{
-                            duration: 0.8,
-                            repeat: Infinity,
-                            ease: 'easeInOut',
-                          }}
-                        />
-                      </motion.div>
-                    </div>
-
-                    {/* Texto de carga */}
+                  {/* Texto de carga */}
+                  <div className="flex flex-col items-center justify-center gap-4 w-full">
                     <motion.div
-                      className="flex items-center gap-2 text-sm text-slate-500"
+                      className="flex items-center justify-center gap-2 text-sm text-slate-500 w-full"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: 0.3 }}

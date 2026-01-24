@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { DebtsService } from './debts.service';
 import { CreateDebtPaymentDto } from './dto/create-debt-payment.dto';
+import { SendDebtReminderDto } from './dto/send-debt-reminder.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DebtStatus } from '../database/entities/debt.entity';
 
@@ -94,10 +95,11 @@ export class DebtsController {
   @Post('customer/:customerId/send-reminder')
   async sendDebtReminder(
     @Param('customerId') customerId: string,
+    @Body() dto: SendDebtReminderDto,
     @Request() req: any,
   ) {
     const storeId = req.user.store_id;
-    return this.debtsService.sendDebtReminder(storeId, customerId);
+    return this.debtsService.sendDebtReminder(storeId, customerId, dto?.debt_ids);
   }
 
   @Post('customer/:customerId/pay-all')

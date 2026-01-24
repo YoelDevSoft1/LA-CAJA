@@ -223,11 +223,13 @@ export class WhatsAppMessagingService {
   }
 
   /**
-   * Envía recordatorio de deudas pendientes
+   * Envía recordatorio de deudas pendientes.
+   * Si debtIds está definido y no vacío, solo se incluyen esas deudas; si no, todas las pendientes.
    */
   async sendDebtReminder(
     storeId: string,
     customerId: string,
+    debtIds?: string[],
   ): Promise<{ queued: boolean; error?: string }> {
     try {
       // Verificar configuración
@@ -245,16 +247,31 @@ export class WhatsAppMessagingService {
         return { queued: false, error: 'Cliente no encontrado o sin teléfono' };
       }
 
+      // Condición base: deudas pendientes del cliente
+      const where: Record<string, unknown> = {
+        customer_id: customerId,
+        store_id: storeId,
+        status: In(['open', 'partial']),
+      };
+      if (debtIds && debtIds.length > 0) {
+        where.id = In(debtIds);
+      }
+
       // Obtener deudas pendientes
       const debts = await this.debtRepository.find({
-        where: {
-          customer_id: customerId,
-          store_id: storeId,
-          status: In(['open', 'partial']),
-        },
+        where,
         relations: ['payments', 'sale'],
         order: { created_at: 'ASC' },
       });
+
+      // Si se pidieron debtIds, asegurar que todas existen y pertenecen al cliente
+      if (debtIds && debtIds.length > 0) {
+        const foundIds = new Set(debts.map((d) => d.id));
+        const missing = debtIds.filter((id) => !foundIds.has(id));
+        if (missing.length > 0) {
+          return { queued: false, error: 'Algunas deudas seleccionadas no existen o no están pendientes' };
+        }
+      }
 
       if (debts.length === 0) {
         return { queued: false, error: 'No hay deudas pendientes' };

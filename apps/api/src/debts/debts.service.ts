@@ -560,14 +560,19 @@ export class DebtsService {
   }
 
   /**
-   * Envía recordatorio de deudas pendientes a un cliente por WhatsApp
+   * Envía recordatorio de deudas pendientes a un cliente por WhatsApp.
+   * Si debtIds está definido y no está vacío, solo se incluyen esas deudas; si no, todas las pendientes.
    */
   async sendDebtReminder(
     storeId: string,
     customerId: string,
+    debtIds?: string[],
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const result = await this.whatsappMessagingService.sendDebtReminder(storeId, customerId);
+      if (debtIds && debtIds.length === 0) {
+        return { success: false, error: 'Seleccione al menos una deuda para enviar' };
+      }
+      const result = await this.whatsappMessagingService.sendDebtReminder(storeId, customerId, debtIds);
       return { success: result.queued, error: result.error };
     } catch (error: any) {
       this.logger.error(`Error enviando recordatorio de deudas:`, error);

@@ -8,7 +8,6 @@ import {
   Trash2,
   Tag,
   Scale,
-  Barcode,
   Apple,
   Beef,
   Coffee,
@@ -18,8 +17,6 @@ import {
   Cpu,
   Pill,
   ShoppingBag,
-  Volume2,
-  VolumeX,
 } from 'lucide-react'
 import { productsService, ProductSearchResponse } from '@/services/products.service'
 import { useBarcodeScanner } from '@/hooks/use-barcode-scanner'
@@ -27,7 +24,7 @@ import { productsCacheService } from '@/services/products-cache.service'
 import { salesService } from '@/services/sales.service'
 import { exchangeService } from '@/services/exchange.service'
 import { cashService } from '@/services/cash.service'
-import { useCart, CartItem } from '@/stores/cart.store'
+import { useCart, CartItem, CART_IDS } from '@/stores/cart.store'
 import { useAuth } from '@/stores/auth.store'
 import { useOnline } from '@/hooks/use-online'
 import { printService } from '@/services/print.service'
@@ -43,6 +40,9 @@ const CheckoutModal = lazy(() => import('@/components/pos/CheckoutModal'))
 import QuickProductsGrid from '@/components/fast-checkout/QuickProductsGrid'
 import VariantSelector from '@/components/variants/VariantSelector'
 import WeightInputModal, { WeightProduct } from '@/components/pos/WeightInputModal'
+import ScannerStatusBadge from '@/components/pos/ScannerStatusBadge'
+import ScannerBarcodeStrip from '@/components/pos/ScannerBarcodeStrip'
+import LastSoldProductsCard from '@/components/pos/LastSoldProductsCard'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -77,8 +77,6 @@ export default function POSPage() {
   const isTabletLandscape = isTablet && isLandscape
   const MAX_QTY_PER_PRODUCT = 999
   const queryClient = useQueryClient()
-  const RECENT_SEARCHES_KEY = 'pos-recent-searches'
-  const MAX_RECENT_SEARCHES = 8
   const [searchQuery, setSearchQuery] = useState('')
   const [showCheckout, setShowCheckout] = useState(false)
   const [shouldPrint, setShouldPrint] = useState(false)
@@ -107,7 +105,44 @@ export default function POSPage() {
   const listViewportRef = useRef<HTMLDivElement | null>(null)
   const [listScrollTop, setListScrollTop] = useState(0)
   const [listViewportHeight, setListViewportHeight] = useState(0)
-  const { items, addItem, updateItem, removeItem, clear, getTotal } = useCart()
+  const {
+    items,
+    addItem,
+    updateItem,
+    removeItem,
+    clear,
+    getTotal,
+    activeCartId,
+    setActiveCart,
+    carts,
+  } = useCart()
+
+  const cartSummaries = useMemo(() => {
+    return CART_IDS.map((id) => {
+      const cartItems = carts[id]?.items ?? []
+      const totalUsd = cartItems.reduce(
+        (sum, item) =>
+          sum + item.qty * item.unit_price_usd - (item.discount_usd || 0),
+        0
+      )
+      return {
+        id,
+        count: cartItems.reduce((s, i) => s + i.qty, 0),
+        totalUsd,
+      }
+    })
+  }, [carts])
+
+  const handleSwitchCart = useCallback(
+    (id: string) => {
+      if (id === activeCartId) return
+      setActiveCart(id)
+      setShowCheckout(false)
+      setDiscountInputs({})
+      setPendingSerials({})
+    },
+    [activeCartId, setActiveCart]
+  )
   const lastCartSnapshot = useRef<CartItem[]>([])
   const cartPulseTimeout = useRef<NodeJS.Timeout | null>(null)
   const lastTotalQty = useRef(0)
@@ -531,7 +566,7 @@ export default function POSPage() {
     queryFn: () =>
       salesService.list({
         store_id: user?.store_id,
-        limit: 6,
+        limit: 12,
         offset: 0,
       }),
     enabled: isOnline && !!user?.store_id,
@@ -564,7 +599,7 @@ export default function POSPage() {
 
     return Array.from(latestByProduct.values())
       .sort((a, b) => new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime())
-      .slice(0, 6)
+      .slice(0, 8)
   }, [recentSales])
 
   useEffect(() => {
@@ -760,6 +795,11 @@ export default function POSPage() {
 
       // Usar handleProductClick para manejar variantes, productos por peso, etc.
       await handleProductClick(product)
+
+      // Limpiar búsqueda y quitar foco del input para que el scanner funcione desde cualquier vista
+      setSearchQuery('')
+      setShowSuggestions(false)
+      searchInputRef.current?.blur()
 
       // Limpiar estado después de agregar
       setTimeout(() => {
@@ -1247,30 +1287,6 @@ export default function POSPage() {
     }
   }
 
-  const [recentSearches, setRecentSearches] = useState<string[]>([])
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(RECENT_SEARCHES_KEY)
-      const parsed = stored ? (JSON.parse(stored) as string[]) : []
-      setRecentSearches(Array.isArray(parsed) ? parsed : [])
-    } catch (error) {
-      setRecentSearches([])
-    }
-  }, [])
-
-  const saveRecentSearch = (value: string) => {
-    const trimmed = value.trim()
-    if (trimmed.length < 2) return
-    try {
-      const next = [trimmed, ...recentSearches.filter((item) => item !== trimmed)].slice(0, MAX_RECENT_SEARCHES)
-      localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next))
-      setRecentSearches(next)
-    } catch (error) {
-      // Silenciar errores de storage
-    }
-  }
-
   useEffect(() => {
     const handleShortcuts = (e: KeyboardEvent) => {
       if (
@@ -1320,67 +1336,13 @@ export default function POSPage() {
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Punto de Venta</h1>
             <p className="text-sm sm:text-base text-muted-foreground mt-1">Busca y agrega productos al carrito</p>
           </div>
-          {/* Indicador de estado del scanner */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <button
-              onClick={() => setScannerSoundEnabled(!scannerSoundEnabled)}
-              className="flex items-center gap-1 sm:gap-1.5 rounded-full border border-border bg-background px-1.5 sm:px-2 py-1 sm:py-1.5 text-xs sm:text-sm text-foreground hover:bg-accent/50 transition-colors shadow-sm"
-            >
-              <span className="hidden sm:inline">Sonido</span>
-              {/* Switch con desplazamiento */}
-              <div className={cn(
-                "relative flex items-center w-10 h-5 sm:w-12 sm:h-6 rounded-full transition-colors duration-300",
-                scannerSoundEnabled 
-                  ? "bg-foreground" 
-                  : "bg-muted border border-border"
-              )}>
-                {/* Círculo que se desplaza */}
-                <div className={cn(
-                  "absolute flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-background shadow-md transition-transform duration-300 ease-in-out",
-                  scannerSoundEnabled 
-                    ? "translate-x-5 sm:translate-x-6" 
-                    : "translate-x-0.5 sm:translate-x-0.5"
-                )}>
-                  {scannerSoundEnabled ? (
-                    <Volume2 className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-foreground" />
-                  ) : (
-                    <VolumeX className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-muted-foreground" />
-                  )}
-                </div>
-              </div>
-            </button>
-            <div className={cn(
-              "flex items-center gap-1 sm:gap-2 px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-sm font-medium transition-all duration-300",
-              scannerStatus === 'idle' && "bg-muted/50 text-muted-foreground",
-              scannerStatus === 'scanning' && "bg-primary/20 text-primary animate-pulse",
-              scannerStatus === 'success' && "bg-green-500/20 text-green-600",
-              scannerStatus === 'error' && "bg-destructive/20 text-destructive"
-            )}>
-              <Barcode className={cn(
-                "w-3.5 h-3.5 sm:w-4 sm:h-4",
-                scannerStatus === 'scanning' && "animate-pulse"
-              )} />
-              <span className="hidden sm:inline">
-                {scannerStatus === 'idle' && 'Scanner listo'}
-                {scannerStatus === 'scanning' && 'Buscando...'}
-                {scannerStatus === 'success' && 'Agregado'}
-                {scannerStatus === 'error' && 'No encontrado'}
-              </span>
-            </div>
-          </div>
+          <ScannerStatusBadge
+            scannerStatus={scannerStatus}
+            scannerSoundEnabled={scannerSoundEnabled}
+            onSoundToggle={() => setScannerSoundEnabled(!scannerSoundEnabled)}
+          />
         </div>
-        {/* Mostrar código escaneado cuando está activo */}
-        {lastScannedBarcode && scannerStatus !== 'idle' && (
-          <div className={cn(
-            "mt-2 px-3 py-2 rounded-md text-sm font-mono flex items-center gap-2 transition-all duration-300",
-            scannerStatus === 'scanning' && "bg-primary/10 text-primary border border-primary/30",
-            scannerStatus === 'success' && "bg-green-500/10 text-green-600 border border-green-500/30",
-            scannerStatus === 'error' && "bg-destructive/10 text-destructive border border-destructive/30"
-          )}>
-            <Barcode className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">{lastScannedBarcode}</span>
-          </div>
-        )}
+        <ScannerBarcodeStrip lastScannedBarcode={lastScannedBarcode} scannerStatus={scannerStatus} />
       </div>
 
       {/* Layout: Mobile (stacked) / Tablet Landscape (optimizado) / Desktop (side by side) */}
@@ -1409,42 +1371,18 @@ export default function POSPage() {
               autoFocus
               ref={searchInputRef}
               onFocus={() => setShowSuggestions(true)}
-              onBlur={() => {
-                setTimeout(() => setShowSuggestions(false), 120)
-                saveRecentSearch(searchQuery)
-              }}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 120)}
               onKeyDown={handleSearchKeyDown}
               role="combobox"
               aria-expanded={showSuggestions}
               aria-controls="pos-search-suggestions"
             />
-            {showSuggestions && (suggestedProducts.length > 0 || recentSearches.length > 0) && (
+            {showSuggestions && suggestedProducts.length > 0 && (
               <div
                 id="pos-search-suggestions"
                 role="listbox"
                 className="absolute z-20 mt-2 w-full rounded-lg border border-border bg-background shadow-lg"
               >
-                {recentSearches.length > 0 && (
-                  <div className="px-3 py-2 text-[11px] text-muted-foreground border-b border-border/60">
-                    Busquedas recientes
-                  </div>
-                )}
-                {recentSearches.map((term) => (
-                  <button
-                    key={`recent-${term}`}
-                    type="button"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      setSearchQuery(term)
-                      setShowSuggestions(false)
-                      saveRecentSearch(term)
-                    }}
-                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-accent/50"
-                  >
-                    <span className="truncate">{term}</span>
-                    <span className="text-[11px] text-muted-foreground">Buscar</span>
-                  </button>
-                ))}
                 {suggestedProducts.map((product, index) => {
                   const isActive = index === activeSuggestionIndex
                   return (
@@ -1519,50 +1457,11 @@ export default function POSPage() {
             <QuickProductsGrid onProductClick={handleQuickProductClick} />
           )}
 
-          {/* Historial de productos vendidos recientemente */}
-          {recentProducts.length > 0 && (
-            <Card className="border border-border">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-foreground">Ultimos vendidos</h3>
-                  <span className="text-xs text-muted-foreground">
-                    Toca para agregar
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {recentProducts.map((item) => (
-                    <Button
-                      key={item.product_id}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleRecentProductClick(item.product_id)}
-                      className="h-8 gap-1.5"
-                    >
-                      {item.is_weight_product && (
-                        <Scale className="w-3.5 h-3.5 text-primary" />
-                      )}
-                      <span className="max-w-[160px] truncate">{item.name}</span>
-                      {item.is_weight_product && item.weight_unit && (
-                        <span className="text-[10px] text-muted-foreground">
-                          /{item.weight_unit}
-                        </span>
-                      )}
-                    </Button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          {isRecentSalesLoading && recentProducts.length === 0 && (
-            <Card className="border border-border">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-pulse" />
-                  Cargando ultimos vendidos...
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <LastSoldProductsCard
+            recentProducts={recentProducts}
+            isLoading={isRecentSalesLoading}
+            onProductClick={handleRecentProductClick}
+          />
 
           {/* Sugerencias complementarias */}
           {complementaryProducts.length > 0 && (
@@ -1573,7 +1472,7 @@ export default function POSPage() {
                     Sugerencias para complementar
                   </h3>
                   <span className="text-xs text-muted-foreground">
-                    Basado en el ultimo agregado
+                    Basado en el último agregado
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1765,6 +1664,33 @@ export default function POSPage() {
               ? "sticky top-20 h-[calc(100vh-140px)]" 
               : "lg:sticky lg:top-20 h-[calc(100vh-140px)] lg:h-[calc(100vh-12rem)]"
           )}>
+            {/* Pestañas de ventas simultáneas */}
+            <div className="px-2 pt-2 pb-1 border-b border-border/60 flex-shrink-0">
+              <div className="flex gap-1">
+                {cartSummaries.map((s, i) => {
+                  const isActive = s.id === activeCartId
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => handleSwitchCart(s.id)}
+                      className={cn(
+                        'flex-1 min-w-0 py-1.5 px-2 rounded-md text-xs font-medium transition-colors',
+                        isActive
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+                      )}
+                      title={`Venta ${i + 1}${s.count > 0 ? ` · ${s.count} ítems · $${s.totalUsd.toFixed(2)}` : ''}`}
+                    >
+                      <span className="truncate block">{i + 1}</span>
+                      {s.count > 0 && (
+                        <span className="tabular-nums">({s.count})</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
             <div className="p-3 sm:p-4 border-b border-border flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <h2 className="text-base sm:text-lg font-semibold text-foreground flex items-center gap-2">

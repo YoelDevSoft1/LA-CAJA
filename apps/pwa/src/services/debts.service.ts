@@ -138,10 +138,15 @@ export const debtsService = {
     return response.data
   },
 
-  // Enviar recordatorio de deudas por WhatsApp
-  async sendDebtReminder(customerId: string): Promise<{ success: boolean; error?: string }> {
+  // Enviar recordatorio de deudas por WhatsApp.
+  // Si debtIds se omite o está vacío, se envían todas las deudas pendientes; si se pasa, solo las seleccionadas.
+  async sendDebtReminder(
+    customerId: string,
+    debtIds?: string[],
+  ): Promise<{ success: boolean; error?: string }> {
     const response = await api.post<{ success: boolean; error?: string }>(
-      `/debts/customer/${customerId}/send-reminder`
+      `/debts/customer/${customerId}/send-reminder`,
+      debtIds && debtIds.length > 0 ? { debt_ids: debtIds } : {},
     )
     return response.data
   },

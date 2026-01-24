@@ -819,6 +819,7 @@ export default function DashboardPage() {
                   data={trends.top_products_trend.filter(p => p.is_weight_product)}
                   currency={chartCurrency}
                   limit={10}
+                  sortBy="revenue"
                 />
               </CardContent>
             </Card>
@@ -838,6 +839,7 @@ export default function DashboardPage() {
                   data={trends.top_products_trend.filter(p => !p.is_weight_product)}
                   currency={chartCurrency}
                   limit={10}
+                  sortBy="revenue"
                 />
               </CardContent>
             </Card>

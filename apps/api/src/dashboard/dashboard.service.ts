@@ -569,15 +569,17 @@ export class DashboardService {
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Top productos de la semana
-    const topProducts = await this.saleItemRepository
+    // Top 10 por peso y top 10 por cantidad: una sola query amplia y separación en JS
+    // (evita que el filtro SQL por is_weight_product deje fuera productos por tipo/coerción)
+    const allTop = await this.saleItemRepository
       .createQueryBuilder('item')
       .leftJoin('item.sale', 'sale')
       .leftJoin('item.product', 'product')
-      .where('sale.store_id = :storeId', { storeId })
-      .andWhere('sale.voided_at IS NULL')
-      .andWhere('sale.sold_at >= :start', { start: startDate })
-      .andWhere('sale.sold_at <= :end', { end: endDate })
+        .where('sale.store_id = :storeId', { storeId })
+        .andWhere('sale.voided_at IS NULL')
+        .andWhere('product.id IS NOT NULL')
+        .andWhere('sale.sold_at >= :start', { start: startDate })
+        .andWhere('sale.sold_at <= :end', { end: endDate })
       .select('product.id', 'product_id')
       .addSelect('product.name', 'product_name')
       .addSelect('product.is_weight_product', 'is_weight_product')
@@ -593,11 +595,18 @@ export class DashboardService {
       )
       .groupBy('product.id')
       .addGroupBy('product.name')
+      .addGroupBy('product.is_weight_product')
+      .addGroupBy('product.weight_unit')
       .orderBy('SUM(item.qty)', 'DESC')
-      .limit(10)
+      .limit(80)
       .getRawMany();
 
-    const topProductsTrend = topProducts.map((p) => ({
+    const isWeight = (p: { is_weight_product: unknown }) =>
+      p.is_weight_product === true || p.is_weight_product === 1 || p.is_weight_product === 't';
+    const topByWeight = allTop.filter(isWeight).slice(0, 10);
+    const topByUnit = allTop.filter((p) => !isWeight(p)).slice(0, 10);
+
+    const topProductsTrend = [...topByWeight, ...topByUnit].map((p) => ({
       product_id: p.product_id,
       product_name: p.product_name,
       quantity_sold: parseFloat(p.total_quantity) || 0,

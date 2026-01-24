@@ -11,8 +11,8 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { cn } from '@/lib/utils'
-import toast from '@/lib/toast'
 import PayAllDebtsModal from './PayAllDebtsModal'
+import SelectDebtsForWhatsAppModal from './SelectDebtsForWhatsAppModal'
 
 interface CustomerDebtCardProps {
   customer: Customer
@@ -58,6 +58,7 @@ export default function CustomerDebtCard({
 }: CustomerDebtCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isPayAllModalOpen, setIsPayAllModalOpen] = useState(false)
+  const [isSelectDebtsWhatsAppOpen, setIsSelectDebtsWhatsAppOpen] = useState(false)
 
   // Obtener resumen del cliente
   const { data: summary } = useQuery({
@@ -83,31 +84,6 @@ export default function CustomerDebtCard({
         },
         { usd: 0, bs: 0 }
       )
-
-  // Handler para enviar recordatorio por WhatsApp (usando Baileys)
-  const handleSendWhatsApp = async () => {
-    if (!customer.phone) {
-      toast.error('El cliente no tiene teléfono registrado')
-      return
-    }
-
-    if (!hasOpenDebts) {
-      toast.error('El cliente no tiene deudas pendientes para enviar')
-      return
-    }
-
-    try {
-      const result = await debtsService.sendDebtReminder(customer.id)
-      if (result.success) {
-        toast.success('Recordatorio de deudas enviado por WhatsApp')
-      } else {
-        toast.error(result.error || 'Error al enviar recordatorio')
-      }
-    } catch (error: any) {
-      console.error('[CustomerDebtCard] Error enviando recordatorio por WhatsApp:', error)
-      toast.error(error.response?.data?.message || 'Error al enviar recordatorio por WhatsApp')
-    }
-  }
 
   return (
     <Card className={cn(
@@ -157,7 +133,7 @@ export default function CustomerDebtCard({
                     size="sm"
                     onClick={(e) => {
                       e.stopPropagation()
-                      handleSendWhatsApp()
+                      setIsSelectDebtsWhatsAppOpen(true)
                     }}
                     className="h-9 w-9 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
                     title="Enviar estado de fiados por WhatsApp"
@@ -333,6 +309,15 @@ export default function CustomerDebtCard({
           onPaymentSuccess?.()
           setIsPayAllModalOpen(false)
         }}
+      />
+
+      {/* Modal para elegir deudas a enviar por WhatsApp */}
+      <SelectDebtsForWhatsAppModal
+        isOpen={isSelectDebtsWhatsAppOpen}
+        onClose={() => setIsSelectDebtsWhatsAppOpen(false)}
+        customer={customer}
+        openDebts={openDebts}
+        onSuccess={onPaymentSuccess}
       />
     </Card>
   )

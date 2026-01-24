@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 
 const paymentSchema = z.object({
   amount_usd: z.number().min(0.01, 'El monto debe ser mayor a 0'),
-  amount_bs: z.number().min(0.01, 'El monto debe ser mayor a 0'),
+  amount_bs: z.number().min(0, 'El monto en Bs no puede ser negativo'),
   method: z.enum(['CASH_BS', 'CASH_USD', 'PAGO_MOVIL', 'TRANSFER', 'OTHER']),
   note: z.string().optional(),
 })
@@ -77,23 +77,31 @@ export default function AddPaymentModal({
   const debtId = debt?.id
   const debtWithTotals = useMemo(() => (debt ? calculateDebtTotals(debt) : null), [debt])
 
-  // Observar cambios en amount_usd para calcular amount_bs
   const amountUsd = watch('amount_usd')
+  const amountBs = watch('amount_bs')
   const selectedMethod = watch('method')
+  const inputSourceRef = useRef<'usd' | 'bs' | null>(null)
 
+  // Cálculo bidireccional USD ↔ Bs con la tasa del día: al editar uno se actualiza el otro
   useEffect(() => {
-    if (amountUsd > 0 && exchangeRate > 0) {
-      // Siempre usar tasa BCV actual para los pagos
-      const calculatedBs = Math.round(amountUsd * exchangeRate * 100) / 100
-      setValue('amount_bs', calculatedBs, { shouldValidate: false })
-    } else if (amountUsd <= 0) {
+    if (exchangeRate <= 0) {
+      if (amountUsd <= 0) return
       setValue('amount_bs', 0, { shouldValidate: false })
+      return
     }
-  }, [amountUsd, exchangeRate, setValue])
+    if (inputSourceRef.current === 'usd') {
+      const calculatedBs = amountUsd >= 0 ? Math.round(amountUsd * exchangeRate * 100) / 100 : 0
+      setValue('amount_bs', calculatedBs, { shouldValidate: false })
+    } else if (inputSourceRef.current === 'bs') {
+      const calculatedUsd = amountBs >= 0 ? Math.round((amountBs / exchangeRate) * 100) / 100 : 0
+      setValue('amount_usd', calculatedUsd, { shouldValidate: false })
+    }
+  }, [amountUsd, amountBs, exchangeRate, setValue])
 
-  // Reset form cuando se abre el modal - solo depende de isOpen y debt.id
+  // Reset form cuando se abre el modal
   useEffect(() => {
     if (isOpen && debtId) {
+      inputSourceRef.current = null
       reset({
         amount_usd: 0,
         amount_bs: 0,
@@ -160,7 +168,13 @@ export default function AddPaymentModal({
 
   const handlePayFull = () => {
     if (!debtWithTotals) return
+    inputSourceRef.current = 'usd'
     setValue('amount_usd', debtWithTotals.remaining_usd, { shouldValidate: true })
+    if (exchangeRate > 0) {
+      setValue('amount_bs', Math.round(debtWithTotals.remaining_usd * exchangeRate * 100) / 100, { shouldValidate: false })
+    } else {
+      setValue('amount_bs', 0, { shouldValidate: false })
+    }
   }
 
   if (!debt || !debtWithTotals) return null
@@ -220,6 +234,7 @@ export default function AddPaymentModal({
                     className="pl-10 pr-4 py-2.5 text-lg"
                     placeholder="0.00"
                     autoFocus
+                    onFocus={() => { inputSourceRef.current = 'usd' }}
                   />
                 </div>
                 {errors.amount_usd && (
@@ -235,11 +250,11 @@ export default function AddPaymentModal({
                 </Button>
               </div>
 
-              {/* Monto Bs (calculado automáticamente) */}
+              {/* Monto Bs: editable; se calcula con la tasa del día al editar USD o Bs */}
               <div className="space-y-2">
                 <Label htmlFor="amount_bs" className="text-sm font-semibold">
-                  Equivalente en Bs
-                  <span className="text-xs font-normal text-muted-foreground ml-2">(Calculado automáticamente)</span>
+                  Monto en Bs
+                  <span className="text-xs font-normal text-muted-foreground ml-2">(Tasa del día: {exchangeRate > 0 ? `${exchangeRate.toFixed(2)} Bs/USD` : '—'})</span>
                 </Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground font-medium">Bs</span>
@@ -248,22 +263,26 @@ export default function AddPaymentModal({
                     type="number"
                     step="0.01"
                     {...register('amount_bs', { valueAsNumber: true })}
-                    className="pl-10 pr-4 py-2.5 text-lg bg-muted text-muted-foreground cursor-not-allowed"
+                    className="pl-10 pr-4 py-2.5 text-lg"
                     placeholder="0.00"
-                    readOnly
+                    readOnly={exchangeRate <= 0}
+                    onFocus={() => { inputSourceRef.current = 'bs' }}
                   />
                 </div>
+                {exchangeRate <= 0 && (
+                  <p className="text-xs text-muted-foreground">Configure la tasa BCV para abonar en Bs.</p>
+                )}
               </div>
 
               {/* Método de pago */}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <Label className="text-sm font-semibold">
                   Método de Pago <span className="text-destructive">*</span>
                 </Label>
                 <RadioGroup
                   value={selectedMethod}
                   onValueChange={(value) => setValue('method', value as PaymentMethod)}
-                  className="grid grid-cols-2 sm:grid-cols-3 gap-2"
+                  className="grid grid-cols-2 gap-x-4 gap-y-3"
                 >
                   {paymentMethods.map((method) => (
                     <div key={method.value} className="flex items-center space-x-2">
@@ -271,13 +290,13 @@ export default function AddPaymentModal({
                       <Label
                         htmlFor={method.value}
                         className={cn(
-                          'flex-1 flex items-center justify-center px-3 py-2.5 border-2 rounded-lg cursor-pointer transition-all',
+                          'flex-1 flex items-center justify-center px-3 py-3 border-2 rounded-lg cursor-pointer transition-all',
                           selectedMethod === method.value
                             ? 'border-success bg-success/10 text-success'
                             : 'border-border hover:border-border/80'
                         )}
                       >
-                        <CreditCard className="w-4 h-4 mr-2" />
+                        <CreditCard className="w-4 h-4 mr-2 flex-shrink-0" />
                         <span className="text-sm font-medium">{method.label}</span>
                       </Label>
                     </div>

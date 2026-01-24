@@ -42,6 +42,8 @@ interface TopProductsChartProps {
   data: TopProductData[]
   currency?: 'BS' | 'USD'
   limit?: number
+  /** Ordenar por cantidad vendida o por ingresos. Por defecto 'revenue'. */
+  sortBy?: 'quantity' | 'revenue'
 }
 
 const formatCurrency = (value: number, currency: 'BS' | 'USD') => {
@@ -139,16 +141,19 @@ export default function TopProductsChart({
   data,
   currency = 'BS',
   limit = 10,
+  sortBy = 'revenue',
 }: TopProductsChartProps) {
   const isMobile = useMobileDetection()
   const colors = useMemo(() => getColors(), [])
   
   const chartData = useMemo(() => {
-    // Ordenar por ingresos descendente (mayor a menor)
     const sortedData = [...data].sort((a, b) => {
+      if (sortBy === 'quantity') {
+        return b.quantity_sold - a.quantity_sold
+      }
       const revenueA = currency === 'BS' ? a.revenue_bs : a.revenue_usd
       const revenueB = currency === 'BS' ? b.revenue_bs : b.revenue_usd
-      return revenueB - revenueA // Orden descendente
+      return revenueB - revenueA
     })
     
     const maxRevenue = sortedData.length > 0 
@@ -174,7 +179,7 @@ export default function TopProductsChart({
         index,
       }
     })
-  }, [data, currency, limit, isMobile])
+  }, [data, currency, limit, sortBy, isMobile])
 
   if (!data || data.length === 0) {
     return (
