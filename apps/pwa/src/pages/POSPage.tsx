@@ -1374,6 +1374,7 @@ export default function POSPage() {
               role="combobox"
               aria-expanded={showSuggestions}
               aria-controls="pos-search-suggestions"
+              data-barcode-passthrough="true"
             />
             {showSuggestions && suggestedProducts.length > 0 && (
               <div

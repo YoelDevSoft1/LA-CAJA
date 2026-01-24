@@ -460,6 +460,7 @@ export default function StockReceivedModal({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
+                  data-barcode-passthrough="true"
                 />
               </div>
 

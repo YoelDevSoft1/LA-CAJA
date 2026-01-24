@@ -161,6 +161,13 @@ export function useBarcodeScanner({
         return
       }
 
+      // En inputs con data-barcode-passthrough (p. ej. buscador POS) no interceptar:
+      // la escritura va directa al input y la búsqueda se actualiza al instante.
+      // Para escanear, usar el lector con el foco fuera del buscador.
+      if (isInputElement && (activeElement as HTMLElement).getAttribute?.('data-barcode-passthrough') === 'true') {
+        return
+      }
+
       const isRapidInput = timeSinceLastKey < maxIntervalMs
 
       if (bufferRef.current.length === 0) {
