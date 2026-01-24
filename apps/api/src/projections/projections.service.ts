@@ -14,6 +14,7 @@ import { DebtStatus } from '../database/entities/debt.entity';
 import { randomUUID } from 'crypto';
 import { WhatsAppMessagingService } from '../whatsapp/whatsapp-messaging.service';
 import { FiscalInvoicesService } from '../fiscal-invoices/fiscal-invoices.service';
+import { WarehousesService } from '../warehouses/warehouses.service';
 
 @Injectable()
 export class ProjectionsService {
@@ -39,7 +40,34 @@ export class ProjectionsService {
     private dataSource: DataSource,
     private whatsappMessagingService: WhatsAppMessagingService,
     private fiscalInvoicesService: FiscalInvoicesService,
+    private warehousesService: WarehousesService,
   ) {}
+
+  private async resolveWarehouseId(
+    storeId: string,
+    candidateWarehouseId?: string | null,
+  ): Promise<string | null> {
+    if (candidateWarehouseId) {
+      try {
+        await this.warehousesService.findOne(storeId, candidateWarehouseId);
+        return candidateWarehouseId;
+      } catch (error) {
+        this.logger.warn(
+          `Bodega inválida en evento, usando bodega por defecto para store ${storeId}`,
+        );
+      }
+    }
+
+    try {
+      const warehouse = await this.warehousesService.getDefaultOrFirst(storeId);
+      return warehouse.id;
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo resolver bodega por defecto para store ${storeId}`,
+      );
+      return null;
+    }
+  }
 
   async projectEvent(event: Event): Promise<void> {
     switch (event.type) {
@@ -166,20 +194,38 @@ export class ProjectionsService {
       return; // Ya existe, idempotente
     }
 
+    const qty = Number(payload.qty) || 0;
+    const warehouseId = await this.resolveWarehouseId(
+      event.store_id,
+      payload.warehouse_id ?? null,
+    );
+
     const movement = this.movementRepository.create({
       id: payload.movement_id,
       store_id: event.store_id,
       product_id: payload.product_id,
+      variant_id: payload.variant_id ?? null,
       movement_type: 'received',
-      qty_delta: Number(payload.qty) || 0,
+      qty_delta: qty,
       unit_cost_bs: Number(payload.unit_cost_bs) || 0,
       unit_cost_usd: Number(payload.unit_cost_usd) || 0,
+      warehouse_id: warehouseId,
       note: payload.note || null,
       ref: payload.ref || null,
       happened_at: event.created_at,
     });
 
     await this.movementRepository.save(movement);
+
+    if (warehouseId) {
+      await this.warehousesService.updateStock(
+        warehouseId,
+        payload.product_id,
+        payload.variant_id ?? null,
+        qty,
+        event.store_id,
+      );
+    }
   }
 
   private async projectStockAdjusted(event: Event): Promise<void> {
@@ -192,20 +238,38 @@ export class ProjectionsService {
       return; // Ya existe, idempotente
     }
 
+    const qtyDelta = Number(payload.qty_delta) || 0;
+    const warehouseId = await this.resolveWarehouseId(
+      event.store_id,
+      payload.warehouse_id ?? null,
+    );
+
     const movement = this.movementRepository.create({
       id: payload.movement_id,
       store_id: event.store_id,
       product_id: payload.product_id,
+      variant_id: payload.variant_id ?? null,
       movement_type: 'adjust',
-      qty_delta: Number(payload.qty_delta) || 0,
+      qty_delta: qtyDelta,
       unit_cost_bs: 0,
       unit_cost_usd: 0,
+      warehouse_id: warehouseId,
       note: payload.note || null,
       ref: null,
       happened_at: event.created_at,
     });
 
     await this.movementRepository.save(movement);
+
+    if (warehouseId) {
+      await this.warehousesService.updateStock(
+        warehouseId,
+        payload.product_id,
+        payload.variant_id ?? null,
+        qtyDelta,
+        event.store_id,
+      );
+    }
   }
 
   private async projectSaleCreated(event: Event): Promise<void> {
@@ -237,6 +301,11 @@ export class ProjectionsService {
         `No se puede crear la venta FIAO ${payload.sale_id}: falta información del cliente.`,
       );
     }
+
+    const warehouseId = await this.resolveWarehouseId(
+      event.store_id,
+      payload.warehouse_id ?? null,
+    );
 
     // Crear venta
     const sale = this.saleRepository.create({
@@ -271,6 +340,8 @@ export class ProjectionsService {
           id: item.item_id || randomUUID(),
           sale_id: savedSale.id,
           product_id: item.product_id,
+          variant_id: item.variant_id ?? null,
+          lot_id: item.lot_id ?? null,
           qty: normalizedQty,
           unit_price_bs: Number(item.unit_price_bs) || 0,
           unit_price_usd: Number(item.unit_price_usd) || 0,
@@ -298,20 +369,35 @@ export class ProjectionsService {
     // ⚡ OPTIMIZACIÓN: Crear movimientos de inventario en batch (descontar stock)
     // Nota: Para FIAO, el stock se descuenta igual
     if (payload.items && Array.isArray(payload.items)) {
+      const stockUpdates: Array<{
+        product_id: string;
+        variant_id: string | null;
+        qty_delta: number;
+      }> = [];
       const movements = payload.items.map((item) => {
         const movementQty = item.is_weight_product && item.weight_value != null
           ? Number(item.weight_value)
           : Number(item.qty) || 0;
+        const variantId = item.variant_id ?? null;
+        if (warehouseId) {
+          stockUpdates.push({
+            product_id: item.product_id,
+            variant_id: variantId,
+            qty_delta: -movementQty,
+          });
+        }
         return this.movementRepository.create({
           id: randomUUID(),
           store_id: event.store_id,
           product_id: item.product_id,
+          variant_id: variantId,
           movement_type: 'sold',
           qty_delta: -movementQty, // Negativo para descontar
           unit_cost_bs: 0,
           unit_cost_usd: 0,
+          warehouse_id: warehouseId,
           note: `Venta ${payload.sale_id}`,
-          ref: { sale_id: payload.sale_id },
+          ref: { sale_id: payload.sale_id, warehouse_id: warehouseId },
           happened_at: payload.sold_at
             ? new Date(payload.sold_at)
             : event.created_at,
@@ -320,6 +406,14 @@ export class ProjectionsService {
 
       // Batch insert para mejor performance
       await this.movementRepository.save(movements);
+
+      if (warehouseId && stockUpdates.length > 0) {
+        await this.warehousesService.updateStockBatch(
+          warehouseId,
+          stockUpdates,
+          event.store_id,
+        );
+      }
     }
 
     // ⚠️ CRÍTICO: Si es venta FIAO, SIEMPRE crear la deuda automáticamente

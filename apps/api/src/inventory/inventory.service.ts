@@ -728,6 +728,8 @@ export class InventoryService {
       throw new ForbiddenException('Solo un owner puede ejecutar la reconciliación de stock');
     }
 
+    const defaultWarehouse = await this.warehousesService.getDefaultOrFirst(storeId);
+
     const updateSql = `
       WITH expected AS (
         SELECT
@@ -775,6 +777,12 @@ export class InventoryService {
     `;
 
     await this.dataSource.transaction(async (manager) => {
+      await manager.query(
+        `UPDATE inventory_movements
+         SET warehouse_id = $1
+         WHERE store_id = $2 AND warehouse_id IS NULL`,
+        [defaultWarehouse.id, storeId],
+      );
       await manager.query(updateSql, [storeId]);
       await manager.query(insertSql, [storeId]);
     });
