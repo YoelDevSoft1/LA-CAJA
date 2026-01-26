@@ -1,23 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  Search,
-  Plus,
-  Minus,
-  ShoppingCart,
-  Trash2,
-  Tag,
-  Scale,
-  Apple,
-  Beef,
-  Coffee,
-  Package,
-  Shirt,
-  Home,
-  Cpu,
-  Pill,
-  ShoppingBag,
-} from 'lucide-react'
+import { CatalogHeader } from '@/components/pos/catalog/CatalogHeader'
+import { ProductCatalog } from '@/components/pos/catalog/ProductCatalog'
+import { QuickActions } from '@/components/pos/catalog/QuickActions'
 import { productsService, ProductSearchResponse } from '@/services/products.service'
 import { useBarcodeScanner } from '@/hooks/use-barcode-scanner'
 import { productsCacheService } from '@/services/products-cache.service'
@@ -33,37 +18,14 @@ import { productVariantsService, ProductVariant } from '@/services/product-varia
 import { productSerialsService } from '@/services/product-serials.service'
 import { warehousesService } from '@/services/warehouses.service'
 import { inventoryService } from '@/services/inventory.service'
-import { promotionsService } from '@/services/promotions.service'
 import toast from '@/lib/toast'
 // ⚡ OPTIMIZACIÓN: Lazy load del modal grande (1916 líneas) - solo cargar cuando se abre
 const CheckoutModal = lazy(() => import('@/components/pos/CheckoutModal'))
-import QuickProductsGrid from '@/components/fast-checkout/QuickProductsGrid'
 import VariantSelector from '@/components/variants/VariantSelector'
 import WeightInputModal, { WeightProduct } from '@/components/pos/WeightInputModal'
-import ScannerStatusBadge from '@/components/pos/ScannerStatusBadge'
-import ScannerBarcodeStrip from '@/components/pos/ScannerBarcodeStrip'
-import LastSoldProductsCard from '@/components/pos/LastSoldProductsCard'
+import POSCart from '@/components/pos/cart/POSCart'
 import { SuccessOverlay } from '@/components/pos/SuccessOverlay'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
-import { SwipeableItem } from '@/components/ui/swipeable-item'
 import { useMobileDetection } from '@/hooks/use-mobile-detection'
 import { useOrientation } from '@/hooks/use-orientation'
 
@@ -82,8 +44,6 @@ export default function POSPage() {
   const [showCheckout, setShowCheckout] = useState(false)
   const [shouldPrint, setShouldPrint] = useState(false)
   const [showVariantSelector, setShowVariantSelector] = useState(false)
-  const [isClearDialogOpen, setIsClearDialogOpen] = useState(false)
-  const [cartPulse, setCartPulse] = useState(false)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<{
     id: string
@@ -95,19 +55,15 @@ export default function POSPage() {
   const [showWeightModal, setShowWeightModal] = useState(false)
   const [selectedWeightProduct, setSelectedWeightProduct] = useState<WeightProduct | null>(null)
   // Estado para indicador visual del scanner
+  // Estado para indicador visual del scanner
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null)
   const [scannerStatus, setScannerStatus] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle')
   // const [discountInputs, setDiscountInputs] = useState<Record<string, string>>({})
   /* Se comenta el estado de input de descuentos por desuso en el diseño compacto */
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1)
   const [scannerSoundEnabled, setScannerSoundEnabled] = useState(true)
   const [successSaleId, setSuccessSaleId] = useState<string | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const [invalidCartProductIds, setInvalidCartProductIds] = useState<string[]>([])
-  const listViewportRef = useRef<HTMLDivElement | null>(null)
-  const [listScrollTop, setListScrollTop] = useState(0)
-  const [listViewportHeight, setListViewportHeight] = useState(0)
   const {
     items,
     addItem,
@@ -147,41 +103,7 @@ export default function POSPage() {
     [activeCartId, setActiveCart]
   )
   const lastCartSnapshot = useRef<CartItem[]>([])
-  const cartPulseTimeout = useRef<NodeJS.Timeout | null>(null)
-  const lastTotalQty = useRef(0)
-  const totalQty = useMemo(() => items.reduce((sum, item) => sum + item.qty, 0), [items])
-  const handleClearCart = useCallback(() => {
-    clear()
-    // setDiscountInputs({})
-    setIsClearDialogOpen(false)
-  }, [clear])
 
-  const triggerCartPulse = useCallback(() => {
-    if (cartPulseTimeout.current) {
-      clearTimeout(cartPulseTimeout.current)
-    }
-    setCartPulse(true)
-    cartPulseTimeout.current = setTimeout(() => {
-      setCartPulse(false)
-    }, 350)
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      if (cartPulseTimeout.current) {
-        clearTimeout(cartPulseTimeout.current)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    if (totalQty !== lastTotalQty.current) {
-      if (totalQty > 0) {
-        triggerCartPulse()
-      }
-      lastTotalQty.current = totalQty
-    }
-  }, [totalQty, triggerCartPulse])
 
   useEffect(() => {
     if (items.length === 0) {
@@ -193,78 +115,6 @@ export default function POSPage() {
     )
   }, [items])
 
-  useEffect(() => {
-    if (!listViewportRef.current) return
-    const updateHeight = () => {
-      setListViewportHeight(listViewportRef.current?.clientHeight || 0)
-    }
-    updateHeight()
-
-    const observer = new ResizeObserver(updateHeight)
-    observer.observe(listViewportRef.current)
-    return () => observer.disconnect()
-  }, [])
-
-  const playScanTone = useCallback((variant: 'success' | 'error') => {
-    try {
-      const AudioContextClass =
-        window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-      if (!AudioContextClass) return
-
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioContextClass()
-      }
-      const context = audioContextRef.current
-      if (context.state === 'suspended') {
-        void context.resume()
-      }
-
-      const oscillator = context.createOscillator()
-      const gainNode = context.createGain()
-      oscillator.type = 'sine'
-      oscillator.frequency.value = variant === 'success' ? 880 : 220
-      gainNode.gain.value = 0.05
-
-      oscillator.connect(gainNode)
-      gainNode.connect(context.destination)
-      oscillator.start()
-      oscillator.stop(context.currentTime + (variant === 'success' ? 0.12 : 0.2))
-    } catch (error) {
-      // Silenciar errores de audio (opcional)
-    }
-  }, [])
-
-  const getCategoryIcon = useCallback((category?: string | null) => {
-    if (!category) return Package
-    const normalized = category.toLowerCase()
-
-    if (normalized.includes('bebida') || normalized.includes('drink') || normalized.includes('refresco')) {
-      return Coffee
-    }
-    if (normalized.includes('fruta') || normalized.includes('verdura') || normalized.includes('vegetal')) {
-      return Apple
-    }
-    if (normalized.includes('carne') || normalized.includes('pollo') || normalized.includes('proteina')) {
-      return Beef
-    }
-    if (normalized.includes('ropa') || normalized.includes('vestir') || normalized.includes('moda')) {
-      return Shirt
-    }
-    if (normalized.includes('hogar') || normalized.includes('casa')) {
-      return Home
-    }
-    if (normalized.includes('electron') || normalized.includes('tecno') || normalized.includes('gadget')) {
-      return Cpu
-    }
-    if (normalized.includes('farmacia') || normalized.includes('salud') || normalized.includes('medic')) {
-      return Pill
-    }
-    if (normalized.includes('accesorio') || normalized.includes('general')) {
-      return ShoppingBag
-    }
-
-    return Package
-  }, [])
 
   // Obtener sesión actual de caja
   const { data: currentCashSession } = useQuery({
@@ -295,13 +145,6 @@ export default function POSPage() {
     staleTime: 1000 * 60 * 5, // 5 minutos
   })
 
-  // Obtener promociones activas
-  const { data: activePromotions = [] } = useQuery({
-    queryKey: ['promotions', 'active'],
-    queryFn: () => promotionsService.getActive(),
-    staleTime: 1000 * 60 * 2, // 2 minutos
-    enabled: !!user?.store_id,
-  })
 
   // Prellenar bodega por defecto
   useEffect(() => {
@@ -310,8 +153,24 @@ export default function POSPage() {
     }
   }, [defaultWarehouse, selectedWarehouseId])
 
-  const getWeightPriceDecimals = useCallback((unit?: string | null) => {
-    return unit === 'g' || unit === 'oz' ? 4 : 2
+  // Audio helper (local definition since it connects to scanner)
+  const playScanTone = useCallback((variant: 'success' | 'error') => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioContextClass) return
+      if (!audioContextRef.current) audioContextRef.current = new AudioContextClass()
+      const context = audioContextRef.current
+      if (context.state === 'suspended') void context.resume()
+      const oscillator = context.createOscillator()
+      const gainNode = context.createGain()
+      oscillator.type = 'sine'
+      oscillator.frequency.value = variant === 'success' ? 880 : 220
+      gainNode.gain.value = 0.05
+      oscillator.connect(gainNode)
+      gainNode.connect(context.destination)
+      oscillator.start()
+      oscillator.stop(context.currentTime + (variant === 'success' ? 0.12 : 0.2))
+    } catch (e) { }
   }, [])
 
   const resolveWeightProduct = useCallback(async (source: any): Promise<WeightProduct | null> => {
@@ -504,21 +363,6 @@ export default function POSPage() {
   })
 
   const products = productsData?.products || []
-  const PRODUCT_ROW_HEIGHT = 104
-  const PRODUCT_OVERSCAN = 6
-  const listTotalHeight = products.length * PRODUCT_ROW_HEIGHT
-  const startIndex = Math.max(
-    0,
-    Math.floor(listScrollTop / PRODUCT_ROW_HEIGHT) - PRODUCT_OVERSCAN
-  )
-  const endIndex = Math.min(
-    products.length,
-    Math.ceil((listScrollTop + listViewportHeight) / PRODUCT_ROW_HEIGHT) + PRODUCT_OVERSCAN
-  )
-  const visibleProducts = useMemo(
-    () => products.slice(startIndex, endIndex),
-    [products, startIndex, endIndex]
-  )
   const suggestedProducts = useMemo(() => {
     const trimmedQuery = searchQuery.trim()
     if (trimmedQuery.length < 2) return []
@@ -531,23 +375,6 @@ export default function POSPage() {
       })
       .slice(0, 6)
   }, [products, searchQuery])
-  const complementaryProducts = useMemo(() => {
-    if (items.length === 0 || products.length === 0) return []
-    const lastItem = items[items.length - 1]
-    const lastProduct = products.find((product) => product.id === lastItem.product_id)
-    const cartIds = new Set(items.map((item) => item.product_id))
-    const category = lastProduct?.category?.toLowerCase()
-
-    const candidates = products.filter((product) => !cartIds.has(product.id))
-    if (!category) {
-      return candidates.slice(0, 6)
-    }
-
-    const sameCategory = candidates.filter(
-      (product) => product.category?.toLowerCase() === category
-    )
-    return (sameCategory.length > 0 ? sameCategory : candidates).slice(0, 6)
-  }, [items, products])
   const { data: lowStockStatuses } = useQuery({
     queryKey: ['inventory', 'low-stock', 'pos', searchQuery, selectedWarehouseId],
     queryFn: () =>
@@ -565,7 +392,7 @@ export default function POSPage() {
   const lowStockIds = useMemo(() => {
     return new Set((lowStockStatuses || []).map((item) => item.product_id))
   }, [lowStockStatuses])
-  const { data: recentSales, isLoading: isRecentSalesLoading } = useQuery({
+  const { data: recentSales } = useQuery({
     queryKey: ['sales', 'recent-products', user?.store_id],
     queryFn: () =>
       salesService.list({
@@ -721,7 +548,6 @@ export default function POSPage() {
         variant_name: variant ? `${variant.variant_type}: ${variant.variant_value}` : null,
       })
     }
-    triggerCartPulse()
     toast.success(`${productName} agregado al carrito`)
   }
 
@@ -761,7 +587,6 @@ export default function POSPage() {
   const handleBarcodeScan = useCallback(async (barcode: string) => {
     // Limpiar búsqueda y quitar foco al instante para feedback visual y que no quede el código en el input
     setSearchQuery('')
-    setShowSuggestions(false)
     searchInputRef.current?.blur()
 
     setLastScannedBarcode(barcode)
@@ -796,7 +621,6 @@ export default function POSPage() {
       }
 
       // Producto encontrado - agregar al carrito
-      setScannerStatus('success')
       if (scannerSoundEnabled) {
         playScanTone('success')
       }
@@ -867,7 +691,6 @@ export default function POSPage() {
         price_per_weight_bs: pricePerWeightBs,
         price_per_weight_usd: pricePerWeightUsd,
       })
-      triggerCartPulse()
       toast.success(`${selectedWeightProduct.name} (${w} ${unitLabel}) agregado al carrito`)
       setSelectedWeightProduct(null)
     } catch (e) {
@@ -925,7 +748,6 @@ export default function POSPage() {
   }
 
   const hasOpenCash = !!currentCashSession?.id
-  const allowDiscounts = !fastCheckoutConfig?.enabled || fastCheckoutConfig?.allow_discounts
   const exchangeRate = bcvRateData?.rate && bcvRateData.rate > 0 ? bcvRateData.rate : 36
 
   /*
@@ -989,9 +811,6 @@ export default function POSPage() {
     }
   }, [items, total, exchangeRate]);
   // #endregion
-  const hasDiscounts = items.some(
-    (item) => (item.discount_usd || 0) > 0 || (item.discount_bs || 0) > 0
-  )
   const totalDiscountUsd = items.reduce((sum, item) => sum + Number(item.discount_usd || 0), 0)
 
   // Porcentaje máximo de descuento permitido (configurable por rol en el futuro)
@@ -1002,24 +821,24 @@ export default function POSPage() {
   /*
   const handleDiscountChange = (item: CartItem, value: string) => {
     setDiscountInputs((prev) => ({ ...prev, [item.id]: value }))
-
+  
     if (value.trim() === '') {
       updateItem(item.id, { discount_usd: 0, discount_bs: 0 })
       return
     }
-
+  
     const parsed = Number(value)
     if (Number.isNaN(parsed) || parsed < 0) {
       return
     }
-
+  
     // Calcular el precio unitario total de la línea
     const lineTotal = Number(item.unit_price_usd || 0) * Number(item.qty || 1)
-
+  
     // Validar que el descuento no exceda el % máximo permitido
     const discountPercent = lineTotal > 0 ? (parsed / lineTotal) * 100 : 0
     const maxDiscountAmount = (lineTotal * MAX_DISCOUNT_PERCENT) / 100
-
+  
     if (discountPercent > MAX_DISCOUNT_PERCENT) {
       toast.error(`El descuento no puede exceder el ${MAX_DISCOUNT_PERCENT}% del precio (máx: $${maxDiscountAmount.toFixed(2)})`)
       // Aplicar el máximo permitido
@@ -1029,7 +848,7 @@ export default function POSPage() {
       setDiscountInputs((prev) => ({ ...prev, [item.id]: maxDiscountAmount.toFixed(2) }))
       return
     }
-
+  
     const roundedUsd = Math.round(parsed * 100) / 100
     const rate = resolveItemRate(item)
     const roundedBs = Math.round(roundedUsd * rate * 100) / 100
@@ -1047,14 +866,6 @@ export default function POSPage() {
   }
   */
 
-  const handleClearDiscounts = () => {
-    // setDiscountInputs({})
-    items.forEach((item) => {
-      if ((item.discount_usd || 0) > 0 || (item.discount_bs || 0) > 0) {
-        updateItem(item.id, { discount_usd: 0, discount_bs: 0 })
-      }
-    })
-  }
 
   // Crear venta
   const createSaleMutation = useMutation({
@@ -1278,836 +1089,77 @@ export default function POSPage() {
     })
   }
 
-  const handleRecentProductClick = async (productId: string) => {
-    const localProduct = products.find((product) => product.id === productId)
-    if (localProduct) {
-      await handleProductClick(localProduct)
-      return
-    }
-
-    try {
-      const fetched = await productsService.getById(productId, user?.store_id)
-      await handleProductClick(fetched)
-    } catch (error) {
-      toast.error('No se pudo cargar el producto seleccionado')
-    }
-  }
-
-  const handleSuggestionSelect = async (
-    product: ProductSearchResponse['products'][number]
-  ) => {
-    await handleProductClick(product)
-    setSearchQuery('')
-    setShowSuggestions(false)
-    setActiveSuggestionIndex(-1)
-  }
-
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showSuggestions || suggestedProducts.length === 0) return
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setActiveSuggestionIndex((prev) => (prev + 1) % suggestedProducts.length)
-    }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setActiveSuggestionIndex((prev) =>
-        prev <= 0 ? suggestedProducts.length - 1 : prev - 1
-      )
-    }
-    if (e.key === 'Enter' && activeSuggestionIndex >= 0) {
-      e.preventDefault()
-      handleSuggestionSelect(suggestedProducts[activeSuggestionIndex])
-    }
-    if (e.key === 'Escape') {
-      setShowSuggestions(false)
-      setActiveSuggestionIndex(-1)
-    }
-  }
-
-  useEffect(() => {
-    const handleShortcuts = (e: KeyboardEvent) => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLSelectElement
-      ) {
-        return
-      }
-
-      if (e.key === '/') {
-        e.preventDefault()
-        searchInputRef.current?.focus()
-        return
-      }
-
-      if (e.key === 'F2') {
-        e.preventDefault()
-        if (items.length > 0 && hasOpenCash) {
-          setShowCheckout(true)
-        } else if (items.length === 0) {
-          toast('Agrega productos al carrito para cobrar', { icon: '🧾' })
-        } else if (!hasOpenCash) {
-          toast.error('No hay caja abierta')
-        }
-        return
-      }
-
-      if (e.altKey && e.key.toLowerCase() === 'l') {
-        e.preventDefault()
-        if (items.length > 0) {
-          setIsClearDialogOpen(true)
-        }
-      }
-    }
-
-    window.addEventListener('keydown', handleShortcuts)
-    return () => window.removeEventListener('keydown', handleShortcuts)
-  }, [hasOpenCash, items.length])
 
   return (
     <div className="h-full max-w-7xl mx-auto">
-      {/* Header - Mobile/Desktop */}
-      <div className="mb-4 sm:mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Punto de Venta</h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">Busca y agrega productos al carrito</p>
-          </div>
-          <ScannerStatusBadge
-            scannerStatus={scannerStatus}
-            scannerSoundEnabled={scannerSoundEnabled}
-            onSoundToggle={() => setScannerSoundEnabled(!scannerSoundEnabled)}
-          />
-        </div>
-        <ScannerBarcodeStrip lastScannedBarcode={lastScannedBarcode} scannerStatus={scannerStatus} />
-      </div>
-
       {/* Layout: Mobile (stacked) / Tablet Landscape (optimizado) / Desktop (side by side) */}
       <div className={cn(
         "grid gap-4 sm:gap-6",
         isTabletLandscape ? "grid-cols-[1.3fr_1fr]" : "grid-cols-1 lg:grid-cols-3"
       )}>
         {/* Búsqueda y Lista de Productos */}
+        {/* Columna Izquierda: Catálogo */}
         <div className={cn(
-          "space-y-3 sm:space-y-4",
+          "flex flex-col h-full overflow-hidden bg-card/30 rounded-2xl border border-border/40 shadow-sm p-4",
           !isTabletLandscape && "lg:col-span-2"
         )}>
-          {/* Barra de búsqueda */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4 sm:w-5 sm:h-5 z-10" />
-            <Input
-              type="text"
-              placeholder="Buscar productos..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value)
-                setShowSuggestions(true)
-                setActiveSuggestionIndex(-1)
-              }}
-              className="pl-9 sm:pl-10 h-11 sm:h-12 text-base sm:text-lg"
-              autoFocus
-              ref={searchInputRef}
-              onFocus={() => setShowSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 120)}
-              onKeyDown={handleSearchKeyDown}
-              role="combobox"
-              aria-expanded={showSuggestions}
-              aria-controls="pos-search-suggestions"
-              data-barcode-passthrough="true"
-            />
-            {showSuggestions && suggestedProducts.length > 0 && (
-              <div
-                id="pos-search-suggestions"
-                role="listbox"
-                className="absolute z-20 mt-2 w-full rounded-lg border border-border bg-background shadow-lg"
-              >
-                {suggestedProducts.map((product, index) => {
-                  const isActive = index === activeSuggestionIndex
-                  return (
-                    <button
-                      key={product.id}
-                      type="button"
-                      role="option"
-                      aria-selected={isActive}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => handleSuggestionSelect(product)}
-                      className={cn(
-                        'flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm',
-                        'hover:bg-accent/50',
-                        isActive && 'bg-accent/60'
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          {product.is_weight_product && (
-                            <Scale className="h-3.5 w-3.5 text-primary" />
-                          )}
-                          <span className="font-medium truncate">{product.name}</span>
-                          {product.category && (
-                            <span className="text-xs text-muted-foreground truncate">
-                              {product.category}
-                            </span>
-                          )}
-                        </div>
-                        {product.barcode && (
-                          <div className="text-[11px] text-muted-foreground/70 font-mono truncate">
-                            {product.barcode}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-right text-xs text-muted-foreground tabular-nums">
-                        {product.is_weight_product && product.price_per_weight_usd ? (
-                          <>
-                            ${Number(product.price_per_weight_usd).toFixed(
-                              getWeightPriceDecimals(product.weight_unit)
-                            )}/{product.weight_unit}
-                          </>
-                        ) : (
-                          <>${Number(product.price_usd).toFixed(2)}</>
-                        )}
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">Atajos:</span>
-            <Badge variant="outline" className="text-[10px] sm:text-xs">
-              / Buscar
-            </Badge>
-            <Badge variant="outline" className="text-[10px] sm:text-xs">
-              F2 Cobrar
-            </Badge>
-            <Badge variant="outline" className="text-[10px] sm:text-xs">
-              Alt + L Limpiar
-            </Badge>
-            {fastCheckoutEnabled && (
-              <Badge variant="secondary" className="text-[10px] sm:text-xs">
-                Teclas rapidas en productos
-              </Badge>
-            )}
-          </div>
-
-          {/* Productos rápidos (solo si está habilitado) */}
-          {fastCheckoutConfig?.enabled && (
-            <QuickProductsGrid onProductClick={handleQuickProductClick} />
-          )}
-
-          <LastSoldProductsCard
-            recentProducts={recentProducts}
-            isLoading={isRecentSalesLoading}
-            onProductClick={handleRecentProductClick}
+          <CatalogHeader
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            scannerStatus={scannerStatus}
+            scannerSoundEnabled={scannerSoundEnabled}
+            onToggleScannerSound={() => setScannerSoundEnabled(!scannerSoundEnabled)}
+            onRefresh={() => {
+              queryClient.invalidateQueries({ queryKey: ['products'] })
+              toast.success('Actualizando productos...')
+            }}
+            isRefetching={isLoading}
           />
 
-          {/* Sugerencias complementarias */}
-          {complementaryProducts.length > 0 && (
-            <Card className="border border-border">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Sugerencias para complementar
-                  </h3>
-                  <span className="text-xs text-muted-foreground">
-                    Basado en el último agregado
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {complementaryProducts.map((product) => (
-                    <Button
-                      key={product.id}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleProductClick(product)}
-                      className="h-8 gap-1.5"
-                    >
-                      {product.is_weight_product && (
-                        <Scale className="w-3.5 h-3.5 text-primary" />
-                      )}
-                      <span className="max-w-[160px] truncate">{product.name}</span>
-                      {product.category && (
-                        <span className="text-[10px] text-muted-foreground">
-                          {product.category}
-                        </span>
-                      )}
-                    </Button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <QuickActions
+            recentProducts={recentProducts}
+            suggestedProducts={suggestedProducts}
+            onProductClick={handleProductClick}
+            onRecentClick={(item) => {
+              const inList = products.find(p => p.id === item.product_id)
+              if (inList) handleProductClick(inList)
+              else setSearchQuery(item.name)
+            }}
+          />
 
-          {/* Lista de productos */}
-          <Card className="border border-border flex flex-col">
-            <CardContent className="p-0 flex-1 min-h-0">
-              {isLoading ? (
-                <div className="p-4 space-y-3">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 border-b border-border last:border-b-0">
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-5 w-3/4" />
-                        <Skeleton className="h-4 w-1/2" />
-                        <Skeleton className="h-3 w-1/4" />
-                      </div>
-                      <div className="text-right space-y-2">
-                        <Skeleton className="h-6 w-20" />
-                        <Skeleton className="h-4 w-16" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : isProductsError ? (
-                <div className="p-6 sm:p-8 text-center">
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
-                      <Search className="w-8 h-8 text-destructive" />
-                    </div>
-                    <p className="text-sm sm:text-base font-medium text-foreground mb-1">
-                      Error al buscar productos
-                    </p>
-                    <p className="text-xs sm:text-sm text-muted-foreground">
-                      Intenta nuevamente o ajusta el filtro de busqueda
-                    </p>
-                  </div>
-                </div>
-              ) : products.length === 0 ? (
-                <div className="p-6 sm:p-8 text-center">
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                      <Search className="w-8 h-8 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm sm:text-base font-medium text-foreground mb-1">
-                      {searchQuery ? 'No se encontraron productos' : 'Busca un producto'}
-                    </p>
-                    <p className="text-xs sm:text-sm text-muted-foreground">
-                      {searchQuery ? 'Intenta con otro término de búsqueda' : 'Escribe para buscar en el inventario'}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="h-[calc(100vh-250px)] sm:h-[calc(100vh-300px)] lg:h-[calc(100vh-350px)]">
-                  <ScrollArea
-                    className="h-full"
-                    viewportRef={listViewportRef}
-                    viewportProps={{
-                      onScroll: (event) => setListScrollTop(event.currentTarget.scrollTop),
-                    }}
-                  >
-                    <div style={{ height: listTotalHeight, position: 'relative' }}>
-                      {visibleProducts.map((product, visibleIndex) => {
-                        const absoluteIndex = startIndex + visibleIndex
-                        const isLowStock = lowStockIds.has(product.id)
+          <ProductCatalog
+            products={products as any[]}
+            isLoading={isLoading}
+            isError={isProductsError}
+            searchQuery={searchQuery}
+            lowStockIds={lowStockIds}
+            onProductClick={handleProductClick}
+          />
 
-                        const CategoryIcon = getCategoryIcon(product.category)
 
-                        return (
-                          <div
-                            key={product.id}
-                            className={cn(
-                              "p-3 sm:p-4 hover:bg-accent/50 active:bg-accent/80 transition-colors cursor-pointer touch-manipulation group absolute left-0 right-0",
-                              absoluteIndex > 0 && "border-t border-border",
-                              isLowStock && "border-l-2 border-warning/60 bg-warning/5"
-                            )}
-                            style={{
-                              WebkitTapHighlightColor: 'transparent',
-                              top: absoluteIndex * PRODUCT_ROW_HEIGHT,
-                              height: PRODUCT_ROW_HEIGHT,
-                            }}
-                            onClick={() => handleProductClick(product)}
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault()
-                                handleProductClick(product)
-                              }
-                            }}
-                          >
-                            <div className="absolute left-0 top-0 bottom-0 w-0 bg-primary opacity-0 group-hover:opacity-100 group-hover:w-0.5 transition-all duration-200" />
-                            <div className="flex items-start justify-between gap-3 min-w-0">
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-sm sm:text-base text-foreground break-words leading-snug group-hover:text-primary transition-colors flex items-center gap-1.5">
-                                  {product.is_weight_product && (
-                                    <Scale className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                                  )}
-                                  {product.category && (
-                                    <CategoryIcon className="w-3.5 h-3.5 text-muted-foreground/70 flex-shrink-0" />
-                                  )}
-                                  {product.name}
-                                  {isLowStock && (
-                                    <Badge className="ml-2 bg-warning/15 text-warning border border-warning/30">
-                                      Stock bajo
-                                    </Badge>
-                                  )}
-                                </h3>
-                                {product.category && (
-                                  <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">
-                                    {product.category}
-                                  </p>
-                                )}
-                                {product.barcode && (
-                                  <p className="text-xs text-muted-foreground/70 mt-0.5 truncate font-mono">
-                                    {product.barcode}
-                                  </p>
-                                )}
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                {product.is_weight_product && product.price_per_weight_usd ? (
-                                  <>
-                                    <Badge variant="secondary" className="mb-1 text-[10px] sm:text-xs">
-                                      Precio por {product.weight_unit || 'kg'}
-                                    </Badge>
-                                    <p className="font-bold text-base sm:text-lg text-foreground">
-                                      ${Number(product.price_per_weight_usd).toFixed(
-                                        getWeightPriceDecimals(product.weight_unit)
-                                      )}/{product.weight_unit}
-                                    </p>
-                                    <p className="text-xs sm:text-sm text-muted-foreground">
-                                      Bs. {Number(product.price_per_weight_bs).toFixed(
-                                        getWeightPriceDecimals(product.weight_unit)
-                                      )}/{product.weight_unit}
-                                    </p>
-                                  </>
-                                ) : (
-                                  <>
-                                    <p className="font-bold text-base sm:text-lg text-foreground">
-                                      ${Number(product.price_usd).toFixed(2)}
-                                    </p>
-                                    <p className="text-xs sm:text-sm text-muted-foreground">
-                                      Bs. {Number(product.price_bs).toFixed(2)}
-                                    </p>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </ScrollArea>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+
         </div>
 
         {/* Carrito - Sticky en desktop/tablet landscape, normal en mobile */}
-        <div className={cn(
-          !isTabletLandscape && "lg:col-span-1"
-        )}>
-          <Card className={cn(
-            "border border-border/40 flex flex-col overflow-hidden min-h-0 bg-gradient-to-br from-card/50 to-card backdrop-blur-sm shadow-xl",
-            isTabletLandscape
-              ? "sticky top-20 h-[calc(100vh-140px)]"
-              : "lg:sticky lg:top-20 h-[calc(100vh-140px)] lg:h-[calc(100vh-12rem)]"
-          )}>
-            {/* Pestañas Premium de ventas simultáneas */}
-            <div className="px-3 pt-3 pb-2 border-b border-border/40 bg-gradient-to-r from-muted/20 via-background to-muted/20 flex-shrink-0">
-              <div className="flex gap-2">
-                {cartSummaries.map((s, i) => {
-                  const isActive = s.id === activeCartId
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => handleSwitchCart(s.id)}
-                      className={cn(
-                        'flex-1 min-w-0 py-2 px-3 rounded-lg text-xs font-semibold transition-all',
-                        isActive
-                          ? 'bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-lg shadow-primary/20'
-                          : 'bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:shadow-md'
-                      )}
-                      title={`Venta ${i + 1}${s.count > 0 ? ` · ${s.count} ítems · $${s.totalUsd.toFixed(2)}` : ''}`}
-                    >
-                      <span className="truncate block">{i + 1}</span>
-                      {s.count > 0 && (
-                        <span className="tabular-nums">({s.count})</span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-            {/* Header Premium del Carrito */}
-            <div className="p-4 sm:p-5 border-b border-border/40 bg-gradient-to-r from-primary/5 via-background to-primary/5 flex-shrink-0">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-primary/10 backdrop-blur-sm">
-                    <ShoppingCart className={cn(
-                      'w-5 h-5 text-primary transition-transform',
-                      cartPulse && 'animate-scale-in'
-                    )} />
-                  </div>
-                  <div>
-                    <h2 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
-                      Carrito
-                      {totalQty > 0 && (
-                        <Badge
-                          variant="secondary"
-                          className={cn('bg-primary/20 text-primary border-primary/30 font-bold transition-transform', cartPulse && 'animate-scale-in')}
-                        >
-                          {totalQty}
-                        </Badge>
-                      )}
-                    </h2>
-                    <p className="text-xs text-muted-foreground">Productos agregados</p>
-                  </div>
-                </div>
-                {items.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsClearDialogOpen(true)}
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10 h-9 px-4 rounded-lg font-medium transition-all"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Limpiar
-                  </Button>
-                )}
-              </div>
-              {/* Badge de promoción activa */}
-              {activePromotions.length > 0 && (
-                <Badge
-                  variant="default"
-                  className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 flex items-center gap-1 text-[10px] sm:text-xs w-fit"
-                >
-                  <Tag className="w-3 h-3" />
-                  {activePromotions.length} Promoción{activePromotions.length !== 1 ? 'es' : ''}
-                </Badge>
-              )}
-            </div>
-            <AlertDialog open={isClearDialogOpen} onOpenChange={setIsClearDialogOpen}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Limpiar carrito</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta accion eliminara todos los productos del carrito. Esta seguro?
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleClearCart}>
-                    Si, limpiar
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-
-            {/* Estado Vacío Premium */}
-            {items.length === 0 ? (
-              <div className="flex-1 p-6 sm:p-8 text-center">
-                <div className="flex flex-col items-center justify-center py-12">
-                  <div className="relative mb-6">
-                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
-                      <ShoppingCart className="w-10 h-10 text-primary" />
-                    </div>
-                    <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
-                      <Plus className="w-4 h-4 text-primary" />
-                    </div>
-                  </div>
-                  <p className="text-base sm:text-lg font-bold text-foreground mb-2">
-                    Carrito vacío
-                  </p>
-                  <p className="text-sm text-muted-foreground max-w-[200px]">
-                    Selecciona productos para comenzar una venta
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex-1 min-h-0">
-                  <ScrollArea className="h-full">
-                    <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
-                      {!allowDiscounts && (
-                        <div className="rounded-md border border-amber-500/70 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                          Descuentos deshabilitados en modo caja rápida.
-                          {hasDiscounts && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="ml-2 h-7 px-2 text-xs"
-                              onClick={handleClearDiscounts}
-                            >
-                              Eliminar descuentos
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                      {items.map((item) => {
-                        const lineSubtotalUsd = item.qty * Number(item.unit_price_usd || 0)
-                        // Recalcular precio en BS usando la tasa actual si es necesario
-                        // Si el precio en BS no coincide con la conversión actual, usar la tasa
-                        const calculatedBsFromUsd = lineSubtotalUsd * exchangeRate
-                        const lineSubtotalBs = item.qty * Number(item.unit_price_bs || 0)
-                        // Si hay diferencia significativa, usar el precio recalculado
-                        const finalLineSubtotalBs = Math.abs(lineSubtotalBs - calculatedBsFromUsd) > 0.01
-                          ? calculatedBsFromUsd
-                          : lineSubtotalBs
-                        const lineDiscountUsd = Number(item.discount_usd || 0)
-                        const lineDiscountBs = Number(item.discount_bs || 0)
-                        // Recalcular descuento en BS si es necesario
-                        const calculatedDiscountBs = lineDiscountUsd * exchangeRate
-                        const finalLineDiscountBs = Math.abs(lineDiscountBs - calculatedDiscountBs) > 0.01
-                          ? calculatedDiscountBs
-                          : lineDiscountBs
-                        const lineTotalUsd = lineSubtotalUsd - lineDiscountUsd
-                        const lineTotalBs = finalLineSubtotalBs - finalLineDiscountBs
-
-                        // #region agent log
-                        // Log para debug: verificar cálculo de línea
-                        // ⚡ FIX: Solo ejecutar en desarrollo local (no en producción)
-                        if (import.meta.env.DEV && window.location.hostname === 'localhost' && items.indexOf(item) === 0) {
-                          fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              location: 'POSPage.tsx:1830',
-                              message: 'Line item calculation',
-                              data: {
-                                product_name: item.product_name,
-                                unit_price_usd: item.unit_price_usd,
-                                unit_price_bs: item.unit_price_bs,
-                                qty: item.qty,
-                                exchangeRate,
-                                lineSubtotalUsd,
-                                lineSubtotalBs,
-                                calculatedBsFromUsd,
-                                finalLineSubtotalBs,
-                                lineDiscountUsd,
-                                lineDiscountBs,
-                                calculatedDiscountBs,
-                                finalLineDiscountBs,
-                                lineTotalUsd,
-                                lineTotalBs,
-                              },
-                              timestamp: Date.now(),
-                              sessionId: 'debug-session',
-                              runId: 'line-calculation',
-                              hypothesisId: 'B',
-                            }),
-                          }).catch(() => { });
-                        }
-                        // #endregion
-                        // const discountInputValue =
-                        //   discountInputs[item.id] ??
-                        //   (lineDiscountUsd > 0 ? lineDiscountUsd.toFixed(2) : '')
-                        const isInvalid = invalidCartProductIds.includes(item.product_id)
-
-                        return (
-                          <SwipeableItem
-                            key={item.id}
-                            onSwipeLeft={isMobile ? () => removeItem(item.id) : undefined}
-                            leftAction={isMobile ? (
-                              <div className="flex items-center gap-2">
-                                <Trash2 className="w-4 h-4" />
-                                <span className="text-sm font-medium">Eliminar</span>
-                              </div>
-                            ) : undefined}
-                            enabled={isMobile}
-                            threshold={80}
-                            className="mb-0"
-                          >
-                            <div
-                              className={cn(
-                                "group grid grid-cols-[auto_1fr_auto_auto_32px] gap-3 p-3 transition-all border-b border-border/40 hover:bg-muted/30 relative items-center",
-                                isInvalid && "bg-destructive/5"
-                              )}
-                            >
-                              {/* 1. Icono de Categoría */}
-                              <div className={cn(
-                                "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors",
-                                isInvalid ? "bg-destructive/10 text-destructive" : "bg-primary/5 text-primary/70 group-hover:bg-primary/10 group-hover:text-primary"
-                              )}>
-                                {item.is_weight_product ? (
-                                  <Scale className="w-5 h-5" />
-                                ) : (
-                                  /* Usamos el helper getCategoryIcon o un icono default */
-                                  (() => {
-                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                    const Icon = getCategoryIcon((item as any).category)
-                                    return <Icon className="w-5 h-5" />
-                                  })()
-                                )}
-                              </div>
-
-                              {/* 2. Info Principal (Truncate Force) */}
-                              <div className="min-w-0 flex flex-col justify-center">
-                                <span className={cn(
-                                  "font-semibold text-sm text-foreground truncate block w-full",
-                                  isInvalid && "text-destructive"
-                                )} title={item.product_name}>
-                                  {item.product_name}
-                                </span>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 truncate">
-                                  <span className="font-mono tabular-nums opacity-80">
-                                    ${Number(item.price_per_weight_usd ?? item.unit_price_usd).toFixed(2)}
-                                  </span>
-                                  {item.is_weight_product && (
-                                    <span className="px-1.5 py-0.5 rounded-md bg-muted text-[10px] font-medium flex-shrink-0">
-                                      /{item.weight_unit || 'kg'}
-                                    </span>
-                                  )}
-                                  {isInvalid && (
-                                    <span className="text-destructive font-medium text-[10px] flex-shrink-0">Inactivo</span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* 3. Stepper de Cantidad */}
-                              {!item.is_weight_product ? (
-                                <div className="flex items-center h-8 bg-background border border-border/60 rounded-full shadow-sm">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleUpdateQty(item.id, item.qty - 1)
-                                    }}
-                                    className="w-7 h-full flex items-center justify-center text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
-                                    disabled={item.qty <= 1}
-                                  >
-                                    <Minus className="w-3 h-3" />
-                                  </button>
-                                  <div className="w-6 text-center font-semibold text-sm tabular-nums border-x border-border/30 h-4 flex items-center justify-center">
-                                    {item.qty}
-                                  </div>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleUpdateQty(item.id, item.qty + 1)
-                                    }}
-                                    className="w-7 h-full flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
-                                  >
-                                    <Plus className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="px-3 py-1.5 rounded-full bg-muted/50 border border-border/40 text-xs font-semibold tabular-nums whitespace-nowrap">
-                                  {item.qty} {item.weight_unit || 'kg'}
-                                </div>
-                              )}
-
-                              {/* 4. Precio Total */}
-                              <div className="text-right flex flex-col justify-center min-w-[60px]">
-                                <span className="font-bold text-sm text-primary tabular-nums tracking-tight">
-                                  ${lineTotalUsd.toFixed(2)}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground/70 font-medium tabular-nums">
-                                  Bs {lineTotalBs.toFixed(2)}
-                                </span>
-                              </div>
-
-                              {/* 5. Acción Eliminar (Grid Column Dedicated) */}
-                              <div className="flex justify-end">
-                                {!isMobile && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      removeItem(item.id)
-                                    }}
-                                    className="w-8 h-8 flex items-center justify-center rounded-full bg-destructive/10 text-destructive opacity-0 group-hover:opacity-100 transition-all hover:bg-destructive hover:text-white hover:scale-110 shadow-sm"
-                                    title="Eliminar producto"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </SwipeableItem>
-                        )
-                      })}
-                    </div>
-                  </ScrollArea>
-                </div>
-
-                {/* Resumen Premium y Checkout */}
-                <div className="flex-shrink-0 p-4 sm:p-5 border-t border-border/40 bg-gradient-to-r from-muted/20 via-background to-muted/20 space-y-4">
-                  {!hasOpenCash && (
-                    <div className="rounded-md border border-amber-500/70 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                      Debes abrir caja para procesar ventas.
-                    </div>
-                  )}
-                  {invalidCartProductIds.length > 0 && (
-                    <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-                      El carrito tiene productos inactivos o eliminados.
-                    </div>
-                  )}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                      <div className="space-y-0.5">
-                        <Label className="text-sm font-medium">Imprimir ticket</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Preguntar antes de gastar tinta/papel
-                        </p>
-                      </div>
-                      <Switch checked={shouldPrint} onCheckedChange={setShouldPrint} />
-                    </div>
-                    {/* Preview de descuento aplicado - Premium */}
-                    {totalDiscountUsd > 0 ? (
-                      <div className="space-y-3 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-primary/5 p-4 shadow-lg">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-muted-foreground">Subtotal:</span>
-                          <span className="text-base font-bold text-foreground tabular-nums">
-                            ${(total.usd + totalDiscountUsd).toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between border-t border-primary/20 pt-2">
-                          <div className="flex items-center gap-2">
-                            <Tag className="w-3.5 h-3.5 text-primary" />
-                            <span className="text-xs font-semibold text-primary">Descuento:</span>
-                            <span className="text-[10px] text-muted-foreground">
-                              ({((totalDiscountUsd / (total.usd + totalDiscountUsd)) * 100).toFixed(1)}%)
-                            </span>
-                          </div>
-                          <span className="text-base font-bold text-primary tabular-nums">
-                            -${totalDiscountUsd.toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between border-t border-primary/20 pt-2">
-                          <span className="text-sm font-bold text-foreground">Total USD:</span>
-                          <span className="text-2xl font-bold text-primary tabular-nums">
-                            ${total.usd.toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-xs text-muted-foreground">Total Bs:</span>
-                          <span className="text-sm font-semibold text-muted-foreground tabular-nums">
-                            Bs. {total.bs.toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 p-4 border border-primary/20 shadow-lg">
-                        <div className="flex justify-between items-baseline mb-2">
-                          <span className="text-sm font-semibold text-muted-foreground">Total USD:</span>
-                          <span className="text-3xl font-bold text-primary tabular-nums">
-                            ${total.usd.toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-baseline">
-                          <span className="text-xs text-muted-foreground">Total Bs:</span>
-                          <span className="text-base font-semibold text-muted-foreground tabular-nums">
-                            Bs. {total.bs.toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    onClick={() => setShowCheckout(true)}
-                    disabled={items.length === 0 || !hasOpenCash || invalidCartProductIds.length > 0}
-                    className="w-full h-12 sm:h-14 text-base sm:text-lg font-bold bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-xl shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 transition-all"
-                    size="lg"
-                  >
-                    <ShoppingCart className="w-5 h-5 mr-2" />
-                    Procesar Venta
-                  </Button>
-                </div>
-              </>
-            )}
-          </Card>
-        </div>
+        {/* Carrito Modular - Reemplaza todo el bloque anterior */}
+        <POSCart
+          items={items}
+          cartSummaries={cartSummaries}
+          activeCartId={activeCartId}
+          total={total}
+          totalDiscountUsd={totalDiscountUsd}
+          hasOpenCash={hasOpenCash}
+          isMobile={isMobile}
+          isTabletLandscape={isTabletLandscape}
+          invalidCartProductIds={invalidCartProductIds}
+          shouldPrint={shouldPrint}
+          setShouldPrint={setShouldPrint}
+          onSwitchCart={handleSwitchCart}
+          onCheckout={() => setShowCheckout(true)}
+          onUpdateQty={handleUpdateQty}
+          onRemoveItem={removeItem}
+          onClearCart={clear}
+        />
       </div>
 
       {/* Modal de checkout - Lazy loaded para reducir bundle inicial */}
