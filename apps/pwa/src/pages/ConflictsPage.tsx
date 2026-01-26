@@ -1,12 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle, XCircle, Clock, Info, GitCompare, Smartphone, Server } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, Info, GitCompare, Smartphone, Server } from 'lucide-react';
 import { db, LocalConflict } from '@/db/database';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { motion, AnimatePresence } from 'framer-motion';
-import { formatDateInAppTimeZone } from '@/lib/timezone';
 import toast from '@/lib/toast';
 
 export default function ConflictsPage() {
@@ -216,4 +215,3 @@ function ConflictCard({
     </Card>
   );
 }
-
