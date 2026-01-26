@@ -1,28 +1,31 @@
-import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
+import { useRef, useCallback, useMemo, lazy, Suspense, useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CatalogHeader } from '@/components/pos/catalog/CatalogHeader'
 import { ProductCatalog } from '@/components/pos/catalog/ProductCatalog'
 import { QuickActions } from '@/components/pos/catalog/QuickActions'
-import { productsService, ProductSearchResponse } from '@/services/products.service'
-import { useBarcodeScanner } from '@/hooks/use-barcode-scanner'
+import { productsService } from '@/services/products.service'
+import { useOnline } from '@/hooks/use-online'
+import { fastCheckoutService, QuickProduct } from '@/services/fast-checkout.service'
+import { printService } from '@/services/print.service'
+import { productSerialsService } from '@/services/product-serials.service'
 import { productsCacheService } from '@/services/products-cache.service'
 import { salesService } from '@/services/sales.service'
 import { exchangeService } from '@/services/exchange.service'
 import { cashService } from '@/services/cash.service'
 import { useCart, CartItem, CART_IDS } from '@/stores/cart.store'
 import { useAuth } from '@/stores/auth.store'
-import { useOnline } from '@/hooks/use-online'
-import { printService } from '@/services/print.service'
-import { fastCheckoutService, QuickProduct } from '@/services/fast-checkout.service'
-import { productVariantsService, ProductVariant } from '@/services/product-variants.service'
-import { productSerialsService } from '@/services/product-serials.service'
-import { warehousesService } from '@/services/warehouses.service'
 import { inventoryService } from '@/services/inventory.service'
+import { warehousesService } from '@/services/warehouses.service'
 import toast from '@/lib/toast'
-// ⚡ OPTIMIZACIÓN: Lazy load del modal grande (1916 líneas) - solo cargar cuando se abre
+// Hooks POS Modularizados
+import { usePOSCartActions } from '@/hooks/pos/usePOSCartActions'
+import { usePOSScanner } from '@/hooks/pos/usePOSScanner'
+import { usePOSHotkeys } from '@/hooks/pos/usePOSHotkeys'
+
+// ⚡ OPTIMIZACIÓN: Lazy load del modal grande
 const CheckoutModal = lazy(() => import('@/components/pos/CheckoutModal'))
 import VariantSelector from '@/components/variants/VariantSelector'
-import WeightInputModal, { WeightProduct } from '@/components/pos/WeightInputModal'
+import WeightInputModal from '@/components/pos/WeightInputModal'
 import POSCart from '@/components/pos/cart/POSCart'
 import { SuccessOverlay } from '@/components/pos/SuccessOverlay'
 import { cn } from '@/lib/utils'
@@ -39,34 +42,20 @@ export default function POSPage() {
   // Modo landscape optimizado para tablets en horizontal
   const isTabletLandscape = isTablet && isLandscape
   const MAX_QTY_PER_PRODUCT = 999
+
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
   const [showCheckout, setShowCheckout] = useState(false)
   const [shouldPrint, setShouldPrint] = useState(false)
-  const [showVariantSelector, setShowVariantSelector] = useState(false)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
-  const [selectedProductForVariant, setSelectedProductForVariant] = useState<{
-    id: string
-    name: string
-  } | null>(null)
+
   const [pendingSerials, setPendingSerials] = useState<Record<string, string[]>>({})
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null)
-  // Estado para productos por peso
-  const [showWeightModal, setShowWeightModal] = useState(false)
-  const [selectedWeightProduct, setSelectedWeightProduct] = useState<WeightProduct | null>(null)
-  // Estado para indicador visual del scanner
-  // Estado para indicador visual del scanner
-  const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null)
-  const [scannerStatus, setScannerStatus] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle')
-  // const [discountInputs, setDiscountInputs] = useState<Record<string, string>>({})
-  /* Se comenta el estado de input de descuentos por desuso en el diseño compacto */
-  const [scannerSoundEnabled, setScannerSoundEnabled] = useState(true)
-  const [successSaleId, setSuccessSaleId] = useState<string | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
   const [invalidCartProductIds, setInvalidCartProductIds] = useState<string[]>([])
+  const [successSaleId, setSuccessSaleId] = useState<string | null>(null)
+  const { isOnline } = useOnline()
   const {
     items,
-    addItem,
     updateItem,
     removeItem,
     clear,
@@ -153,164 +142,53 @@ export default function POSPage() {
     }
   }, [defaultWarehouse, selectedWarehouseId])
 
-  // Audio helper (local definition since it connects to scanner)
-  const playScanTone = useCallback((variant: 'success' | 'error') => {
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
-      if (!AudioContextClass) return
-      if (!audioContextRef.current) audioContextRef.current = new AudioContextClass()
-      const context = audioContextRef.current
-      if (context.state === 'suspended') void context.resume()
-      const oscillator = context.createOscillator()
-      const gainNode = context.createGain()
-      oscillator.type = 'sine'
-      oscillator.frequency.value = variant === 'success' ? 880 : 220
-      gainNode.gain.value = 0.05
-      oscillator.connect(gainNode)
-      gainNode.connect(context.destination)
-      oscillator.start()
-      oscillator.stop(context.currentTime + (variant === 'success' ? 0.12 : 0.2))
-    } catch (e) { }
-  }, [])
+  // --- HOOKS POS MODULARES ---
 
-  const resolveWeightProduct = useCallback(async (source: any): Promise<WeightProduct | null> => {
-    const normalize = (item: any): WeightProduct | null => {
-      const pricePerWeightBs = Number(item.price_per_weight_bs) || 0
-      const pricePerWeightUsd = Number(item.price_per_weight_usd) || 0
-      const hasPrice = pricePerWeightBs > 0 || pricePerWeightUsd > 0
-      if (!hasPrice) return null
+  // 1. Acciones de carrito (validaciones, peso, stock)
+  const {
+    handleProductClick,
+    // Variant Modal State
+    showVariantSelector, setShowVariantSelector,
+    selectedProductForVariant, setSelectedProductForVariant,
+    handleVariantSelect,
+    // Weight Modal State
+    showWeightModal, setShowWeightModal,
+    selectedWeightProduct, setSelectedWeightProduct,
+    handleWeightConfirm
+  } = usePOSCartActions({
+    storeId: user?.store_id,
+    isOnline
+  })
 
-      return {
-        id: item.id,
-        name: item.name,
-        weight_unit: item.weight_unit || 'kg',
-        price_per_weight_bs: pricePerWeightBs,
-        price_per_weight_usd: pricePerWeightUsd,
-        min_weight: item.min_weight != null ? Number(item.min_weight) : null,
-        max_weight: item.max_weight != null ? Number(item.max_weight) : null,
-      }
+  // 2. Scanner (Audio, Búsqueda, Estado)
+  const {
+    scannerStatus,
+    scannerSoundEnabled,
+    setScannerSoundEnabled,
+  } = usePOSScanner({
+    storeId: user?.store_id,
+    onProductFound: async (product) => {
+      // Al encontrar por scanner, limpiamos búsqueda visual
+      setSearchQuery('')
+      searchInputRef.current?.blur()
+      // Y mandamos click de producto
+      await handleProductClick(product)
     }
+  })
 
-    let weightProduct = normalize(source)
-    if (weightProduct && source.weight_unit) {
-      return weightProduct
+  // 3. Hotkeys (Teclado)
+  usePOSHotkeys({
+    searchInputRef,
+    hasOpenCash: !!currentCashSession?.id,
+    onCheckout: () => setShowCheckout(true),
+    onClear: clear,
+    fastCheckoutEnabled: !!fastCheckoutConfig?.enabled,
+    onQuickProduct: (qp) => {
+      if (qp.product) handleProductClick(qp.product)
     }
+  })
 
-    try {
-      const fresh = await productsService.getById(source.id, user?.store_id)
-      weightProduct = normalize(fresh)
-    } catch (error) {
-      // Silenciar errores y usar lo que ya tenemos
-    }
-
-    return weightProduct
-  }, [user?.store_id])
-
-  // Handler para productos rápidos
-  const handleQuickProductClick = useCallback(async (quickProduct: QuickProduct) => {
-    if (!quickProduct.product) {
-      toast.error('Producto no encontrado')
-      return
-    }
-
-    if (quickProduct.product.is_weight_product) {
-      const weightProduct = await resolveWeightProduct(quickProduct.product)
-      if (!weightProduct) {
-        toast.error('Este producto por peso no tiene precio configurado')
-        return
-      }
-      setSelectedWeightProduct(weightProduct)
-      setShowWeightModal(true)
-      return
-    }
-
-    // Verificar si el producto tiene variantes activas
-    try {
-      const variants = await productVariantsService.getVariantsByProduct(quickProduct.product_id)
-      const activeVariants = variants.filter((v) => v.is_active)
-
-      if (activeVariants.length > 0) {
-        // Mostrar selector de variantes
-        setSelectedProductForVariant({
-          id: quickProduct.product_id,
-          name: quickProduct.product.name,
-        })
-        setShowVariantSelector(true)
-      } else {
-        // Agregar directamente sin variante
-        const existingItem = items.find((item) => item.product_id === quickProduct.product_id)
-
-        if (existingItem) {
-          // Si existe, aumentar cantidad
-          updateItem(existingItem.id, { qty: existingItem.qty + 1 })
-          toast.success(`${quickProduct.product.name} agregado al carrito`)
-        } else {
-          // Si no existe, agregar nuevo item
-          addItem({
-            product_id: quickProduct.product_id,
-            product_name: quickProduct.product.name,
-            qty: 1,
-            unit_price_bs: Number(quickProduct.product.price_bs),
-            unit_price_usd: Number(quickProduct.product.price_usd),
-          })
-          toast.success(`${quickProduct.product.name} agregado al carrito`)
-        }
-      }
-    } catch (error) {
-      // Si hay error, agregar sin variante
-      const existingItem = items.find((item) => item.product_id === quickProduct.product_id)
-
-      if (existingItem) {
-        updateItem(existingItem.id, { qty: existingItem.qty + 1 })
-        toast.success(`${quickProduct.product.name} agregado al carrito`)
-      } else {
-        addItem({
-          product_id: quickProduct.product_id,
-          product_name: quickProduct.product.name,
-          qty: 1,
-          unit_price_bs: Number(quickProduct.product.price_bs),
-          unit_price_usd: Number(quickProduct.product.price_usd),
-        })
-        toast.success(`${quickProduct.product.name} agregado al carrito`)
-      }
-    }
-  }, [addItem, items, resolveWeightProduct, updateItem])
-
-  const fastCheckoutEnabled = Boolean(fastCheckoutConfig?.enabled)
-
-  // Soporte para teclas de acceso rápido
-  useEffect(() => {
-    if (!fastCheckoutEnabled) return
-
-    const handleKeyPress = async (e: KeyboardEvent) => {
-      // Ignorar si está escribiendo en un input
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLSelectElement
-      ) {
-        return
-      }
-
-      const key = e.key.toUpperCase()
-
-      try {
-        const quickProduct = await fastCheckoutService.getQuickProductByKey(key)
-        if (quickProduct && quickProduct.is_active) {
-          handleQuickProductClick(quickProduct)
-        }
-      } catch (error) {
-        // Silenciar errores, simplemente no hacer nada si no hay producto para esa tecla
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyPress)
-    return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [fastCheckoutEnabled, handleQuickProductClick])
-
-  const { isOnline } = useOnline(); // Usar hook más confiable
-  const [initialData, setInitialData] = useState<ProductSearchResponse | undefined>(undefined);
-
+  const [initialData, setInitialData] = useState<ProductSearchResponse | undefined>(undefined)
   // Cargar desde IndexedDB al montar o cuando cambia la búsqueda
   useEffect(() => {
     if (user?.store_id && (searchQuery.length >= 2 || searchQuery.length === 0)) {
@@ -368,7 +246,7 @@ export default function POSPage() {
     if (trimmedQuery.length < 2) return []
     const normalized = trimmedQuery.toLowerCase()
     return products
-      .filter((product) => {
+      .filter((product: any) => {
         const nameMatch = product.name?.toLowerCase().includes(normalized)
         const barcodeMatch = product.barcode?.includes(trimmedQuery)
         return nameMatch || barcodeMatch
@@ -472,244 +350,6 @@ export default function POSPage() {
     void prefetchFrequentProducts()
   }, [fastCheckoutConfig?.enabled, isOnline, queryClient, recentSales, user?.store_id])
 
-  const handleAddToCart = async (product: any, variant: ProductVariant | null = null) => {
-    // Determinar precios (usar precio de variante si existe, sino precio del producto)
-    const priceBs = variant?.price_bs
-      ? Number(variant.price_bs)
-      : Number(product.price_bs)
-    const priceUsd = variant?.price_usd
-      ? Number(variant.price_usd)
-      : Number(product.price_usd)
-
-    // Construir nombre con variante si existe
-    const productName = variant
-      ? `${product.name} (${variant.variant_type}: ${variant.variant_value})`
-      : product.name
-
-    const existingItem = items.find(
-      (item) =>
-        item.product_id === product.id &&
-        (item.variant_id ?? null) === (variant?.id ?? null)
-    )
-
-    // Calcular cantidad actual en carrito para este producto
-    const currentQtyInCart = existingItem ? existingItem.qty : 0
-    const newQty = currentQtyInCart + 1
-
-    if (!product.is_weight_product && newQty > MAX_QTY_PER_PRODUCT) {
-      toast.error(`Cantidad máxima por producto: ${MAX_QTY_PER_PRODUCT}`)
-      return
-    }
-
-    // Validar stock disponible (solo si está online, offline permitir agregar)
-    if (isOnline && !product.is_weight_product) {
-      try {
-        const stockInfo = await inventoryService.getProductStock(product.id)
-        const availableStock = stockInfo.current_stock
-
-        if (newQty > availableStock) {
-          if (availableStock <= 0) {
-            toast.error(`${product.name} no tiene stock disponible`, {
-              icon: '📦',
-              duration: 3000,
-            })
-          } else {
-            toast.error(
-              `Stock insuficiente. Disponible: ${availableStock}, En carrito: ${currentQtyInCart}`,
-              { icon: '⚠️', duration: 4000 }
-            )
-          }
-          return
-        }
-
-        // Advertir si el stock quedará bajo después de esta venta
-        if (availableStock - newQty <= (product.low_stock_threshold || 5) && availableStock - newQty > 0) {
-          toast(`Stock bajo: quedarán ${availableStock - newQty} unidades`, {
-            icon: '📉',
-            duration: 2000,
-          })
-        }
-      } catch (error) {
-        // Si falla la verificación de stock, permitir agregar (mejor UX)
-        console.warn('[POS] No se pudo verificar stock:', error)
-      }
-    }
-
-    if (existingItem) {
-      updateItem(existingItem.id, { qty: existingItem.qty + 1 })
-    } else {
-      addItem({
-        product_id: product.id,
-        product_name: productName,
-        qty: 1,
-        unit_price_bs: priceBs,
-        unit_price_usd: priceUsd,
-        variant_id: variant?.id || null,
-        variant_name: variant ? `${variant.variant_type}: ${variant.variant_value}` : null,
-      })
-    }
-    toast.success(`${productName} agregado al carrito`)
-  }
-
-  const handleProductClick = async (product: any) => {
-    // Verificar si es un producto por peso
-    if (product.is_weight_product) {
-      const weightProduct = await resolveWeightProduct(product)
-      if (!weightProduct) {
-        toast.error('Este producto por peso no tiene precio configurado')
-        return
-      }
-      setSelectedWeightProduct(weightProduct)
-      setShowWeightModal(true)
-      return
-    }
-
-    // Verificar si el producto tiene variantes activas
-    try {
-      const variants = await productVariantsService.getVariantsByProduct(product.id)
-      const activeVariants = variants.filter((v) => v.is_active)
-
-      if (activeVariants.length > 0) {
-        // Mostrar selector de variantes
-        setSelectedProductForVariant({ id: product.id, name: product.name })
-        setShowVariantSelector(true)
-      } else {
-        // Agregar directamente sin variante
-        handleAddToCart(product, null)
-      }
-    } catch (error) {
-      // Si hay error, agregar sin variante
-      handleAddToCart(product, null)
-    }
-  }
-
-  // Handler para escaneo de código de barras
-  const handleBarcodeScan = useCallback(async (barcode: string) => {
-    // Limpiar búsqueda y quitar foco al instante para feedback visual y que no quede el código en el input
-    setSearchQuery('')
-    searchInputRef.current?.blur()
-
-    setLastScannedBarcode(barcode)
-    setScannerStatus('scanning')
-
-    try {
-      const result = await productsService.search({
-        q: barcode,
-        is_active: true,
-        limit: 5,
-      }, user?.store_id)
-
-      // Buscar coincidencia exacta por barcode
-      const product = result.products.find(
-        (p) => p.barcode?.toLowerCase() === barcode.toLowerCase()
-      )
-
-      if (!product) {
-        setScannerStatus('error')
-        toast.error(`Producto no encontrado: ${barcode}`, {
-          icon: '🔍',
-          duration: 3000,
-        })
-        if (scannerSoundEnabled) {
-          playScanTone('error')
-        }
-        setTimeout(() => {
-          setScannerStatus('idle')
-          setLastScannedBarcode(null)
-        }, 2000)
-        return
-      }
-
-      // Producto encontrado - agregar al carrito
-      if (scannerSoundEnabled) {
-        playScanTone('success')
-      }
-
-      await handleProductClick(product)
-
-      // Limpiar estado después de agregar
-      setTimeout(() => {
-        setScannerStatus('idle')
-        setLastScannedBarcode(null)
-      }, 1500)
-    } catch (error) {
-      console.error('[POS] Error al buscar producto por código de barras:', error)
-      setScannerStatus('error')
-      toast.error('Error al buscar producto')
-      setTimeout(() => {
-        setScannerStatus('idle')
-        setLastScannedBarcode(null)
-      }, 2000)
-    }
-  }, [user?.store_id, handleProductClick, scannerSoundEnabled, playScanTone])
-
-  // Integrar scanner de código de barras (siempre activo: busca, carrito, etc.)
-  useBarcodeScanner({
-    onScan: handleBarcodeScan,
-    enabled: true,
-    minLength: 4,
-    maxLength: 50,
-    maxIntervalMs: 100, // Tolerar escáneres más lentos; siempre interceptar en inputs
-  })
-
-  // Handler para confirmar peso de producto
-  const handleWeightConfirm = (weightValue: number) => {
-    if (!selectedWeightProduct) {
-      toast.error('Producto no seleccionado')
-      return
-    }
-
-    const nBs = Number(selectedWeightProduct.price_per_weight_bs)
-    const nUsd = Number(selectedWeightProduct.price_per_weight_usd)
-    const pricePerWeightBs = Number.isFinite(nBs) ? nBs : 0
-    const pricePerWeightUsd = Number.isFinite(nUsd) ? nUsd : 0
-
-    if (pricePerWeightBs <= 0 && pricePerWeightUsd <= 0) {
-      toast.error('Este producto por peso no tiene precio configurado')
-      return
-    }
-
-    const w = Number.isFinite(weightValue) && weightValue > 0 ? weightValue : 0
-    if (w <= 0) {
-      toast.error('El peso debe ser mayor a 0')
-      return
-    }
-
-    const unit = selectedWeightProduct.weight_unit || 'kg'
-    const unitLabel = unit === 'g' ? 'g' : unit === 'kg' ? 'kg' : unit === 'lb' ? 'lb' : 'oz'
-
-    try {
-      addItem({
-        product_id: selectedWeightProduct.id,
-        product_name: `${selectedWeightProduct.name} (${w} ${unitLabel})`,
-        qty: w,
-        unit_price_bs: pricePerWeightBs,
-        unit_price_usd: pricePerWeightUsd,
-        is_weight_product: true,
-        weight_unit: selectedWeightProduct.weight_unit,
-        weight_value: w,
-        price_per_weight_bs: pricePerWeightBs,
-        price_per_weight_usd: pricePerWeightUsd,
-      })
-      toast.success(`${selectedWeightProduct.name} (${w} ${unitLabel}) agregado al carrito`)
-      setSelectedWeightProduct(null)
-    } catch (e) {
-      console.error('[POS] Error al agregar producto por peso:', e)
-      toast.error('No se pudo agregar al carrito. Intenta de nuevo.')
-      throw e
-    }
-  }
-
-  const handleVariantSelect = (variant: ProductVariant | null) => {
-    if (selectedProductForVariant) {
-      const product = products.find((p) => p.id === selectedProductForVariant.id)
-      if (product) {
-        handleAddToCart(product, variant)
-      }
-    }
-    setShowVariantSelector(false)
-    setSelectedProductForVariant(null)
-  }
 
   const handleUpdateQty = async (itemId: string, newQty: number) => {
     if (newQty <= 0) {
@@ -962,6 +602,7 @@ export default function POSPage() {
       const message = error.response?.data?.message || error.message || 'Error al procesar la venta'
       toast.error(message)
     },
+    // onSuccess se encargara de limpiar y mostrar exito
   })
 
   const handleCheckout = async (checkoutData: {
@@ -1120,8 +761,8 @@ export default function POSPage() {
             recentProducts={recentProducts}
             suggestedProducts={suggestedProducts}
             onProductClick={handleProductClick}
-            onRecentClick={(item) => {
-              const inList = products.find(p => p.id === item.product_id)
+            onRecentClick={(item: any) => {
+              const inList = products.find((p: any) => p.id === item.product_id)
               if (inList) handleProductClick(inList)
               else setSearchQuery(item.name)
             }}
