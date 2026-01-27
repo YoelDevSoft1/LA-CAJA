@@ -217,17 +217,25 @@ class SyncServiceClass {
     // Iniciar sincronización periódica
     this.startPeriodicSync();
 
+    // ✅ OFFLINE-FIRST: Iniciar watchdog de red (fallback por si el evento 'online' falla)
+    setInterval(() => {
+      if (navigator.onLine && this.syncQueue && this.syncQueue.getStats().pending > 0) {
+        this.logger.debug('Watchdog: Conexión detectada y hay eventos pendientes → Forzando sync');
+        this.syncQueue.flush().catch(() => { });
+      }
+    }, 5000); // Verificar cada 5 segundos
+
     this.isInitialized = true;
     this.logger.info('Servicio de sincronización inicializado correctamente');
 
     // Si había un evento online pendiente antes de inicializar, sincronizar ahora
-    if (this.pendingSyncOnInit && navigator.onLine && this.syncQueue) {
-      this.logger.info('Ejecutando sincronización pendiente después de inicializar');
+    if ((this.pendingSyncOnInit || navigator.onLine) && this.syncQueue && this.syncQueue.getStats().pending > 0) {
+      this.logger.info('Sincronización inicial (o pendiente) requerida');
       this.pendingSyncOnInit = false;
       this.syncQueue.flush().then(() => {
-        this.logger.info('Sincronización pendiente completada');
+        this.logger.info('Sincronización inicial completada');
       }).catch((err: unknown) => {
-        this.logger.warn('Error en sincronización pendiente (se reintentará)', { error: err });
+        this.logger.warn('Error en sincronización inicial (se reintentará)', { error: err });
       });
     }
 

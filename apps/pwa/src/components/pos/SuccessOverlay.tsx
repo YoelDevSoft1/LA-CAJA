@@ -132,14 +132,20 @@ export function SuccessOverlay({
                             </h2>
 
                             <div className="flex items-center justify-center gap-2 mt-2">
-                                <span className="px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-sm font-bold tracking-wider shadow-sm">
-                                    {/* Extraer solo el ID del mensaje si viene completo */}
-                                    {message?.includes('#') ? message.split('#')[1].split(' ')[0] : 'PROCESADO'}
+                                <span className={cn(
+                                    "px-3 py-1 rounded-full text-sm font-bold tracking-wider shadow-sm border",
+                                    message?.includes('OFFLINE')
+                                        ? "bg-amber-50 border-amber-100 text-amber-700"
+                                        : "bg-blue-50 border-blue-100 text-blue-700"
+                                )}>
+                                    {message?.includes('OFFLINE') ? 'ALMACENADO OFFLINE' : (message?.includes('#') ? message.split('#')[1].split(' ')[0] : 'PROCESADO')}
                                 </span>
                             </div>
 
                             <p className="mt-4 text-sm text-slate-500 font-medium leading-relaxed">
-                                La transacción ha sido registrada correctamente en el sistema.
+                                {message?.includes('OFFLINE')
+                                    ? 'La venta se ha guardado localmente y se sincronizará cuando retorne la conexión.'
+                                    : 'La transacción ha sido registrada correctamente en el sistema.'}
                             </p>
                         </motion.div>
 

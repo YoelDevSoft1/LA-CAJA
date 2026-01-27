@@ -857,7 +857,7 @@ export default function POSPage() {
       <SuccessOverlay
         isOpen={!!successSaleId}
         onAnimationComplete={() => setSuccessSaleId(null)}
-        message={`Venta #${successSaleId} procesada exitosamente`}
+        message={isOnline ? `Venta #${successSaleId} procesada exitosamente` : `Venta #${successSaleId} almacenada en OFFLINE`}
       />
     </div>
   )

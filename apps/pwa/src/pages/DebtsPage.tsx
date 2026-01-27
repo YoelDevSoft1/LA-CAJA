@@ -6,7 +6,6 @@ import {
   DollarSign,
   AlertCircle,
   CheckCircle,
-  Clock,
   TrendingUp,
   CreditCard
 } from 'lucide-react'
@@ -22,13 +21,6 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
   Table,
   TableBody,
   TableCell,
@@ -37,6 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 
 type ViewMode = 'by_customer' | 'all_debts'
 type StatusFilter = 'all' | DebtStatus
@@ -122,33 +115,53 @@ export default function DebtsPage() {
   const stats = useMemo(() => {
     let totalDebt = 0
     let totalPaid = 0
+    let totalPending = 0
     let openCount = 0
     let partialCount = 0
     let paidCount = 0
+    let overdueCount = 0
+    let overdueAmount = 0
+    const customersWithDebtSet = new Set<string>()
 
     allDebts.forEach((debt) => {
       const calc = calculateDebtTotals(debt)
       totalDebt += Number(debt.amount_usd)
       totalPaid += calc.total_paid_usd
+      const pending = calc.remaining_usd
+      totalPending += pending
 
       if (debt.status === 'open') openCount++
       else if (debt.status === 'partial') partialCount++
       else if (debt.status === 'paid') paidCount++
+
+      if (debt.status !== 'paid') {
+        customersWithDebtSet.add(debt.customer_id)
+
+        // Calcular vencido (> 30 días)
+        const debtDate = new Date(debt.created_at)
+        const diffTime = Math.abs(new Date().getTime() - debtDate.getTime())
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+        if (diffDays > 30) {
+          overdueAmount += pending
+          overdueCount++
+        }
+      }
     })
 
     return {
       totalDebt,
       totalPaid,
-      totalPending: totalDebt - totalPaid,
+      totalPending,
       openCount,
       partialCount,
       paidCount,
       totalCount: allDebts.length,
-      customersWithDebt: debtsByCustomer.filter(({ debts }) =>
-        debts.some((d) => d.status !== 'paid')
-      ).length,
+      customersWithDebt: customersWithDebtSet.size,
+      overdueAmount,
+      overdueCount
     }
-  }, [allDebts, debtsByCustomer])
+  }, [allDebts])
 
   const handleViewDebt = (debt: Debt) => {
     setSelectedDebt(debt)
@@ -197,125 +210,102 @@ export default function DebtsPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Smart Stats Dashboard */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4 sm:mb-6">
-        <Card className="border border-border">
+        <Card className="border border-indigo-100 bg-indigo-50/50">
           <CardContent className="p-3 sm:p-4">
-          <div className="flex items-center justify-between">
-            <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Total Fiado</p>
-                <p className="text-lg sm:text-2xl font-bold text-foreground">
-                ${stats.totalDebt.toFixed(2)}
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider">Dinero en la Calle</span>
+              <div className="flex items-center justify-between">
+                <span className="text-2xl font-bold text-foreground">${stats.totalPending.toFixed(2)}</span>
+                <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                  <TrendingUp className="h-4 w-4 text-indigo-600" />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {stats.customersWithDebt} clientes activos
               </p>
             </div>
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-            </div>
-          </div>
           </CardContent>
         </Card>
 
-        <Card className="border border-border">
+        <Card className="border border-orange-100 bg-orange-50/50">
           <CardContent className="p-3 sm:p-4">
-          <div className="flex items-center justify-between">
-            <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Pendiente</p>
-              <p className="text-lg sm:text-2xl font-bold text-orange-600">
-                ${stats.totalPending.toFixed(2)}
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-semibold text-orange-600 uppercase tracking-wider">Vencido {'>'} 30 Días</span>
+              <div className="flex items-center justify-between">
+                <span className="text-2xl font-bold text-orange-700">${stats.overdueAmount.toFixed(2)}</span>
+                <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center">
+                  <AlertCircle className="h-4 w-4 text-orange-600" />
+                </div>
+              </div>
+              <p className="text-xs text-orange-600/80 mt-1 font-medium">
+                {stats.overdueCount} facturas críticas
               </p>
             </div>
-            <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-              <AlertCircle className="w-5 h-5 text-orange-600" />
-            </div>
-          </div>
           </CardContent>
         </Card>
 
-        <Card className="border border-border">
+        <Card className="border border-emerald-100 bg-emerald-50/50">
           <CardContent className="p-3 sm:p-4">
-          <div className="flex items-center justify-between">
-            <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Recuperado</p>
-              <p className="text-lg sm:text-2xl font-bold text-green-600">
-                ${stats.totalPaid.toFixed(2)}
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Recuperado Hoy</span>
+              <div className="flex items-center justify-between">
+                <span className="text-2xl font-bold text-emerald-700">$0.00</span>
+                <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <CheckCircle className="h-4 w-4 text-emerald-600" />
+                </div>
+              </div>
+              <p className="text-xs text-emerald-600/80 mt-1">
+                0 pagos recibidos
               </p>
             </div>
-            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-            </div>
-          </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-border">
-          <CardContent className="p-3 sm:p-4">
-          <div className="flex items-center justify-between">
-            <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Clientes con Deuda</p>
-                <p className="text-lg sm:text-2xl font-bold text-foreground">
-                {stats.customersWithDebt}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-              <Users className="w-5 h-5 text-purple-600" />
-            </div>
-          </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
-      <Card className="mb-4 sm:mb-6 border border-border">
-        <CardContent className="p-3 sm:p-4 space-y-3 sm:space-y-4">
-        <div className="flex flex-col sm:flex-row gap-3">
-          {/* Search */}
-          <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4 sm:w-5 sm:h-5 z-10" />
-              <Input
-              type="text"
-              placeholder="Buscar por nombre, cédula o teléfono..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 sm:pl-10 h-11 sm:h-12 text-base"
-            />
-          </div>
-
-          {/* Status Filter */}
-          <div className="flex items-center gap-2">
-              <Select
-              value={statusFilter}
-                onValueChange={(value) => setStatusFilter(value as StatusFilter)}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Filtrar por estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los estados</SelectItem>
-                  <SelectItem value="open">Pendientes</SelectItem>
-                  <SelectItem value="partial">Pago Parcial</SelectItem>
-                  <SelectItem value="paid">Pagados</SelectItem>
-                </SelectContent>
-              </Select>
-          </div>
+      {/* Advanced Filters */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6 sticky top-0 z-10 bg-background/95 backdrop-blur py-2">
+        {/* Search */}
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Input
+            type="text"
+            placeholder="Buscar por cliente..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 h-10 w-full"
+          />
         </div>
 
-        {/* Status Pills */}
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-100">
-            <AlertCircle className="w-3 h-3 mr-1" />
-            {stats.openCount} Pendientes
-            </Badge>
-            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-100">
-            <Clock className="w-3 h-3 mr-1" />
-            {stats.partialCount} Parciales
-            </Badge>
-            <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200 hover:bg-green-100">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            {stats.paidCount} Pagados
-            </Badge>
+        {/* Quick Chips */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+          <Button
+            variant={statusFilter === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setStatusFilter('all')}
+            className="rounded-full h-8"
+          >
+            Todos
+          </Button>
+          <Button
+            variant={statusFilter === 'open' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setStatusFilter('open')}
+            className={cn("rounded-full h-8", statusFilter === 'open' ? 'bg-orange-600 hover:bg-orange-700' : 'text-orange-600 border-orange-200')}
+          >
+            Pendientes
+          </Button>
+          <Button
+            variant={statusFilter === 'paid' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setStatusFilter('paid')}
+            className={cn("rounded-full h-8", statusFilter === 'paid' ? 'bg-emerald-600 hover:bg-emerald-700' : 'text-emerald-600 border-emerald-200')}
+          >
+            Pagados
+          </Button>
         </div>
-        </CardContent>
-      </Card>
+      </div>
 
       {/* View Mode Tabs */}
       <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)} className="w-full">
@@ -330,181 +320,181 @@ export default function DebtsPage() {
           </TabsTrigger>
         </TabsList>
 
-      {/* Content */}
-      {isLoading ? (
+        {/* Content */}
+        {isLoading ? (
           <Card className="border border-border">
             <CardContent className="p-8 text-center">
               <div className="flex flex-col items-center gap-3">
                 <Skeleton className="h-12 w-12 rounded-full" />
                 <Skeleton className="h-4 w-32" />
-        </div>
+              </div>
             </CardContent>
           </Card>
         ) : (
           <>
             <TabsContent value="by_customer" className="mt-0">
-            {/* Vista por cliente */}
-        <div className="space-y-3">
-          {(filteredData as { customer: Customer; debts: Debt[] }[]).length === 0 ? (
-                <Card className="border border-border">
-                  <CardContent className="p-8 text-center">
-                    <div className="flex flex-col items-center justify-center py-8">
-                      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                        <Users className="w-8 h-8 text-muted-foreground" />
+              {/* Vista por cliente */}
+              <div className="space-y-3">
+                {(filteredData as { customer: Customer; debts: Debt[] }[]).length === 0 ? (
+                  <Card className="border border-border">
+                    <CardContent className="p-8 text-center">
+                      <div className="flex flex-col items-center justify-center py-8">
+                        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                          <Users className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                        <p className="text-sm sm:text-base font-medium text-foreground mb-1">
+                          {searchQuery ? 'No se encontraron clientes' : 'No hay deudas registradas'}
+                        </p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">
+                          {searchQuery
+                            ? 'Intenta con otro término de búsqueda'
+                            : 'Las ventas FIAO aparecerán aquí automáticamente'}
+                        </p>
                       </div>
-                      <p className="text-sm sm:text-base font-medium text-foreground mb-1">
-                {searchQuery ? 'No se encontraron clientes' : 'No hay deudas registradas'}
-              </p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">
-                {searchQuery
-                  ? 'Intenta con otro término de búsqueda'
-                  : 'Las ventas FIAO aparecerán aquí automáticamente'}
-              </p>
-            </div>
-                  </CardContent>
-                </Card>
-          ) : (
-            (filteredData as { customer: Customer; debts: Debt[] }[]).map(({ customer, debts }) => (
-              <CustomerDebtCard
-                key={customer.id}
-                customer={customer}
-                debts={debts}
-                onViewDebt={handleViewDebt}
-                onAddPayment={handleAddPayment}
-                onPaymentSuccess={handlePaymentSuccess}
-              />
-            ))
-          )}
-        </div>
-          </TabsContent>
-
-          <TabsContent value="all_debts" className="mt-0">
-            {/* Vista de todas las deudas */}
-            <Card className="border border-border">
-              <CardContent className="p-0">
-                {(() => {
-                  // Obtener el array de deudas filtrado para la vista "all_debts"
-                  const debtsList: Debt[] = viewMode === 'all_debts' 
-                    ? (filteredData as Debt[]) || []
-                    : []
-                  
-                  if (!Array.isArray(debtsList) || debtsList.length === 0) {
-                    return (
-            <div className="p-8 text-center">
-                        <div className="flex flex-col items-center justify-center py-8">
-                          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                            <CreditCard className="w-8 h-8 text-muted-foreground" />
-                          </div>
-                          <p className="text-sm sm:text-base font-medium text-foreground mb-1">
-                {searchQuery ? 'No se encontraron deudas' : 'No hay deudas registradas'}
-              </p>
-                          <p className="text-xs sm:text-sm text-muted-foreground">
-                {searchQuery
-                  ? 'Intenta con otro término de búsqueda'
-                  : 'Las ventas FIAO aparecerán aquí automáticamente'}
-              </p>
-            </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  (filteredData as { customer: Customer; debts: Debt[] }[]).map(({ customer, debts }) => (
+                    <CustomerDebtCard
+                      key={customer.id}
+                      customer={customer}
+                      debts={debts}
+                      onViewDebt={handleViewDebt}
+                      onAddPayment={handleAddPayment}
+                      onPaymentSuccess={handlePaymentSuccess}
+                    />
+                  ))
+                )}
               </div>
-                    )
-                  }
-                  return (
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Cliente</TableHead>
-                            <TableHead className="hidden md:table-cell">Fecha</TableHead>
-                            <TableHead className="text-right">Monto</TableHead>
-                            <TableHead className="text-right">Pagado</TableHead>
-                            <TableHead className="text-center">Progreso</TableHead>
-                            <TableHead className="text-center">Estado</TableHead>
-                            <TableHead className="text-right">Acciones</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {debtsList.map((debt) => {
-                const calc = calculateDebtTotals(debt)
-                          const paymentPercentage = getPaymentPercentage(debt)
-                const statusConfig = {
-                            open: { label: 'Pendiente', variant: 'outline' as const, className: 'bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-100' },
-                            partial: { label: 'Parcial', variant: 'outline' as const, className: 'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-100' },
-                            paid: { label: 'Pagado', variant: 'outline' as const, className: 'bg-green-100 text-green-800 border-green-200 hover:bg-green-100' },
-                }
-                const status = statusConfig[debt.status] || statusConfig.open
+            </TabsContent>
 
-                return (
-                            <TableRow key={debt.id} className="hover:bg-muted/50">
-                              <TableCell>
-                                <div>
-                                  <p className="font-semibold text-foreground truncate">
-                        {debt.customer?.name || 'Cliente desconocido'}
-                      </p>
-                      {debt.customer?.document_id && (
-                                    <p className="text-xs text-muted-foreground">{debt.customer.document_id}</p>
-                      )}
-                    </div>
-                              </TableCell>
-                              <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                      {new Date(debt.created_at).toLocaleDateString('es-VE')}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <p className="font-semibold text-foreground">
-                        ${Number(debt.amount_usd).toFixed(2)}
-                      </p>
-                              </TableCell>
-                              <TableCell className="text-right">
-                      <p className="font-semibold text-green-600">
-                        ${calc.total_paid_usd.toFixed(2)}
-                      </p>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <div className="flex flex-col items-center gap-1">
-                                  <Progress value={paymentPercentage} className="w-16 h-2" />
-                                  <span className="text-xs text-muted-foreground">
-                                    {paymentPercentage.toFixed(0)}%
-                      </span>
-                    </div>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Badge variant={status.variant} className={status.className}>
-                                  {status.label}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                        onClick={() => handleViewDebt(debt)}
-                                    className="h-8 w-8"
-                        title="Ver detalle"
-                      >
-                        <DollarSign className="w-4 h-4" />
-                                  </Button>
-                      {debt.status !== 'paid' && (
-                                    <Button
-                                      size="sm"
-                          onClick={() => handleAddPayment(debt)}
-                                      className="bg-success hover:bg-success/90 text-white"
-                        >
-                          Abonar
-                                    </Button>
-                      )}
-                    </div>
-                              </TableCell>
+            <TabsContent value="all_debts" className="mt-0">
+              {/* Vista de todas las deudas */}
+              <Card className="border border-border">
+                <CardContent className="p-0">
+                  {(() => {
+                    // Obtener el array de deudas filtrado para la vista "all_debts"
+                    const debtsList: Debt[] = viewMode === 'all_debts'
+                      ? (filteredData as Debt[]) || []
+                      : []
+
+                    if (!Array.isArray(debtsList) || debtsList.length === 0) {
+                      return (
+                        <div className="p-8 text-center">
+                          <div className="flex flex-col items-center justify-center py-8">
+                            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                              <CreditCard className="w-8 h-8 text-muted-foreground" />
+                            </div>
+                            <p className="text-sm sm:text-base font-medium text-foreground mb-1">
+                              {searchQuery ? 'No se encontraron deudas' : 'No hay deudas registradas'}
+                            </p>
+                            <p className="text-xs sm:text-sm text-muted-foreground">
+                              {searchQuery
+                                ? 'Intenta con otro término de búsqueda'
+                                : 'Las ventas FIAO aparecerán aquí automáticamente'}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    }
+                    return (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Cliente</TableHead>
+                              <TableHead className="hidden md:table-cell">Fecha</TableHead>
+                              <TableHead className="text-right">Monto</TableHead>
+                              <TableHead className="text-right">Pagado</TableHead>
+                              <TableHead className="text-center">Progreso</TableHead>
+                              <TableHead className="text-center">Estado</TableHead>
+                              <TableHead className="text-right">Acciones</TableHead>
                             </TableRow>
-                )
-              })}
-                        </TableBody>
-                      </Table>
-            </div>
-                  )
-                })()}
-              </CardContent>
-            </Card>
+                          </TableHeader>
+                          <TableBody>
+                            {debtsList.map((debt) => {
+                              const calc = calculateDebtTotals(debt)
+                              const paymentPercentage = getPaymentPercentage(debt)
+                              const statusConfig = {
+                                open: { label: 'Pendiente', variant: 'outline' as const, className: 'bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-100' },
+                                partial: { label: 'Parcial', variant: 'outline' as const, className: 'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-100' },
+                                paid: { label: 'Pagado', variant: 'outline' as const, className: 'bg-green-100 text-green-800 border-green-200 hover:bg-green-100' },
+                              }
+                              const status = statusConfig[debt.status] || statusConfig.open
+
+                              return (
+                                <TableRow key={debt.id} className="hover:bg-muted/50">
+                                  <TableCell>
+                                    <div>
+                                      <p className="font-semibold text-foreground truncate">
+                                        {debt.customer?.name || 'Cliente desconocido'}
+                                      </p>
+                                      {debt.customer?.document_id && (
+                                        <p className="text-xs text-muted-foreground">{debt.customer.document_id}</p>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                                    {new Date(debt.created_at).toLocaleDateString('es-VE')}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <p className="font-semibold text-foreground">
+                                      ${Number(debt.amount_usd).toFixed(2)}
+                                    </p>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <p className="font-semibold text-green-600">
+                                      ${calc.total_paid_usd.toFixed(2)}
+                                    </p>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <div className="flex flex-col items-center gap-1">
+                                      <Progress value={paymentPercentage} className="w-16 h-2" />
+                                      <span className="text-xs text-muted-foreground">
+                                        {paymentPercentage.toFixed(0)}%
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Badge variant={status.variant} className={status.className}>
+                                      {status.label}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleViewDebt(debt)}
+                                        className="h-8 w-8"
+                                        title="Ver detalle"
+                                      >
+                                        <DollarSign className="w-4 h-4" />
+                                      </Button>
+                                      {debt.status !== 'paid' && (
+                                        <Button
+                                          size="sm"
+                                          onClick={() => handleAddPayment(debt)}
+                                          className="bg-success hover:bg-success/90 text-white"
+                                        >
+                                          Abonar
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )
+                  })()}
+                </CardContent>
+              </Card>
             </TabsContent>
           </>
-      )}
+        )}
       </Tabs>
 
       {/* Modals */}

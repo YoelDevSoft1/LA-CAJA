@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Phone, CreditCard, DollarSign, Clock, CheckCircle, AlertCircle, Eye, Plus, MessageCircle, Receipt } from 'lucide-react'
+import { CreditCard, Clock, CheckCircle, AlertCircle, Eye, Plus, MessageCircle, Receipt, AlertTriangle, ShieldCheck } from 'lucide-react'
 import { Customer } from '@/services/customers.service'
 import { debtsService, Debt, calculateDebtTotals } from '@/services/debts.service'
 import { format } from 'date-fns'
@@ -13,6 +13,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { cn } from '@/lib/utils'
 import PayAllDebtsModal from './PayAllDebtsModal'
 import SelectDebtsForWhatsAppModal from './SelectDebtsForWhatsAppModal'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface CustomerDebtCardProps {
   customer: Customer
@@ -72,42 +73,89 @@ export default function CustomerDebtCard({
   const hasOpenDebts = openDebts.length > 0
 
   // Calcular totales localmente si no hay summary
-  const totalRemaining = summary
-    ? { usd: summary.remaining_usd, bs: summary.remaining_bs }
+  const totalRemainingUsd = summary
+    ? summary.remaining_usd
     : debtsArray.reduce(
-        (acc, debt) => {
-          const calc = calculateDebtTotals(debt)
-          return {
-            usd: acc.usd + calc.remaining_usd,
-            bs: acc.bs + calc.remaining_bs,
-          }
-        },
-        { usd: 0, bs: 0 }
-      )
+      (acc, debt) => acc + calculateDebtTotals(debt).remaining_usd,
+      0
+    )
+
+  // --- LOGICA DE CREDIT HEALTH ---
+  const creditLimit = Number(customer.credit_limit) || 0
+  const hasCreditLimit = creditLimit > 0
+
+  let creditHealth = {
+    percent: 0,
+    color: 'bg-blue-500',
+    status: 'Sin Límite',
+    textColor: 'text-muted-foreground'
+  }
+
+  if (hasCreditLimit) {
+    const percent = Math.min((totalRemainingUsd / creditLimit) * 100, 100)
+    creditHealth.percent = percent
+
+    if (percent >= 100) {
+      creditHealth.color = 'bg-destructive'
+      creditHealth.status = 'Límite Excedido'
+      creditHealth.textColor = 'text-destructive font-bold'
+    } else if (percent > 80) {
+      creditHealth.color = 'bg-orange-500'
+      creditHealth.status = 'Crítico'
+      creditHealth.textColor = 'text-orange-600 font-bold'
+    } else if (percent > 50) {
+      creditHealth.color = 'bg-yellow-500'
+      creditHealth.status = 'Moderado'
+      creditHealth.textColor = 'text-yellow-600'
+    } else {
+      creditHealth.color = 'bg-green-500'
+      creditHealth.status = 'Saludable'
+      creditHealth.textColor = 'text-green-600'
+    }
+  }
 
   return (
     <Card className={cn(
-      'border',
-      hasOpenDebts ? 'border-warning/50' : 'border-border'
+      'border shadow-sm transition-all hover:shadow-md',
+      hasOpenDebts ? 'border-l-4 border-l-warning border-y-border border-r-border' : 'border-l-4 border-l-success border-y-border border-r-border'
     )}>
       <Accordion type="single" collapsible value={isExpanded ? 'debt' : ''} onValueChange={(value) => setIsExpanded(value === 'debt')}>
         <AccordionItem value="debt" className="border-0">
-          <AccordionTrigger className="px-4 py-4 hover:no-underline">
-            <div className="flex items-center justify-between w-full pr-4">
-              <div className="flex items-center flex-1 min-w-0">
-                <Avatar className={cn(
-                  'w-12 h-12 mr-3 flex-shrink-0',
-                  hasOpenDebts ? 'bg-warning/10' : 'bg-success/10'
-                )}>
-                  <AvatarFallback className={cn(
-                    'font-bold text-lg',
-                    hasOpenDebts ? 'text-warning' : 'text-success'
+          <AccordionTrigger className="px-4 py-4 hover:no-underline group">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-4 pr-2">
+
+              {/* IZQUIERDA: Info Cliente + Avatar */}
+              <div className="flex items-center min-w-0 flex-1">
+                <div className="relative">
+                  <Avatar className={cn(
+                    'w-12 h-12 mr-3 flex-shrink-0 border-2',
+                    hasOpenDebts ? 'border-warning/20 bg-warning/5' : 'border-success/20 bg-success/5'
                   )}>
-                    {customer.name.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+                    <AvatarFallback className={cn(
+                      'font-bold text-lg',
+                      hasOpenDebts ? 'text-warning' : 'text-success'
+                    )}>
+                      {customer.name.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  {/* Badge de estado VIP o Alerta */}
+                  {hasCreditLimit && totalRemainingUsd > creditLimit && (
+                    <div className="absolute -top-1 -right-1 bg-destructive text-white rounded-full p-0.5" title="Límite Excedido">
+                      <AlertTriangle className="w-3 h-3" />
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex-1 min-w-0 text-left">
-                  <p className="font-semibold text-foreground truncate">{customer.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-foreground truncate text-lg">{customer.name}</p>
+                    {hasCreditLimit && (
+                      <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5", creditHealth.textColor.includes('destructive') ? 'border-destructive/50 bg-destructive/10' : '')}>
+                        {creditHealth.status}
+                      </Badge>
+                    )}
+                  </div>
+
                   <div className="flex items-center gap-3 mt-0.5">
                     {customer.document_id && (
                       <span className="text-xs text-muted-foreground flex items-center">
@@ -115,39 +163,29 @@ export default function CustomerDebtCard({
                         {customer.document_id}
                       </span>
                     )}
-                    {customer.phone && (
-                      <span className="text-xs text-muted-foreground flex items-center">
-                        <Phone className="w-3 h-3 mr-1" />
-                        {customer.phone}
-                      </span>
+                    {/* Barra de Crédito Mini (Solo si tiene limite) */}
+                    {hasCreditLimit && (
+                      <div className="hidden sm:flex items-center gap-2 flex-1 max-w-[120px]">
+                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                          <div className={cn("h-full transition-all", creditHealth.color)} style={{ width: `${creditHealth.percent}%` }} />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {(creditHealth.percent).toFixed(0)}%
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 ml-3">
-                {/* Botón WhatsApp - solo si hay deudas activas y teléfono */}
-                {hasOpenDebts && customer.phone && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setIsSelectDebtsWhatsAppOpen(true)
-                    }}
-                    className="h-9 w-9 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                    title="Enviar estado de fiados por WhatsApp"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                  </Button>
-                )}
-                
-                {/* Total pendiente */}
-                <div className="text-right">
+              {/* DERECHA: Totales y Botones Rápidos */}
+              <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
+                {/* Totales */}
+                <div className="text-left sm:text-right">
                   {hasOpenDebts ? (
                     <>
-                      <p className="text-lg font-bold text-warning">
-                        ${totalRemaining.usd.toFixed(2)}
+                      <p className="text-xl font-bold text-warning tabular-nums">
+                        ${totalRemainingUsd.toFixed(2)}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {openDebts.length} deuda{openDebts.length !== 1 ? 's' : ''} pendiente{openDebts.length !== 1 ? 's' : ''}
@@ -155,65 +193,103 @@ export default function CustomerDebtCard({
                     </>
                   ) : (
                     <>
-                      <p className="text-lg font-bold text-success">$0.00</p>
-                      <p className="text-xs text-muted-foreground">Sin deudas</p>
+                      <div className="flex items-center text-success">
+                        <ShieldCheck className="w-5 h-5 mr-1" />
+                        <p className="text-lg font-bold">Al día</p>
+                      </div>
                     </>
                   )}
                 </div>
+
+                {/* Botones de Acción Rápida (Solo visible si expandido en desktop, o siempre visible? Mejor siempre visible para acción rápida) */}
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  {hasOpenDebts && customer.phone && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setIsSelectDebtsWhatsAppOpen(true)}
+                            className="h-10 w-10 rounded-full border-green-200 text-green-600 hover:bg-green-50 hover:text-green-700 hover:border-green-300 transition-colors"
+                          >
+                            <MessageCircle className="w-5 h-5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Cobrar por WhatsApp</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </div>
               </div>
+
             </div>
           </AccordionTrigger>
           <AccordionContent className="px-0 pb-0">
-            {/* Resumen */}
-            {summary && (
-              <div className="bg-muted/50 px-4 py-3 border-t border-border">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-3">
-                  <div>
-                    <p className="text-muted-foreground">Total Fiado</p>
-                    <p className="font-semibold text-foreground">${summary.total_debt_usd.toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground">{summary.total_debt_bs.toFixed(2)} Bs</p>
+            {/* Resumen Expandido */}
+            <div className="bg-muted/30 px-4 py-4 border-t border-border">
+              {/* Visualización detallada del Crédito */}
+              {hasCreditLimit && (
+                <div className="mb-4 bg-background p-3 rounded-lg border border-border">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">Salud Crediticia</span>
+                      <Badge variant="secondary" className="text-xs">{creditHealth.status}</Badge>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      Límite: <b>${creditLimit.toFixed(2)}</b>
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-muted-foreground">Total Pagado</p>
-                    <p className="font-semibold text-success">${summary.total_paid_usd.toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground">{summary.total_paid_bs.toFixed(2)} Bs</p>
+                  <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
+                    <div className={cn("h-full transition-all", creditHealth.color)} style={{ width: `${creditHealth.percent}%` }} />
                   </div>
-                  <div>
-                    <p className="text-muted-foreground">Pendiente</p>
-                    <p className="font-semibold text-warning">${summary.remaining_usd.toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground">{summary.remaining_bs.toFixed(2)} Bs</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Deudas</p>
-                    <p className="font-semibold text-foreground">
-                      {summary.open_debts_count} abiertas / {summary.total_debts_count} total
-                    </p>
+                  <div className="flex justify-between mt-1 text-xs text-muted-foreground">
+                    <span>Usado: ${totalRemainingUsd.toFixed(2)}</span>
+                    <span>Disponible: ${Math.max(creditLimit - totalRemainingUsd, 0).toFixed(2)}</span>
                   </div>
                 </div>
-                {/* Botón de pago completo */}
-                {hasOpenDebts && summary.remaining_usd > 0 && (
-                  <div className="pt-3 border-t border-border">
-                    <Button
-                      onClick={() => setIsPayAllModalOpen(true)}
-                      className="w-full bg-success hover:bg-success/90 text-white"
-                      size="sm"
-                    >
-                      <Receipt className="w-4 h-4 mr-2" />
-                      Pagar Todas las Deudas (${summary.remaining_usd.toFixed(2)} USD / {summary.remaining_bs.toFixed(2)} Bs)
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
 
-            {/* Lista de deudas */}
-            <div className="divide-y divide-border">
+              {/* Grid de KPIs */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-4">
+                <div className="bg-background p-3 rounded-md border border-border/50">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wider">Total Fiado</p>
+                  <p className="font-semibold text-foreground text-lg">${summary?.total_debt_usd.toFixed(2) ?? '0.00'}</p>
+                </div>
+                <div className="bg-background p-3 rounded-md border border-border/50">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wider">Total Pagado</p>
+                  <p className="font-semibold text-success text-lg">${summary?.total_paid_usd.toFixed(2) ?? '0.00'}</p>
+                </div>
+                <div className="bg-background p-3 rounded-md border border-border/50">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wider">Pendiente</p>
+                  <p className="font-semibold text-warning text-lg">${totalRemainingUsd.toFixed(2)}</p>
+                </div>
+                <div className="bg-background p-3 rounded-md border border-border/50">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wider">Facturas</p>
+                  <p className="font-semibold text-foreground text-lg">{summary?.open_debts_count ?? 0} <span className="text-xs font-normal text-muted-foreground">abiertas</span></p>
+                </div>
+              </div>
+
+              {/* Botón de pago completo grande */}
+              {hasOpenDebts && totalRemainingUsd > 0 && (
+                <Button
+                  onClick={() => setIsPayAllModalOpen(true)}
+                  className="w-full bg-success hover:bg-success/90 text-white font-semibold h-11 shadow-sm"
+                >
+                  <Receipt className="w-4 h-4 mr-2" />
+                  Pagar Saldo Total (${totalRemainingUsd.toFixed(2)})
+                </Button>
+              )}
+            </div>
+
+            {/* Lista de deudas individual */}
+            <div className="divide-y divide-border border-t border-border">
               {debtsArray.length === 0 ? (
-                <div className="p-6 text-center text-muted-foreground">
-                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mx-auto mb-2">
-                    <DollarSign className="w-5 h-5 text-muted-foreground" />
+                <div className="p-8 text-center text-muted-foreground bg-background">
+                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+                    <ShieldCheck className="w-6 h-6 text-muted-foreground/50" />
                   </div>
-                  <p className="text-sm">Este cliente no tiene deudas registradas</p>
+                  <p className="text-sm">Historial limpio. Cliente sin deudas.</p>
                 </div>
               ) : (
                 debtsArray.map((debt) => {
@@ -222,7 +298,7 @@ export default function CustomerDebtCard({
                   const StatusIcon = status.icon
 
                   return (
-                    <div key={debt.id} className="p-4 hover:bg-muted/50 transition-colors">
+                    <div key={debt.id} className="p-4 hover:bg-muted/50 transition-colors bg-background group/item">
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
@@ -233,43 +309,47 @@ export default function CustomerDebtCard({
                               <StatusIcon className="w-3 h-3 mr-1" />
                               {status.label}
                             </Badge>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-xs text-muted-foreground flex items-center">
+                              <Clock className="w-3 h-3 mr-1" />
                               {format(new Date(debt.created_at), "dd MMM yyyy", { locale: es })}
                             </span>
                           </div>
-                          <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
+
+                          <div className="flex items-baseline gap-4 mt-2">
                             <div>
-                              <span className="text-muted-foreground">Monto:</span>
-                              <span className="ml-1 font-medium text-foreground">
+                              <span className="text-xs text-muted-foreground block">Monto Original</span>
+                              <span className="text-sm font-medium text-foreground">
                                 ${Number(debt.amount_usd).toFixed(2)}
                               </span>
                             </div>
+
                             {debt.status !== 'paid' && (
                               <div>
-                                <span className="text-muted-foreground">Pendiente:</span>
-                                <span className="ml-1 font-medium text-warning">
+                                <span className="text-xs text-muted-foreground block">Saldo</span>
+                                <span className="text-sm font-bold text-warning">
                                   ${debtCalc.remaining_usd.toFixed(2)}
                                 </span>
                               </div>
                             )}
                           </div>
-                          {debt.payments && debt.payments.length > 0 && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {debt.payments.length} pago{debt.payments.length !== 1 ? 's' : ''} registrado{debt.payments.length !== 1 ? 's' : ''}
+
+                          {debt.note && (
+                            <p className="text-xs text-muted-foreground mt-2 italic border-l-2 pl-2 border-border">
+                              "{debt.note}"
                             </p>
                           )}
                         </div>
 
-                        {/* Acciones */}
-                        <div className="flex items-center gap-1 ml-3">
+                        {/* Acciones por deuda */}
+                        <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon"
                             onClick={(e) => {
                               e.stopPropagation()
                               onViewDebt(debt)
                             }}
-                            className="h-8 w-8 p-0 text-primary hover:bg-primary/10"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
                             title="Ver detalle"
                           >
                             <Eye className="w-4 h-4" />
@@ -277,12 +357,12 @@ export default function CustomerDebtCard({
                           {debt.status !== 'paid' && (
                             <Button
                               variant="ghost"
-                              size="sm"
+                              size="icon"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 onAddPayment(debt)
                               }}
-                              className="h-8 w-8 p-0 text-success hover:bg-success/10"
+                              className="h-8 w-8 text-success hover:bg-success/10"
                               title="Agregar abono"
                             >
                               <Plus className="w-4 h-4" />

@@ -11,6 +11,7 @@ import { DebtPayment } from '../database/entities/debt-payment.entity';
 import { Customer } from '../database/entities/customer.entity';
 import { Sale } from '../database/entities/sale.entity';
 import { CreateDebtPaymentDto } from './dto/create-debt-payment.dto';
+import { CreateLegacyDebtDto } from './dto/create-legacy-debt.dto';
 import { ExchangeService } from '../exchange/exchange.service';
 import { AccountingService } from '../accounting/accounting.service';
 import { WhatsAppMessagingService } from '../whatsapp/whatsapp-messaging.service';
@@ -84,6 +85,37 @@ export class DebtsService {
       // No fallar la creación de deuda si hay error en WhatsApp
       this.logger.warn(`Error enviando notificación de WhatsApp para deuda ${savedDebt.id}:`, error);
     }
+
+    return savedDebt;
+  }
+
+  async createLegacyDebt(
+    storeId: string,
+    dto: CreateLegacyDebtDto,
+  ): Promise<Debt> {
+    const customer = await this.customerRepository.findOne({
+      where: { id: dto.customer_id, store_id: storeId },
+    });
+
+    if (!customer) {
+      throw new NotFoundException('Cliente no encontrado');
+    }
+
+    const debt = this.debtRepository.create({
+      id: randomUUID(),
+      store_id: storeId,
+      sale_id: null,
+      customer_id: dto.customer_id,
+      created_at: dto.created_at ? new Date(dto.created_at) : new Date(),
+      amount_bs: dto.amount_usd * 36,
+      amount_usd: dto.amount_usd,
+      status: DebtStatus.OPEN,
+    });
+
+    const savedDebt = await this.debtRepository.save(debt);
+    this.logger.log(
+      `Legacy Debt creada: ${savedDebt.id} para cliente ${customer.name}`,
+    );
 
     return savedDebt;
   }

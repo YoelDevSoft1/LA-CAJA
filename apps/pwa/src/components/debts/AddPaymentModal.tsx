@@ -16,6 +16,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/stores/auth.store'
 
 const paymentSchema = z.object({
   amount_usd: z.number().min(0.01, 'El monto debe ser mayor a 0'),
@@ -47,6 +48,7 @@ export default function AddPaymentModal({
   debt,
   onSuccess,
 }: AddPaymentModalProps) {
+  const { user } = useAuth()
   const {
     register,
     handleSubmit,
@@ -112,12 +114,18 @@ export default function AddPaymentModal({
   }, [isOpen, debtId, reset])
 
   const addPaymentMutation = useMutation({
-    mutationFn: (data: PaymentFormData) => debtsService.addPayment(debt!.id, {
-      amount_bs: data.amount_bs,
-      amount_usd: data.amount_usd,
-      method: data.method,
-      note: data.note,
-    }),
+    mutationFn: (data: PaymentFormData) => {
+      if (!user) throw new Error('Usuario no autenticado')
+
+      return debtsService.addPayment(debt!.id, {
+        amount_bs: data.amount_bs,
+        amount_usd: data.amount_usd,
+        method: data.method,
+        note: data.note,
+        store_id: user.store_id,
+        user_id: user.user_id
+      })
+    },
     onSuccess: () => {
       toast.success('Pago registrado exitosamente')
       onSuccess?.()
@@ -126,7 +134,7 @@ export default function AddPaymentModal({
     onError: (error: any) => {
       console.error('Error al registrar pago:', error)
       let message = 'Error al registrar el pago'
-      
+
       if (error.response?.data) {
         // Si hay un mensaje directo
         if (error.response.data.message) {
@@ -142,7 +150,7 @@ export default function AddPaymentModal({
           message = messages.join(', ')
         }
       }
-      
+
       toast.error(message)
     },
   })

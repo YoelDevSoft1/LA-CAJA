@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { DebtsService } from './debts.service';
 import { CreateDebtPaymentDto } from './dto/create-debt-payment.dto';
+import { CreateLegacyDebtDto } from './dto/create-legacy-debt.dto';
 import { SendDebtReminderDto } from './dto/send-debt-reminder.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DebtStatus } from '../database/entities/debt.entity';
@@ -34,6 +35,13 @@ export class DebtsController {
   ) {
     const storeId = req.user.store_id;
     return this.debtsService.createDebtFromSale(storeId, saleId, customerId);
+  }
+
+  @Post('legacy')
+  @HttpCode(HttpStatus.CREATED)
+  async createLegacy(@Body() dto: CreateLegacyDebtDto, @Request() req: any) {
+    const storeId = req.user.store_id;
+    return this.debtsService.createLegacyDebt(storeId, dto);
   }
 
   @Post(':id/payments')

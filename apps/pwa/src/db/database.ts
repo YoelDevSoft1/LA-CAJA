@@ -83,6 +83,24 @@ export interface LocalConflict {
   resolved_at?: number;
 }
 
+export interface LocalDebt {
+  id: string;
+  store_id: string;
+  customer_id: string;
+  sale_id: string | null;
+  amount_bs: number;
+  amount_usd: number;
+  total_paid_bs: number;
+  total_paid_usd: number;
+  remaining_bs: number;
+  remaining_usd: number;
+  status: 'open' | 'partial' | 'paid';
+  created_at: number;
+  updated_at: number;
+  cached_at: number;
+  note?: string;
+}
+
 export class LaCajaDB extends Dexie {
   localEvents!: Table<LocalEvent, number>;
   products!: Table<LocalProduct, string>;
@@ -90,6 +108,7 @@ export class LaCajaDB extends Dexie {
   sales!: Table<LocalSale, string>;
   conflicts!: Table<LocalConflict, string>;
   whatsappConfigs!: Table<LocalWhatsAppConfig, string>;
+  debts!: Table<LocalDebt, string>;
   kv!: Table<{ key: string; value: any }, string>;
 
   constructor() {
@@ -136,6 +155,18 @@ export class LaCajaDB extends Dexie {
       sales: 'id, store_id, sold_at, customer_id, [store_id+sold_at]',
       conflicts: 'id, event_id, status, created_at, [status+created_at]',
       whatsappConfigs: 'id, store_id, [store_id+sync_status]',
+      kv: 'key',
+    });
+
+    // Versión 6: Agregar tabla de deudas para Offline Debts
+    this.version(6).stores({
+      localEvents: '++id, event_id, store_id, device_id, seq, type, sync_status, created_at, [sync_status+created_at], [store_id+device_id+sync_status]',
+      products: 'id, store_id, name, category, barcode, sku, is_active, [store_id+is_active], [store_id+category]',
+      customers: 'id, store_id, name, document_id, [store_id+document_id]',
+      sales: 'id, store_id, sold_at, customer_id, [store_id+sold_at]',
+      conflicts: 'id, event_id, status, created_at, [status+created_at]',
+      whatsappConfigs: 'id, store_id, [store_id+sync_status]',
+      debts: 'id, store_id, customer_id, status, [store_id+customer_id], [store_id+status]',
       kv: 'key',
     });
   }

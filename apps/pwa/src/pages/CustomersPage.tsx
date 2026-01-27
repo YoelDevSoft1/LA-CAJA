@@ -7,6 +7,7 @@ import { useAuth } from '@/stores/auth.store'
 import CustomerFormModal from '@/components/customers/CustomerFormModal'
 import CustomerHistoryModal from '@/components/customers/CustomerHistoryModal'
 import CustomerStatementModal from '@/components/customers/CustomerStatementModal'
+import LegacyDebtModal from '@/components/customers/LegacyDebtModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -37,6 +38,7 @@ export default function CustomersPage() {
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null)
   const [customerDebtSummary, setCustomerDebtSummary] = useState<DebtSummary | null>(null)
   const [isLoadingDebt, setIsLoadingDebt] = useState(false)
+  const [isLegacyDebtOpen, setIsLegacyDebtOpen] = useState(false)
   const queryClient = useQueryClient()
   const { user } = useAuth()
 
@@ -69,6 +71,16 @@ export default function CustomersPage() {
 
   const handleCloseStatement = () => {
     setIsStatementOpen(false)
+    setSelectedCustomer(null)
+  }
+
+  const handleOpenLegacyDebt = (customer: Customer) => {
+    setSelectedCustomer(customer)
+    setIsLegacyDebtOpen(true)
+  }
+
+  const handleCloseLegacyDebt = () => {
+    setIsLegacyDebtOpen(false)
     setSelectedCustomer(null)
   }
 
@@ -550,6 +562,15 @@ export default function CustomersPage() {
                           <Printer className="w-4 h-4 mr-2" />
                           Estado
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpenLegacyDebt(customer)}
+                          className="h-10 text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                        >
+                          <DollarSign className="w-4 h-4 mr-2" />
+                          Deuda Antigua
+                        </Button>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button
@@ -599,6 +620,13 @@ export default function CustomersPage() {
       <CustomerStatementModal
         isOpen={isStatementOpen}
         onClose={handleCloseStatement}
+        customer={selectedCustomer}
+      />
+
+      {/* Legacy Debt Modal */}
+      <LegacyDebtModal
+        isOpen={isLegacyDebtOpen}
+        onClose={handleCloseLegacyDebt}
         customer={selectedCustomer}
       />
 

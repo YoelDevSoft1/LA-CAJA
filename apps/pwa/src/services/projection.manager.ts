@@ -33,7 +33,7 @@ export const projectionManager = {
         // Agrupamos por tipo para debugging
         const byType: Record<string, number> = {};
 
-        await db.transaction('rw', db.products, db.customers, async () => {
+        await db.transaction('rw', db.products, db.customers, db.debts, async () => {
             for (const event of events) {
                 try {
                     await this.applyEvent(event);
@@ -77,6 +77,14 @@ export const projectionManager = {
                 break;
             case 'CustomerUpdated':
                 await this.applyCustomerUpdated(event);
+                break;
+
+            // DEUDAS
+            case 'DebtCreated':
+                await this.applyDebtCreated(event);
+                break;
+            case 'DebtPaymentAdded':
+                await this.applyDebtPaymentAdded(event);
                 break;
 
             // TODO: Implementar más proyecciones (Inventario, etc.)
@@ -186,6 +194,74 @@ export const projectionManager = {
                 cached_at: Date.now()
             };
             await db.customers.put(updated);
+        }
+    },
+
+    // --- DEUDAS ---
+
+    async applyDebtCreated(event: BaseEvent) {
+        // Tipado manual simple ya que no tenemos el tipo importado aún
+        // { debt_id, customer_id, sale_id, amount_bs, amount_usd, note, due_date ... }
+        const payload = event.payload as any;
+
+        await db.debts.put({
+            id: payload.debt_id,
+            store_id: event.store_id,
+            customer_id: payload.customer_id,
+            sale_id: payload.sale_id || null, // Puede ser deuda legacy sin venta
+            amount_bs: Number(payload.amount_bs),
+            amount_usd: Number(payload.amount_usd),
+            total_paid_bs: 0,
+            total_paid_usd: 0,
+            remaining_bs: Number(payload.amount_bs),
+            remaining_usd: Number(payload.amount_usd),
+            status: 'open',
+            created_at: event.created_at,
+            updated_at: event.created_at,
+            cached_at: Date.now(),
+            note: payload.note || null
+        });
+    },
+
+    async applyDebtPaymentAdded(event: BaseEvent) {
+        const payload = event.payload as any;
+        const debtId = payload.debt_id;
+        const amountBs = Number(payload.amount_bs);
+        const amountUsd = Number(payload.amount_usd);
+
+        const existing = await db.debts.get(debtId);
+        if (existing) {
+            // Recalcular totales
+            // Nota: Esto es una simplificación optimista. El backend es la fuente de verdad.
+            // Pero para UI offline, sumamos lo que tenemos.
+
+            const newTotalPaidBs = (existing.total_paid_bs || 0) + amountBs;
+            const newTotalPaidUsd = (existing.total_paid_usd || 0) + amountUsd;
+
+            const newRemainingBs = existing.amount_bs - newTotalPaidBs;
+            const newRemainingUsd = existing.amount_usd - newTotalPaidUsd;
+
+            // Determinar estado
+            // Tolerancia pequeña por errores de punto flotante
+            let newStatus: 'open' | 'partial' | 'paid' = 'partial';
+            if (newRemainingUsd <= 0.01 && newRemainingBs <= 0.01) {
+                newStatus = 'paid';
+            } else if (newTotalPaidUsd <= 0.01 && newTotalPaidBs <= 0.01) {
+                newStatus = 'open';
+            }
+
+            const updated = {
+                ...existing,
+                total_paid_bs: newTotalPaidBs,
+                total_paid_usd: newTotalPaidUsd,
+                remaining_bs: Math.max(0, newRemainingBs),
+                remaining_usd: Math.max(0, newRemainingUsd),
+                status: newStatus,
+                updated_at: event.created_at,
+                cached_at: Date.now()
+            };
+
+            await db.debts.put(updated);
         }
     }
 };
