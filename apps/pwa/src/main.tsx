@@ -53,6 +53,41 @@ const hardRefreshIfBuildMismatch = async () => {
   }
 }
 
+
+
+// ✅ OFFLINE-FIRST: Solicitar persistencia de almacenamiento para evitar borrado automático
+const enablePersistentStorage = async () => {
+  if (navigator.storage && navigator.storage.persist) {
+    const isPersisted = await navigator.storage.persisted();
+    console.log(`[Storage] Persisted: ${isPersisted}`);
+    if (!isPersisted) {
+      const result = await navigator.storage.persist();
+      console.log(`[Storage] Request Persist Result: ${result}`);
+    }
+  }
+};
+
+const registerPeriodicSync = async (registration: ServiceWorkerRegistration) => {
+  if ('periodicSync' in registration) {
+    try {
+      const status = await navigator.permissions.query({
+        name: 'periodic-background-sync' as any,
+      });
+      if (status.state === 'granted') {
+        // @ts-ignore
+        await registration.periodicSync.register('update-catalogs', {
+          minInterval: 24 * 60 * 60 * 1000, // 24 horas
+        });
+        console.log('[PWA] Periodic Sync registrado: update-catalogs');
+      } else {
+        console.warn('[PWA] Permiso para Periodic Sync no otorgado');
+      }
+    } catch (error) {
+      console.error('[PWA] Error registrando Periodic Sync:', error);
+    }
+  }
+};
+
 const setupPwaUpdates = () => {
   if (!('serviceWorker' in navigator)) return
 
@@ -61,14 +96,25 @@ const setupPwaUpdates = () => {
   updateSW = registerSW({
     immediate: true,
     onNeedRefresh() {
-      console.warn('[PWA] Service Worker update detected. Reloading...')
-      updateSW(true)
+      console.log('[PWA] Service Worker update detected. Waiting for idle moment...')
+      if (confirm('Nueva versión disponible. ¿Actualizar ahora para asegurar funciones offline?')) {
+        updateSW(true)
+      }
     },
     onOfflineReady() {
       console.log('[PWA] App lista para usar offline')
     },
-    onRegisteredSW() {
+    onRegisteredSW(_swUrl, registration) {
       void hardRefreshIfBuildMismatch()
+      // Chequear actualizaciones periódicamente (cada hora)
+      if (registration) {
+        setInterval(() => {
+          registration.update()
+        }, 60 * 60 * 1000)
+
+        // Registrar Periodic Sync
+        void registerPeriodicSync(registration);
+      }
     },
     onRegisterError(error: unknown) {
       console.warn('[PWA] Error registrando Service Worker:', error)
@@ -84,7 +130,9 @@ const setupPwaUpdates = () => {
   })
 }
 
+void enablePersistentStorage();
 setupPwaUpdates()
+
 
 const queryClient = new QueryClient({
   defaultOptions: {

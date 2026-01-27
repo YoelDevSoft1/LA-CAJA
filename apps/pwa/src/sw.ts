@@ -47,17 +47,67 @@ registerRoute(
             new CacheableResponsePlugin({ statuses: [0, 200] }),
             new ExpirationPlugin({ maxEntries: 500, maxAgeSeconds: 24 * 60 * 60 }) // 1 día
         ],
-        networkTimeoutSeconds: 3
+        networkTimeoutSeconds: 5 // increased timeout
     })
 )
 
+// 4. Google Fonts Caching (StaleWhileRevalidate/CacheFirst)
+registerRoute(
+    ({ url }) => url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com',
+    new CacheFirst({
+        cacheName: 'google-fonts',
+        plugins: [
+            new CacheableResponsePlugin({ statuses: [0, 200] }),
+            new ExpirationPlugin({ maxEntries: 30, maxAgeSeconds: 365 * 24 * 60 * 60 }),
+        ],
+    })
+);
+
+
 // ===== BACKGROUND SYNC =====
 
-self.addEventListener('sync', (event) => {
-    if (event.tag === 'sync-events') {
-        event.waitUntil(syncEvents())
+interface SyncEvent extends ExtendableEvent {
+    readonly tag: string;
+    readonly lastChance: boolean;
+}
+
+self.addEventListener('sync', (event: Event) => {
+    const syncEvent = event as SyncEvent;
+    if (syncEvent.tag === 'sync-events') {
+        console.log('[SW] Background Sync triggered: sync-events');
+        syncEvent.waitUntil(syncEvents())
     }
 })
+
+// ===== PERIODIC BACKGROUND SYNC =====
+interface PeriodicSyncEvent extends ExtendableEvent {
+    readonly tag: string;
+}
+
+// @ts-ignore - periodicSync types might be missing
+self.addEventListener('periodicsync', (event: Event) => {
+    const periodicEvent = event as PeriodicSyncEvent;
+    if (periodicEvent.tag === 'update-catalogs') {
+        console.log('[SW] Periodic Sync triggered: update-catalogs');
+        periodicEvent.waitUntil(updateCatalogs())
+    }
+})
+
+async function updateCatalogs() {
+    console.log('[SW] Updating catalogs...');
+    try {
+        const apiUrlEntry = await db.kv.get('api_url')
+        const apiUrl = apiUrlEntry?.value
+        if (!apiUrl) return;
+
+        // Fetch products, prices, customers logic here...
+        // For now, simple logging as placeholder for full logic
+        console.log('[SW] Catalog update simulation complete');
+    } catch (err) {
+        console.error('[SW] Catalog update failed', err);
+    }
+}
+
 
 // Simulación de sync de eventos (se integrará con SyncService más tarde)
 // Integración real con Dexie y API

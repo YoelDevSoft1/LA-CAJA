@@ -119,6 +119,9 @@ class SyncServiceClass {
   /**
    * Registra un background sync tag para sincronizar cuando vuelva la conexión
    */
+  /**
+   * Registra un background sync tag para sincronizar cuando vuelva la conexión
+   */
   private async registerBackgroundSync(): Promise<void> {
     if (!('serviceWorker' in navigator)) {
       this.logger.debug('Service Worker no está disponible');
@@ -136,14 +139,26 @@ class SyncServiceClass {
     try {
       const registration = await navigator.serviceWorker.ready as ServiceWorkerRegistrationWithSync;
       if (!registration.sync) {
-        this.logger.warn('Service Worker no soporta Background Sync');
+        this.logger.warn('Service Worker no soporta Background Sync (API no presente)');
+        return;
+      }
+
+      // Verificar si ya está registrado para evitar overhead
+      const tags = await registration.sync.getTags();
+      if (tags.includes('sync-events')) {
+        this.logger.debug('Background sync ya registrado: sync-events');
         return;
       }
 
       await registration.sync.register('sync-events');
-      this.logger.info('Background sync registrado: sync-events');
+      this.logger.info('Background sync registrado exitosamente: sync-events');
     } catch (error) {
-      this.logger.error('Error registrando background sync', error);
+      // Si falla, verificar permisos (a veces requiere permisos explícitos en algunos navegadores)
+      if (error instanceof Error && error.name === 'NotAllowedError') {
+        this.logger.warn('Permiso denegado para Background Sync', { error: error.message });
+      } else {
+        this.logger.error('Error registrando background sync', error);
+      }
     }
   }
 

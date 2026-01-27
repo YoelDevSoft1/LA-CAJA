@@ -172,8 +172,15 @@ export default defineConfig(({ mode }) => ({
     VitePWA({
       srcDir: 'src',
       filename: 'sw.ts',
+      strategies: 'injectManifest', // <== SWITCH TO INJECT MANIFEST
       registerType: 'autoUpdate',
       injectRegister: 'auto',
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB limit
+        // runtimeCaching is now in src/sw.ts
+      },
       manifest: {
         name: 'LA CAJA',
         short_name: 'LA CAJA',
