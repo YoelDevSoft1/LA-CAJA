@@ -28,7 +28,7 @@ export function SuccessOverlay({
                 return {
                     x: Math.cos(angle) * distance,
                     y: Math.sin(angle) * distance,
-                    color: Math.random() > 0.5 ? "bg-blue-400" : (Math.random() > 0.5 ? "bg-white" : "bg-cyan-300"),
+                    color: Math.random() > 0.5 ? "bg-primary" : (Math.random() > 0.5 ? "bg-white" : "bg-primary/60"),
                     size: Math.random() * 4 + 2
                 }
             })
@@ -57,7 +57,7 @@ export function SuccessOverlay({
                     <motion.div
                         initial={{ opacity: 0, scale: 0.5 }}
                         animate={{ opacity: 0.6, scale: 1 }}
-                        className="absolute inset-0 bg-radial-gradient from-blue-100/50 to-transparent opacity-0 pointer-events-none"
+                        className="absolute inset-0 bg-radial-gradient from-primary/20 to-transparent opacity-0 pointer-events-none"
                     />
 
                     <div className="relative flex flex-col items-center justify-center p-8 z-10 w-full max-w-sm mx-4 pointer-events-none">
@@ -90,7 +90,7 @@ export function SuccessOverlay({
                                 initial={{ scale: 0, opacity: 0 }}
                                 animate={{ scale: [0.8, 1.2, 1], opacity: [0, 0.4, 0.2] }}
                                 transition={{ duration: 2, repeat: Infinity, repeatType: "reverse" }}
-                                className="absolute inset-0 -m-8 bg-blue-400/20 rounded-full blur-2xl"
+                                className="absolute inset-0 -m-8 bg-primary/20 rounded-full blur-2xl"
                             />
 
                             {/* Botón/Círculo del Check */}
@@ -103,7 +103,7 @@ export function SuccessOverlay({
                                     damping: 15,
                                     delay: 0.1
                                 }}
-                                className="relative flex items-center justify-center w-28 h-28 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-[0_10px_30px_-5px_rgba(37,99,235,0.4)] border-4 border-white"
+                                className="relative flex items-center justify-center w-28 h-28 rounded-full bg-gradient-to-br from-primary to-primary/80 shadow-[0_10px_30px_-5px_rgba(var(--primary),0.4)] border-4 border-white"
                             >
                                 {/* Brillo interno */}
                                 <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/30 to-transparent opacity-60 pointer-events-none" />
@@ -136,7 +136,7 @@ export function SuccessOverlay({
                                     "px-3 py-1 rounded-full text-sm font-bold tracking-wider shadow-sm border",
                                     message?.includes('OFFLINE')
                                         ? "bg-amber-50 border-amber-100 text-amber-700"
-                                        : "bg-blue-50 border-blue-100 text-blue-700"
+                                        : "bg-primary/10 border-primary/20 text-primary"
                                 )}>
                                     {message?.includes('OFFLINE') ? 'ALMACENADO OFFLINE' : (message?.includes('#') ? message.split('#')[1].split(' ')[0] : 'PROCESADO')}
                                 </span>

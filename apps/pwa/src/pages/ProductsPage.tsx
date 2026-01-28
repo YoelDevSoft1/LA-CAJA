@@ -1,16 +1,16 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Plus, Edit, Trash2, Package, CheckCircle, DollarSign, Layers, Boxes, Hash, Upload, AlertTriangle, LayoutGrid, LayoutList, Download, Copy } from 'lucide-react'
+import { Search, Plus, Edit, Trash2, Package, CheckCircle, DollarSign, Layers, Boxes, Hash, Upload, AlertTriangle, LayoutGrid, LayoutList, Download, Copy, MoreHorizontal, TrendingUp, TrendingDown, Archive } from 'lucide-react'
 import { productsService, Product, ProductSearchResponse } from '@/services/products.service'
 import { productsCacheService } from '@/services/products-cache.service'
 import { warehousesService } from '@/services/warehouses.service'
 import { useAuth } from '@/stores/auth.store'
 import { useOnline } from '@/hooks/use-online'
 import toast from '@/lib/toast'
-// ⚡ OPTIMIZACIÓN: Lazy load del modal grande (1249 líneas) - solo cargar cuando se abre
+// ⚡ OPTIMIZACIÓN: Lazy load del modal grande
 const ProductFormModal = lazy(() => import('@/components/products/ProductFormModal'))
 import ChangePriceModal from '@/components/products/ChangePriceModal'
-// ⚡ OPTIMIZACIÓN: Lazy load de modales grandes - solo cargar cuando se abren
+// ⚡ OPTIMIZACIÓN: Lazy load de modales grandes
 const BulkPriceChangeModal = lazy(() => import('@/components/products/BulkPriceChangeModal'))
 const ProductVariantsModal = lazy(() => import('@/components/variants/ProductVariantsModal'))
 const ProductLotsModal = lazy(() => import('@/components/lots/ProductLotsModal'))
@@ -30,6 +30,14 @@ import { usePullToRefresh } from '@/hooks/use-pull-to-refresh'
 import { PullToRefreshIndicator } from '@/components/ui/pull-to-refresh-indicator'
 import { useMobileDetection } from '@/hooks/use-mobile-detection'
 import { cn } from '@/lib/utils'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 type WeightUnit = 'kg' | 'g' | 'lb' | 'oz'
 
@@ -60,7 +68,6 @@ const formatStockValue = (product: Product, item?: StockStatus) => {
  * Retorna una tupla [bgColor, textColor, borderColor]
  */
 const getCategoryColor = (category: string): [string, string, string] => {
-  // Paleta de colores predefinida para mejor contraste y accesibilidad
   const colorPalette: Array<[string, string, string]> = [
     ['bg-blue-100', 'text-blue-700', 'border-blue-300'], // Azul
     ['bg-green-100', 'text-green-700', 'border-green-300'], // Verde
@@ -76,14 +83,12 @@ const getCategoryColor = (category: string): [string, string, string] => {
     ['bg-emerald-100', 'text-emerald-700', 'border-emerald-300'], // Esmeralda
   ]
 
-  // Genera un hash simple del nombre de categoría
   let hash = 0
   for (let i = 0; i < category.length; i++) {
     hash = ((hash << 5) - hash) + category.charCodeAt(i)
-    hash = hash & hash // Convierte a entero de 32 bits
+    hash = hash & hash
   }
 
-  // Usa el hash para seleccionar un color de la paleta
   const index = Math.abs(hash) % colorPalette.length
   return colorPalette[index]
 }
@@ -94,7 +99,7 @@ export default function ProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize] = useState(50) // 50 productos por página
+  const [pageSize] = useState(50)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [duplicatingProduct, setDuplicatingProduct] = useState<Product | null>(null)
@@ -107,31 +112,41 @@ export default function ProductsPage() {
   const [lotsProduct, setLotsProduct] = useState<Product | null>(null)
   const [serialsProduct, setSerialsProduct] = useState<Product | null>(null)
   const [warehouseFilter, setWarehouseFilter] = useState<string>('all')
-  // Estado para edición inline de precios
   const [editingPriceProductId, setEditingPriceProductId] = useState<string | null>(null)
   const [editingPriceValue, setEditingPriceValue] = useState<string>('')
   const isMobile = useMobileDetection()
-  // Vista: 'cards' para móvil, 'table' para desktop
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>(() => 
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>(() =>
     window.innerWidth < 640 ? 'cards' : 'table'
   )
   const queryClient = useQueryClient()
 
-  // Actualizar viewMode cuando cambia el tamaño de pantalla
   useEffect(() => {
     if (isMobile) {
       setViewMode('cards')
     }
   }, [isMobile])
 
-  // Reset page cuando cambia búsqueda
   useEffect(() => {
     setCurrentPage(1)
   }, [searchQuery, categoryFilter, statusFilter])
 
-  // Cargar datos desde cache al iniciar (para mostrar inmediatamente)
-  const [initialData, setInitialData] = useState<ProductSearchResponse | undefined>(undefined);
-  const { isOnline } = useOnline(); // Usar hook más confiable
+  const [initialData, setInitialData] = useState<ProductSearchResponse | undefined>(undefined)
+  const { isOnline } = useOnline()
+
+  // KPI DATA: Stock bajo
+  const { data: lowStockCountData } = useQuery({
+    queryKey: ['inventory', 'low-stock-count', user?.store_id],
+    queryFn: () =>
+      inventoryService.getStockStatusPaged({
+        low_stock_only: true,
+        limit: 1,
+        offset: 0,
+      }),
+    enabled: !!user?.store_id,
+    staleTime: 1000 * 60 * 10,
+  })
+
+  // Stock status actual
   const { data: stockStatus } = useQuery({
     queryKey: ['inventory', 'status', user?.store_id, warehouseFilter],
     queryFn: () =>
@@ -141,36 +156,33 @@ export default function ProductsPage() {
     enabled: !!user?.store_id,
     staleTime: 1000 * 60 * 5,
   })
+
   const stockByProduct = (stockStatus || []).reduce<Record<string, StockStatus>>((acc, item) => {
     acc[item.product_id] = item
     return acc
   }, {})
-  
+
   const isActiveFilter =
     statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined
 
-  // Cargar desde IndexedDB al montar el componente o cuando cambia la búsqueda
   useEffect(() => {
     if (user?.store_id) {
       productsCacheService.getProductsFromCache(user.store_id, {
         search: searchQuery || undefined,
         category: categoryFilter || undefined,
         is_active: isActiveFilter,
-        limit: pageSize, // Solo cargar una página del cache
+        limit: pageSize,
       }).then(cached => {
         if (cached.length > 0) {
           setInitialData({
             products: cached,
             total: cached.length,
-          });
+          })
         }
-      }).catch(() => {
-        // Silenciar errores
-      });
+      }).catch(() => { })
     }
-  }, [user?.store_id, searchQuery, categoryFilter, isActiveFilter, pageSize]);
+  }, [user?.store_id, searchQuery, categoryFilter, isActiveFilter, pageSize])
 
-  // Búsqueda de productos (con cache offline persistente y paginación)
   const offset = (currentPage - 1) * pageSize
   const { data: productsData, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['products', 'list', searchQuery, categoryFilter, statusFilter, currentPage, pageSize, user?.store_id],
@@ -182,14 +194,11 @@ export default function ProductsPage() {
         limit: pageSize,
         offset: offset,
       }, user?.store_id),
-    enabled: !!user?.store_id && isOnline, // Solo ejecutar query si está online
-    // Configuración para persistencia offline
-    staleTime: 1000 * 60 * 5, // 5 minutos - considerar datos frescos
-    gcTime: Infinity, // Nunca eliminar del cache de React Query
-    retry: false, // No reintentar si falla (usaremos cache)
-    // Si está offline, usar cache como datos iniciales
+    enabled: !!user?.store_id && isOnline,
+    staleTime: 1000 * 60 * 5,
+    gcTime: Infinity,
+    retry: false,
     initialData: !isOnline ? initialData : undefined,
-    // Si está offline, mantener cache como placeholder
     placeholderData: !isOnline ? initialData : undefined,
   })
 
@@ -202,8 +211,8 @@ export default function ProductsPage() {
   const products = productsData?.products || []
   const total = productsData?.total || 0
   const isOfflineEmpty = !isOnline && products.length === 0
+  const lowStockCount = lowStockCountData?.total || 0
 
-  // Pull-to-refresh para móvil
   const pullToRefresh = usePullToRefresh({
     onRefresh: async () => {
       await refetch()
@@ -212,7 +221,6 @@ export default function ProductsPage() {
     threshold: 80,
   })
 
-  // Mutación para desactivar producto
   const deactivateMutation = useMutation({
     mutationFn: (id: string) => productsService.deactivate(id, user?.store_id),
     onSuccess: () => {
@@ -225,7 +233,6 @@ export default function ProductsPage() {
     },
   })
 
-  // Mutación para activar producto
   const activateMutation = useMutation({
     mutationFn: (id: string) => productsService.activate(id, user?.store_id),
     onSuccess: () => {
@@ -235,6 +242,27 @@ export default function ProductsPage() {
     onError: (error: any) => {
       const message = error.response?.data?.message || 'Error al activar el producto'
       toast.error(message)
+    },
+  })
+
+  const inlinePriceMutation = useMutation({
+    mutationFn: ({ productId, priceUsd }: { productId: string; priceUsd: number }) =>
+      productsService.changePrice(productId, {
+        price_usd: priceUsd,
+        price_bs: 0,
+      }, user?.store_id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory', 'status'] })
+      toast.success('Precio actualizado exitosamente')
+      setEditingPriceProductId(null)
+      setEditingPriceValue('')
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Error al actualizar el precio'
+      toast.error(message)
+      setEditingPriceProductId(null)
+      setEditingPriceValue('')
     },
   })
 
@@ -251,13 +279,12 @@ export default function ProductsPage() {
   }
 
   const handleDuplicate = (product: Product) => {
-    // Preparar producto duplicado: copiar todos los datos pero limpiar campos únicos
     const duplicated: Product = {
       ...product,
-      id: '', // Sin ID para que se cree uno nuevo
-      name: `${product.name} (Copia)`, // Agregar "(Copia)" al nombre
-      sku: '', // Limpiar SKU (debe ser único)
-      barcode: '', // Limpiar código de barras (debe ser único)
+      id: '',
+      name: `${product.name} (Copia)`,
+      sku: '',
+      barcode: '',
     }
     setDuplicatingProduct(duplicated)
     setEditingProduct(null)
@@ -287,35 +314,11 @@ export default function ProductsPage() {
     setIsPriceModalOpen(true)
   }
 
-  // Mutación para edición inline de precios
-  const inlinePriceMutation = useMutation({
-    mutationFn: ({ productId, priceUsd }: { productId: string; priceUsd: number }) =>
-      productsService.changePrice(productId, {
-        price_usd: priceUsd,
-        price_bs: 0, // El backend calculará el precio en Bs usando la tasa BCV
-      }, user?.store_id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] })
-      queryClient.invalidateQueries({ queryKey: ['inventory', 'status'] })
-      toast.success('Precio actualizado exitosamente')
-      setEditingPriceProductId(null)
-      setEditingPriceValue('')
-    },
-    onError: (error: any) => {
-      const message = error.response?.data?.message || 'Error al actualizar el precio'
-      toast.error(message)
-      setEditingPriceProductId(null)
-      setEditingPriceValue('')
-    },
-  })
-
-  // Handler para iniciar edición inline
   const handleStartInlinePriceEdit = (product: Product) => {
     setEditingPriceProductId(product.id)
     setEditingPriceValue(Number(product.price_usd).toFixed(2))
   }
 
-  // Handler para guardar precio inline
   const handleSaveInlinePrice = (productId: string) => {
     const parsed = parseFloat(editingPriceValue)
     if (isNaN(parsed) || parsed < 0) {
@@ -327,7 +330,6 @@ export default function ProductsPage() {
     inlinePriceMutation.mutate({ productId, priceUsd: parsed })
   }
 
-  // Handler para cancelar edición inline
   const handleCancelInlinePriceEdit = () => {
     setEditingPriceProductId(null)
     setEditingPriceValue('')
@@ -345,13 +347,9 @@ export default function ProductsPage() {
     setSerialsProduct(product)
   }
 
-  // Exportar productos a Excel - Obtiene TODOS los productos sin límite
   const handleExportProducts = async () => {
     try {
       toast.loading('Exportando productos...', { id: 'export-products' })
-      
-      // Obtener TODOS los productos sin límite, aplicando los mismos filtros
-      // Primero obtenemos el total para saber cuántos productos hay
       const firstPage = await productsService.search({
         q: searchQuery || undefined,
         category: categoryFilter || undefined,
@@ -361,31 +359,24 @@ export default function ProductsPage() {
       }, user?.store_id)
 
       const totalProducts = firstPage.total || 0
-
       if (totalProducts === 0) {
         toast.error('No hay productos para exportar', { id: 'export-products' })
         return
       }
 
-      // Obtener todos los productos en una sola petición
-      // Si hay más de 5000 productos, obtenerlos en lotes para evitar problemas de memoria
       let allProducts: Product[] = []
-      
       if (totalProducts <= 5000) {
-        // Obtener todos de una vez si son menos de 5000
         const allProductsData = await productsService.search({
           q: searchQuery || undefined,
           category: categoryFilter || undefined,
           is_active: isActiveFilter,
-          limit: totalProducts + 100, // Buffer por si acaso
+          limit: totalProducts + 100,
           offset: 0,
         }, user?.store_id)
         allProducts = allProductsData.products || []
       } else {
-        // Obtener en lotes de 1000 si hay muchos productos
         const batchSize = 1000
         const batches = Math.ceil(totalProducts / batchSize)
-        
         for (let i = 0; i < batches; i++) {
           const batchData = await productsService.search({
             q: searchQuery || undefined,
@@ -394,10 +385,7 @@ export default function ProductsPage() {
             limit: batchSize,
             offset: i * batchSize,
           }, user?.store_id)
-          
           allProducts = [...allProducts, ...(batchData.products || [])]
-          
-          // Actualizar toast con progreso
           toast.loading(`Exportando productos... ${Math.min((i + 1) * batchSize, totalProducts)}/${totalProducts}`, { id: 'export-products' })
         }
       }
@@ -407,7 +395,6 @@ export default function ProductsPage() {
         return
       }
 
-      // Obtener stock para todos los productos exportados
       const stockStatusForExport = await inventoryService.getStockStatus({
         warehouse_id: warehouseFilter !== 'all' ? warehouseFilter : undefined,
       })
@@ -417,68 +404,33 @@ export default function ProductsPage() {
       }, {})
 
       const timestamp = new Date().toISOString().split('T')[0]
-
-      // Exportar con los campos exactos que requiere la importación CSV
-      // Orden: nombre, categoria, sku, codigo_barras, precio_bs, precio_usd, costo_bs, costo_usd, stock_minimo
-      // IMPORTANTE: Los headers deben coincidir exactamente con los que espera la importación
-      // Los headers requeridos son: nombre, precio_bs, precio_usd
       const csvHeaders = 'nombre,categoria,sku,codigo_barras,precio_bs,precio_usd,costo_bs,costo_usd,stock_minimo'
-      
-      // Verificar que los headers incluyan los campos requeridos
-      const requiredHeaders = ['nombre', 'precio_bs', 'precio_usd']
-      const headerArray = csvHeaders.split(',')
-      const missingInHeaders = requiredHeaders.filter(h => !headerArray.includes(h))
-      if (missingInHeaders.length > 0) {
-        console.error('ERROR: Headers faltantes en CSV:', missingInHeaders)
-        toast.error(`Error al generar CSV: faltan headers ${missingInHeaders.join(', ')}`, { id: 'export-products' })
-        return
-      }
-      
+
       const csvRows = allProducts.map((p) => {
-        // Función para escapar valores CSV
         const escapeCSVValue = (val: string | number): string => {
           const str = String(val)
-          // Si contiene coma, comilla o salto de línea, envolver en comillas
           if (str.includes(',') || str.includes('"') || str.includes('\n')) {
             return `"${str.replace(/"/g, '""')}"`
           }
           return str
         }
-        
-        // Preparar valores asegurando que siempre tengan un valor válido
+
         const nombre = escapeCSVValue(p.name || '')
         const categoria = escapeCSVValue(p.category || '')
         const sku = escapeCSVValue(p.sku || '')
         const codigo_barras = escapeCSVValue(p.barcode || '')
-        
-        // Asegurar que los precios siempre tengan un valor numérico válido
         const precio_bs = Number(p.price_bs || 0).toFixed(2)
         const precio_usd = Number(p.price_usd || 0).toFixed(2)
         const costo_bs = p.cost_bs ? Number(p.cost_bs).toFixed(2) : '0.00'
         const costo_usd = p.cost_usd ? Number(p.cost_usd).toFixed(2) : '0.00'
         const stock_minimo = String(stockByProductExport[p.id]?.low_stock_threshold ?? p.low_stock_threshold ?? 10)
-        
-        // Construir la fila CSV con todos los campos en el orden correcto
-        return [
-          nombre,
-          categoria,
-          sku,
-          codigo_barras,
-          precio_bs,  // precio_bs - REQUERIDO
-          precio_usd, // precio_usd - REQUERIDO
-          costo_bs,
-          costo_usd,
-          stock_minimo,
-        ].join(',')
+
+        return [nombre, categoria, sku, codigo_barras, precio_bs, precio_usd, costo_bs, costo_usd, stock_minimo].join(',')
       })
-      
-      // Crear CSV sin BOM para evitar problemas de lectura
+
       const csvContent = [csvHeaders, ...csvRows].join('\n')
-      
-      // Crear blob y descargar
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
-      
       const link = document.createElement('a')
       link.setAttribute('href', url)
       link.setAttribute('download', `Productos_${timestamp}.csv`)
@@ -490,458 +442,443 @@ export default function ProductsPage() {
 
       toast.success(`${allProducts.length} productos exportados a Excel`, { id: 'export-products' })
     } catch (error: any) {
-      console.error('[ProductsPage] Error exportando productos:', error)
       toast.error(error.response?.data?.message || 'Error al exportar productos', { id: 'export-products' })
     }
   }
 
   return (
     <div className="h-full max-w-7xl mx-auto">
-      {/* Indicador de pull-to-refresh */}
       <PullToRefreshIndicator
         isPulling={pullToRefresh.isPulling}
         isRefreshing={pullToRefresh.isRefreshing}
         pullDistance={pullToRefresh.pullDistance}
         threshold={80}
       />
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-6">
+        <Card className="border-none shadow-sm bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/20 dark:to-background">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+              <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Total Productos</p>
+              <h3 className="text-2xl font-bold text-foreground">{total}</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-sm bg-gradient-to-br from-orange-50 to-white dark:from-orange-950/20 dark:to-background">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-xl">
+              <AlertTriangle className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Alertas de Stock</p>
+              <h3 className="text-2xl font-bold text-orange-700 dark:text-orange-400">
+                {lowStockCount}
+                <span className="text-xs font-normal text-muted-foreground ml-2">críticos</span>
+              </h3>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Header */}
-      <div className="mb-4 sm:mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Gestión de Productos</h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              {total} {total === 1 ? 'producto' : 'productos'} encontrados
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Button
-              onClick={handleExportProducts}
-              variant="outline"
-              className="min-h-[44px]"
-            >
-              <Download className="w-5 h-5 mr-2" />
-              Exportar Excel
-            </Button>
-            <Button
-              onClick={() => setIsCleanDuplicatesOpen(true)}
-              variant="outline"
-              className="border-destructive text-destructive hover:bg-destructive/10 min-h-[44px]"
-            >
-              <Trash2 className="w-5 h-5 mr-2" />
-              Limpiar Duplicados
-            </Button>
-            <Button
-              onClick={() => setIsImportCSVOpen(true)}
-              variant="outline"
-              className="border-primary text-primary hover:bg-primary/10 min-h-[44px]"
-            >
-              <Upload className="w-5 h-5 mr-2" />
-              Importar CSV
-            </Button>
-            <Button
-              onClick={() => setIsBulkPriceModalOpen(true)}
-              variant="default"
-              className="bg-success hover:bg-success/90 min-h-[44px]"
-            >
-              <DollarSign className="w-5 h-5 mr-2" />
-              Cambio Masivo
-            </Button>
-            <Button
-              onClick={handleCreate}
-              variant="default"
-              className="min-h-[44px]"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              Nuevo Producto
-            </Button>
-          </div>
+      <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">Gestión de Productos</h1>
+        <div className="flex flex-col sm:flex-row gap-2">
+          {/* Opciones Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="w-auto px-3 gap-2 bg-background/50 backdrop-blur-sm">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="hidden sm:inline">Opciones</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Acciones Masivas</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleExportProducts}>
+                <Download className="w-4 h-4 mr-2" /> Exportar Excel
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsImportCSVOpen(true)}>
+                <Upload className="w-4 h-4 mr-2" /> Importar CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsCleanDuplicatesOpen(true)}>
+                <Trash2 className="w-4 h-4 mr-2" /> Limpiar Duplicados
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setIsBulkPriceModalOpen(true)}>
+                <DollarSign className="w-4 h-4 mr-2" /> Cambio Masivo Precios
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button
+            onClick={handleCreate}
+            variant="default"
+            className="shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30 transition-all font-semibold"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Nuevo Producto
+          </Button>
         </div>
       </div>
 
-      {/* Barra de búsqueda */}
-      <div className="mb-4 sm:mb-6 space-y-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5 z-10" />
-          <Input
-            type="text"
-            placeholder="Buscar por nombre, SKU o código de barras..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-4 py-2.5 sm:py-3 text-base sm:text-lg"
-            autoFocus
-          />
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="w-full sm:max-w-xs">
-            <Label className="text-xs text-muted-foreground">Categoría</Label>
+      {/* Filtros Flotantes */}
+      <Card className="mb-4 sm:mb-6 border-none shadow-sm bg-white/50 backdrop-blur-sm dark:bg-slate-900/50">
+        <CardContent className="p-3 sm:p-4 space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground/60 w-5 h-5 z-10" />
             <Input
-              value={categoryFilter}
-              onChange={(event) => setCategoryFilter(event.target.value)}
-              className="mt-2"
-              placeholder="Todas"
+              type="text"
+              placeholder="Buscar por nombre, SKU o código de barras..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-4 h-11 sm:h-12 text-base border-muted/40 bg-white/60 focus:bg-white transition-all shadow-sm focus:ring-primary/20"
             />
           </div>
-          <div className="w-full sm:max-w-xs">
-            <Label className="text-xs text-muted-foreground">Estado</Label>
-            <Select
-              value={statusFilter}
-              onValueChange={(value) =>
-                setStatusFilter(value as 'all' | 'active' | 'inactive')
-              }
-            >
-              <SelectTrigger className="mt-2">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="active">Activos</SelectItem>
-                <SelectItem value="inactive">Inactivos</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {warehouses.length > 0 && (
-            <div className="w-full sm:max-w-sm">
-              <Label className="text-xs text-muted-foreground">Stock por bodega</Label>
-              <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
-                <SelectTrigger className="mt-2">
-                  <SelectValue placeholder="Todas las bodegas" />
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="w-full sm:max-w-xs">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold ml-1">Categoría</Label>
+              <Input
+                value={categoryFilter}
+                onChange={(event) => setCategoryFilter(event.target.value)}
+                className="mt-1 border-muted/40 bg-white/60"
+                placeholder="Todas"
+              />
+            </div>
+            <div className="w-full sm:max-w-xs">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold ml-1">Estado</Label>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) =>
+                  setStatusFilter(value as 'all' | 'active' | 'inactive')
+                }
+              >
+                <SelectTrigger className="mt-1 border-muted/40 bg-white/60">
+                  <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todas las bodegas</SelectItem>
-                  {warehouses
-                    .filter((warehouse) => warehouse.is_active)
-                    .map((warehouse) => (
-                      <SelectItem key={warehouse.id} value={warehouse.id}>
-                        {warehouse.name} {warehouse.is_default ? '(Por defecto)' : ''}
-                      </SelectItem>
-                    ))}
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="active">Activos</SelectItem>
+                  <SelectItem value="inactive">Inactivos</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          )}
-        </div>
+            {warehouses.length > 0 && (
+              <div className="w-full sm:max-w-sm">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold ml-1">Stock por bodega</Label>
+                <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+                  <SelectTrigger className="mt-1 border-muted/40 bg-white/60">
+                    <SelectValue placeholder="Todas las bodegas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las bodegas</SelectItem>
+                    {warehouses.filter((w) => w.is_active).map((w) => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.name} {w.is_default ? '(Por defecto)' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-        {/* Toggle de vista - Solo en desktop */}
-        <div className="hidden sm:flex items-center justify-end">
-          <Tabs
-            value={viewMode}
-            onValueChange={(v) => setViewMode(v as 'cards' | 'table')}
-            className="w-auto"
-          >
-            <TabsList className="h-9">
-              <TabsTrigger value="cards" className="px-3 gap-1.5">
-                <LayoutGrid className="w-4 h-4" />
-                <span className="hidden sm:inline">Cards</span>
-              </TabsTrigger>
-              <TabsTrigger value="table" className="px-3 gap-1.5">
-                <LayoutList className="w-4 h-4" />
-                <span className="hidden sm:inline">Tabla</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-      </div>
+            <div className="hidden sm:flex items-end flex-1 justify-end">
+              <Tabs
+                value={viewMode}
+                onValueChange={(v) => setViewMode(v as 'cards' | 'table')}
+                className="w-auto"
+              >
+                <TabsList className="h-10 bg-muted/40">
+                  <TabsTrigger value="cards" className="px-3 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                    <LayoutGrid className="w-4 h-4" />
+                    <span className="hidden sm:inline">Cards</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="table" className="px-3 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                    <LayoutList className="w-4 h-4" />
+                    <span className="hidden sm:inline">Tabla</span>
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Lista de productos */}
-      <Card className="border border-border overflow-hidden">
+      <Card className="border-none shadow-sm overflow-hidden bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm">
         <CardContent className="p-0">
-        {isError ? (
-            <div className="p-8 text-center">
-              <div className="flex flex-col items-center justify-center py-8">
+          {isError ? (
+            <div className="p-12 text-center">
+              <div className="flex flex-col items-center justify-center">
                 <AlertTriangle className="w-12 h-12 mx-auto mb-3 text-destructive" />
-                <p className="text-muted-foreground">No se pudieron cargar los productos</p>
-                {error instanceof Error && (
-                  <p className="mt-1 text-xs text-muted-foreground">{error.message}</p>
-                )}
-                <Button
-                  variant="outline"
-                  className="mt-4"
-                  onClick={() => refetch()}
-                >
+                <p className="text-muted-foreground">Error al cargar productos</p>
+                <Button variant="outline" className="mt-4" onClick={() => refetch()}>
                   Reintentar
                 </Button>
               </div>
-          </div>
-        ) : isLoading ? (
-            <div className="p-8 text-center">
-              <div className="flex flex-col items-center justify-center py-8">
-                <Package className="w-12 h-12 mx-auto mb-3 text-muted-foreground animate-pulse" />
+            </div>
+          ) : isLoading ? (
+            <div className="p-12 text-center">
+              <div className="flex flex-col items-center justify-center">
+                <Package className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30 animate-bounce" />
                 <p className="text-muted-foreground">Cargando productos...</p>
               </div>
-          </div>
-        ) : products.length === 0 ? (
-            <div className="p-8 text-center">
-              <div className="flex flex-col items-center justify-center py-8">
-                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                  <Package className="w-8 h-8 text-muted-foreground" />
-                </div>
-                <p className="text-lg font-medium text-foreground mb-1">
-              {isOfflineEmpty
-                ? 'Sin conexión'
-                : searchQuery
-                  ? 'No se encontraron productos'
-                  : 'No hay productos registrados'}
-            </p>
-                <p className="text-sm text-muted-foreground">
-              {isOfflineEmpty
-                ? 'Conéctate para sincronizar o importa productos desde otro dispositivo'
-                : searchQuery
-                  ? 'Intenta con otro término de búsqueda'
-                  : 'Haz clic en "Nuevo Producto" para comenzar'}
-            </p>
-              </div>
-          </div>
-        ) : viewMode === 'cards' || isMobile ? (
-          /* Vista de Cards para móvil */
-          <div className="p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {products.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  stock={stockByProduct[product.id]}
-                  onEdit={handleEdit}
-                  onDuplicate={handleDuplicate}
-                  onChangePrice={handleChangePrice}
-                  onManageVariants={handleManageVariants}
-                  onManageLots={handleManageLots}
-                  onManageSerials={handleManageSerials}
-                  onDeactivate={handleDeactivate}
-                  onActivate={handleActivate}
-                  isDeactivating={deactivateMutation.isPending}
-                  isActivating={activateMutation.isPending}
-                />
-              ))}
             </div>
-          </div>
-        ) : (
-          /* Vista de Tabla para desktop */
-            <div className="overflow-x-auto">
-            <table className="w-full sm:table-fixed">
-                <thead className="bg-muted/50">
-                <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider w-[45%] sm:w-[40%]">
-                    Producto
-                  </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider hidden sm:table-cell">
-                    Categoría
-                  </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider hidden md:table-cell">
-                    SKU
-                  </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-foreground uppercase tracking-wider w-28 sm:w-32">
-                    Precio
-                  </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-foreground uppercase tracking-wider hidden sm:table-cell">
-                    Stock
-                  </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-foreground uppercase tracking-wider w-24">
-                    Estado
-                  </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-foreground uppercase tracking-wider w-40">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-                <tbody className="bg-background divide-y divide-border">
+          ) : products.length === 0 ? (
+            <div className="p-16 text-center">
+              <div className="flex flex-col items-center justify-center">
+                <div className="w-20 h-20 rounded-full bg-muted/50 flex items-center justify-center mb-6">
+                  <Package className="w-10 h-10 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-1">
+                  {isOfflineEmpty ? 'Sin conexión' : searchQuery ? 'No encontrado' : 'Inventario Vacío'}
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-xs mx-auto mb-6">
+                  {isOfflineEmpty ? 'Conéctate para ver tus productos.' : searchQuery ? 'Intenta con otro término.' : 'Crea tu primer producto ahora.'}
+                </p>
+                {!searchQuery && !isOfflineEmpty && (
+                  <Button onClick={handleCreate}>
+                    <Plus className="w-4 h-4 mr-2" /> Crear Producto
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : viewMode === 'cards' || isMobile ? (
+            <div className="p-4 bg-transparent">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {products.map((product) => (
-                  <tr
+                  <ProductCard
                     key={product.id}
-                    className={`hover:bg-accent/50 transition-colors ${
-                      !product.is_active ? 'opacity-60' : ''
-                    }`}
-                  >
-                    <td className="px-4 py-3 align-top w-[45%] sm:w-[40%]">
-                      <div className="min-w-0 max-w-full">
-                        <p
-                          className="font-semibold text-foreground text-sm sm:text-base break-words"
-                          title={product.name}
-                        >
-                          {product.name}
-                        </p>
-                        {product.barcode && (
-                          <p className="text-xs text-muted-foreground mt-0.5 break-words">
-                            Código: {product.barcode}
-                          </p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm hidden sm:table-cell">
-                      {product.category ? (
-                        <Badge 
-                          variant="outline" 
-                          className={cn(
-                            ...getCategoryColor(product.category),
-                            "border font-medium text-xs"
-                          )}
-                        >
-                          {product.category}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground hidden md:table-cell">
-                      {product.sku || '-'}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {editingPriceProductId === product.id ? (
-                        <div className="flex items-center gap-2 justify-end">
-                          <div className="flex items-center gap-1">
-                            <span className="text-sm text-muted-foreground">$</span>
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              step="0.01"
-                              min={0}
-                              value={editingPriceValue}
-                              onChange={(e) => setEditingPriceValue(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleSaveInlinePrice(product.id)
-                                } else if (e.key === 'Escape') {
-                                  handleCancelInlinePriceEdit()
-                                }
-                              }}
-                              onBlur={() => handleSaveInlinePrice(product.id)}
-                              className="h-8 w-20 text-sm text-right"
-                              autoFocus
-                              disabled={inlinePriceMutation.isPending}
-                            />
-                          </div>
-                          {inlinePriceMutation.isPending && (
-                            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                          )}
-                        </div>
-                      ) : (
-                        <div 
-                          className="text-sm sm:text-base cursor-pointer hover:bg-accent/50 rounded px-2 py-1 -mx-2 -my-1 transition-colors"
-                          onDoubleClick={() => handleStartInlinePriceEdit(product)}
-                          title="Doble clic para editar precio"
-                        >
-                          <p className="font-semibold text-foreground">
-                            ${Number(product.price_usd).toFixed(2)}
-                          </p>
-                          <p className="text-xs text-muted-foreground">Bs. {Number(product.price_bs).toFixed(2)}</p>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center hidden sm:table-cell">
-                      {stockByProduct[product.id] ? (
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="text-sm font-semibold">
-                            {formatStockValue(product, stockByProduct[product.id])}
-                          </span>
-                          {stockByProduct[product.id].is_low_stock && (
-                            <Badge variant="destructive" className="text-[10px]">
-                              Bajo
-                            </Badge>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {product.is_active ? (
-                        <Badge variant="default" className="bg-success/10 text-success hover:bg-success/20">
-                          Activo
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">
-                          Inactivo
-                        </Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleManageVariants(product)}
-                          className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
-                          title="Gestionar Variantes"
-                        >
-                          <Layers className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleManageLots(product)}
-                          className="h-8 w-8 text-blue-600 hover:text-blue-600 hover:bg-blue-600/10"
-                          title="Gestionar Lotes"
-                        >
-                          <Boxes className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleManageSerials(product)}
-                          className="h-8 w-8 text-purple-600 hover:text-purple-600 hover:bg-purple-600/10"
-                          title="Gestionar Seriales"
-                        >
-                          <Hash className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleChangePrice(product)}
-                          className="h-8 w-8 text-success hover:text-success hover:bg-success/10"
-                          title="Cambiar Precio"
-                        >
-                          <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDuplicate(product)}
-                          className="h-8 w-8 text-blue-600 hover:text-blue-600 hover:bg-blue-600/10"
-                          title="Duplicar"
-                          aria-label="Duplicar producto"
-                        >
-                          <Copy className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEdit(product)}
-                          className="h-8 w-8"
-                          title="Editar"
-                          aria-label="Editar producto"
-                        >
-                          <Edit className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-                        </Button>
-                        {product.is_active ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeactivate(product)}
-                            disabled={deactivateMutation.isPending}
-                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            title="Desactivar"
-                          >
-                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleActivate(product)}
-                            disabled={activateMutation.isPending}
-                            className="h-8 w-8 text-success hover:text-success hover:bg-success/10"
-                            title="Activar"
-                          >
-                            <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                    product={product}
+                    stock={stockByProduct[product.id]}
+                    onEdit={handleEdit}
+                    onDuplicate={handleDuplicate}
+                    onChangePrice={handleChangePrice}
+                    onManageVariants={handleManageVariants}
+                    onManageLots={handleManageLots}
+                    onManageSerials={handleManageSerials}
+                    onDeactivate={handleDeactivate}
+                    onActivate={handleActivate}
+                    isDeactivating={deactivateMutation.isPending}
+                    isActivating={activateMutation.isPending}
+                  />
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full sm:table-fixed">
+                <thead className="bg-muted/30">
+                  <tr className="border-b border-border/60">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider w-[45%] sm:w-[40%] pl-6">
+                      Producto
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden sm:table-cell">
+                      Categoría
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden md:table-cell">
+                      SKU
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider w-28 sm:w-32">
+                      Precio
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden sm:table-cell">
+                      Stock
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider w-24">
+                      Estado
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider w-40 pr-6">
+                      Acciones
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {products.map((product) => {
+                    const initial = product.name.charAt(0).toUpperCase()
+                    const stockItem = stockByProduct[product.id]
+                    const isLowStock = stockItem?.is_low_stock
+
+                    return (
+                      <tr
+                        key={product.id}
+                        className={cn(
+                          "hover:bg-muted/40 transition-colors group",
+                          !product.is_active && 'opacity-60 bg-muted/20'
+                        )}
+                      >
+                        <td className="px-4 py-3 align-middle w-[45%] sm:w-[40%] pl-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-background shrink-0">
+                              {initial}
+                            </div>
+                            <div className="min-w-0 max-w-full">
+                              <p
+                                className="font-semibold text-foreground text-sm sm:text-base break-words leading-snug"
+                                title={product.name}
+                              >
+                                {product.name}
+                              </p>
+                              {product.barcode && (
+                                <p className="text-xs text-muted-foreground mt-0.5 font-mono bg-muted/50 inline-block px-1 rounded">
+                                  {product.barcode}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm hidden sm:table-cell">
+                          {product.category ? (
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                ...getCategoryColor(product.category),
+                                "border font-medium text-xs px-2 py-0.5 rounded-full"
+                              )}
+                            >
+                              {product.category}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground hidden md:table-cell font-mono">
+                          {product.sku || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {editingPriceProductId === product.id ? (
+                            <div className="flex items-center gap-2 justify-end">
+                              <div className="flex items-center gap-1 bg-white dark:bg-slate-800 rounded border p-1 shadow-sm">
+                                <span className="text-sm text-muted-foreground px-1">$</span>
+                                <Input
+                                  type="number"
+                                  inputMode="decimal"
+                                  step="0.01"
+                                  min={0}
+                                  value={editingPriceValue}
+                                  onChange={(e) => setEditingPriceValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveInlinePrice(product.id)
+                                    else if (e.key === 'Escape') handleCancelInlinePriceEdit()
+                                  }}
+                                  onBlur={() => handleSaveInlinePrice(product.id)}
+                                  className="h-7 w-20 text-sm text-right border-none focus-visible:ring-0 p-0"
+                                  autoFocus
+                                  disabled={inlinePriceMutation.isPending}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              className="group/price cursor-pointer hover:bg-muted/50 rounded px-2 py-1 -mx-2 transition-all text-right"
+                              onDoubleClick={() => handleStartInlinePriceEdit(product)}
+                              title="Doble clic para editar precio"
+                            >
+                              <p className="font-bold text-foreground tabular-nums">
+                                ${Number(product.price_usd).toFixed(2)}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground tabular-nums">Bs. {Number(product.price_bs).toFixed(2)}</p>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center hidden sm:table-cell">
+                          {stockItem ? (
+                            <div className="flex flex-col items-center gap-1">
+                              <span className={cn(
+                                "text-sm font-bold tabular-nums",
+                                isLowStock ? "text-orange-600" : "text-slate-700 dark:text-slate-300"
+                              )}>
+                                {formatStockValue(product, stockItem)}
+                              </span>
+                              {isLowStock && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300">
+                                  Bajo
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {product.is_active ? (
+                            <div className="w-2.5 h-2.5 rounded-full bg-green-500 mx-auto ring-4 ring-green-500/20" title="Activo" />
+                          ) : (
+                            <Badge variant="secondary" className="text-[10px]">Inactivo</Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 pr-6">
+                          <div className="flex items-center justify-end space-x-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleManageVariants(product)}
+                              className="h-8 w-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full"
+                              title="Gestionar Variantes"
+                            >
+                              <Layers className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleChangePrice(product)}
+                              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-full"
+                              title="Cambiar Precio"
+                            >
+                              <DollarSign className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEdit(product)}
+                              className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-full"
+                              title="Editar"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+                                  <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleDuplicate(product)}>
+                                  <Copy className="w-4 h-4 mr-2" /> Duplicar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleManageLots(product)}>
+                                  <Boxes className="w-4 h-4 mr-2" /> Lotes
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleManageSerials(product)}>
+                                  <Hash className="w-4 h-4 mr-2" /> Seriales
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                {product.is_active ? (
+                                  <DropdownMenuItem onClick={() => handleDeactivate(product)} className="text-destructive focus:text-destructive">
+                                    <Trash2 className="w-4 h-4 mr-2" /> Desactivar
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem onClick={() => handleActivate(product)} className="text-green-600 focus:text-green-600">
+                                    <CheckCircle className="w-4 h-4 mr-2" /> Activar
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -977,16 +914,9 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Modal de formulario - Lazy loaded para reducir bundle inicial */}
+      {/* Modales */}
       {isFormOpen && (
-        <Suspense fallback={
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
-            <div className="flex flex-col items-center gap-2">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <p className="text-sm text-muted-foreground">Cargando formulario...</p>
-            </div>
-          </div>
-        }>
+        <Suspense fallback={<div className="fixed inset-0 bg-background/80 z-50 flex items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
           <ProductFormModal
             isOpen={isFormOpen}
             onClose={handleCloseForm}
@@ -1002,7 +932,6 @@ export default function ProductsPage() {
         </Suspense>
       )}
 
-      {/* Modal de cambio de precio */}
       <ChangePriceModal
         isOpen={isPriceModalOpen}
         onClose={() => {
@@ -1018,16 +947,8 @@ export default function ProductsPage() {
         }}
       />
 
-      {/* Modal de cambio masivo de precios - Lazy loaded */}
       {isBulkPriceModalOpen && (
-        <Suspense fallback={
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
-            <div className="flex flex-col items-center gap-2">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <p className="text-sm text-muted-foreground">Cargando...</p>
-            </div>
-          </div>
-        }>
+        <Suspense fallback={<div className="fixed inset-0 bg-background/80 z-50 flex items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
           <BulkPriceChangeModal
             isOpen={isBulkPriceModalOpen}
             onClose={() => setIsBulkPriceModalOpen(false)}
@@ -1040,16 +961,8 @@ export default function ProductsPage() {
         </Suspense>
       )}
 
-      {/* Modal de gestión de variantes - Lazy loaded */}
       {variantsProduct && (
-        <Suspense fallback={
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
-            <div className="flex flex-col items-center gap-2">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <p className="text-sm text-muted-foreground">Cargando...</p>
-            </div>
-          </div>
-        }>
+        <Suspense fallback={null}>
           <ProductVariantsModal
             isOpen={!!variantsProduct}
             onClose={() => setVariantsProduct(null)}
@@ -1058,16 +971,8 @@ export default function ProductsPage() {
         </Suspense>
       )}
 
-      {/* Modal de gestión de lotes - Lazy loaded */}
       {lotsProduct && (
-        <Suspense fallback={
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
-            <div className="flex flex-col items-center gap-2">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <p className="text-sm text-muted-foreground">Cargando...</p>
-            </div>
-          </div>
-        }>
+        <Suspense fallback={null}>
           <ProductLotsModal
             isOpen={!!lotsProduct}
             onClose={() => setLotsProduct(null)}
@@ -1076,16 +981,8 @@ export default function ProductsPage() {
         </Suspense>
       )}
 
-      {/* Modal de gestión de seriales - Lazy loaded */}
       {serialsProduct && (
-        <Suspense fallback={
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
-            <div className="flex flex-col items-center gap-2">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <p className="text-sm text-muted-foreground">Cargando...</p>
-            </div>
-          </div>
-        }>
+        <Suspense fallback={null}>
           <ProductSerialsModal
             isOpen={!!serialsProduct}
             onClose={() => setSerialsProduct(null)}
@@ -1094,42 +991,22 @@ export default function ProductsPage() {
         </Suspense>
       )}
 
-      {/* Modal de importación CSV - Lazy loaded */}
       {isImportCSVOpen && (
-        <Suspense fallback={
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
-            <div className="flex flex-col items-center gap-2">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <p className="text-sm text-muted-foreground">Cargando...</p>
-            </div>
-          </div>
-        }>
+        <Suspense fallback={null}>
           <ImportCSVModal
             isOpen={isImportCSVOpen}
             onClose={() => setIsImportCSVOpen(false)}
-            onSuccess={() => {
-              queryClient.invalidateQueries({ queryKey: ['products'] })
-            }}
+            onSuccess={() => queryClient.invalidateQueries({ queryKey: ['products'] })}
           />
         </Suspense>
       )}
 
-      {/* Modal de limpieza de duplicados - Lazy loaded */}
       {isCleanDuplicatesOpen && (
-        <Suspense fallback={
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
-            <div className="flex flex-col items-center gap-2">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <p className="text-sm text-muted-foreground">Cargando...</p>
-            </div>
-          </div>
-        }>
+        <Suspense fallback={null}>
           <CleanDuplicatesModal
             isOpen={isCleanDuplicatesOpen}
             onClose={() => setIsCleanDuplicatesOpen(false)}
-            onSuccess={() => {
-              queryClient.invalidateQueries({ queryKey: ['products'] })
-            }}
+            onSuccess={() => queryClient.invalidateQueries({ queryKey: ['products'] })}
           />
         </Suspense>
       )}

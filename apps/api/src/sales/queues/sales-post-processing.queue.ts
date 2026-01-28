@@ -11,6 +11,7 @@ export interface PostProcessSaleJob {
   storeId: string;
   saleId: string;
   userId?: string;
+  generateFiscalInvoice?: boolean; // Si true, genera factura fiscal
 }
 
 /**
@@ -50,15 +51,19 @@ export class SalesPostProcessingQueueProcessor extends WorkerHost {
     try {
       await job.updateProgress(10);
 
-      // 1. Procesar factura fiscal si está configurado
+      // 1. Procesar factura fiscal si está configurado Y el usuario lo solicitó
       let fiscalInvoiceIssued = false;
       let fiscalInvoiceFound = false;
 
       try {
+        const { generateFiscalInvoice = false } = job.data;
         const hasFiscalConfig =
           await this.fiscalInvoicesService.hasActiveFiscalConfig(storeId);
 
-        if (hasFiscalConfig) {
+        // Solo generar factura fiscal si:
+        // 1. El usuario lo solicitó (generateFiscalInvoice = true)
+        // 2. Y existe una configuración fiscal activa
+        if (generateFiscalInvoice && hasFiscalConfig) {
           await job.updateProgress(30);
 
           const existingInvoice =
@@ -99,6 +104,14 @@ export class SalesPostProcessingQueueProcessor extends WorkerHost {
               `✅ Factura fiscal creada y emitida para venta ${saleId}: ${issuedInvoice.invoice_number}`,
             );
           }
+        } else if (!generateFiscalInvoice) {
+          this.logger.log(
+            `ℹ️ Factura fiscal no solicitada para venta ${saleId}`,
+          );
+        } else if (!hasFiscalConfig) {
+          this.logger.log(
+            `⚠️ No hay configuración fiscal activa para tienda ${storeId}`,
+          );
         }
       } catch (error) {
         // Log error pero no fallar el job completo

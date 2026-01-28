@@ -21,6 +21,7 @@ export interface InvoiceConfig {
     priceListId: string | null
     promotionId: string | null
     warehouseId: string | null
+    generateFiscalInvoice: boolean
 }
 
 export interface CheckoutState {
@@ -67,6 +68,7 @@ export type CheckoutAction =
     | { type: 'SET_PRICE_LIST'; payload: string | null }
     | { type: 'SET_PROMOTION'; payload: string | null }
     | { type: 'SET_WAREHOUSE'; payload: string | null }
+    | { type: 'SET_GENERATE_FISCAL_INVOICE'; payload: boolean }
     | { type: 'SET_SALE_NOTE'; payload: string }
     | { type: 'SET_ERROR'; payload: string }
     | { type: 'RESET' }

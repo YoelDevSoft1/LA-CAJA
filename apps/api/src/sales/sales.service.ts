@@ -1823,6 +1823,7 @@ export class SalesService {
           storeId,
           saleId: saleWithDebt.id,
           userId: userId || undefined,
+          generateFiscalInvoice: dto.generate_fiscal_invoice || false,
         },
         {
           priority: 5, // Prioridad media para tareas post-venta

@@ -20,7 +20,6 @@ import CashPaymentSection from './checkout/CashPaymentSection'
 import CustomerSearchSection from './checkout/CustomerSearchSection'
 import InvoiceConfigSection from './checkout/InvoiceConfigSection'
 import CheckoutSummary from './checkout/CheckoutSummary'
-import { QuickActionsBar } from './checkout/QuickActionsBar'
 
 // Nuevos hooks
 import { useCheckoutState } from '@/hooks/pos/useCheckoutState'
@@ -364,30 +363,7 @@ export default function CheckoutModal({
             />
 
             {/* Pagos divididos */}
-            {/* Pagos divididos (MOVIDO A LA DERECHA) */}
-          </div>
-
-          {/* RIGHT COLUMN */}
-          <div className="space-y-4 sm:space-y-6">
-
-            {/* Quick Actions Bar */}
-            <QuickActionsBar
-              isSplitPayment={state.paymentMode === 'SPLIT'}
-              onToggleSplitPayment={() => actions.setPaymentMode(state.paymentMode === 'SPLIT' ? 'SINGLE' : 'SPLIT')}
-              generateFiscalInvoice={state.invoice.generateFiscalInvoice}
-              hasFiscalConfig={checkoutData.invoiceSeries.length > 0}
-              onToggleFiscalInvoice={actions.setGenerateFiscalInvoice}
-              promotions={checkoutData.promotions as any || []}
-              selectedPromotionId={state.invoice.promotionId}
-              onPromotionChange={actions.setPromotion}
-              customers={checkoutData.customers}
-              selectedCustomerId={state.customerData.selectedId}
-              onCustomerChange={actions.setCustomerId}
-              customerSearchTerm={state.customerData.search}
-              onCustomerSearchChange={actions.setCustomerSearch}
-            />
-
-            {state.paymentMode === 'SPLIT' ? (
+            {state.paymentMode === 'SPLIT' && (
               <SplitPaymentManager
                 payments={splitPayments}
                 remainingUsd={splitRemainingUsd}
@@ -398,39 +374,59 @@ export default function CheckoutModal({
                 onRemovePayment={handleRemoveSplitPayment}
                 onUpdatePayment={handleUpdateSplitPayment}
               />
-            ) : (
-              <>
-                {/* Selector de método de pago */}
-                <PaymentMethodSelector
-                  value={state.selectedMethod}
-                  onChange={actions.setPaymentMethod}
-                  disabled={state.paymentMode === 'SPLIT'}
-                />
+            )}
+          </div>
 
-                {/* Sección de efectivo USD */}
-                {state.selectedMethod === 'CASH_USD' && (
-                  <CashPaymentSection
-                    mode="USD"
-                    totalAmount={total.usd}
-                    exchangeRate={checkoutData.exchangeRate}
-                    receivedAmount={state.cash.receivedUsd}
-                    onAmountChange={actions.setReceivedUsd}
-                    giveChangeInBs={state.cash.giveChangeInBs}
-                    onGiveChangeInBsChange={actions.setGiveChangeInBs}
-                  />
-                )}
+          {/* RIGHT COLUMN */}
+          <div className="space-y-4 sm:space-y-6">
+            {/* Toggle de pago dividido */}
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold">Pago Dividido</h3>
+                    <p className="text-sm text-muted-foreground">Dividir el pago en múltiples métodos</p>
+                  </div>
+                  <Button
+                    variant={state.paymentMode === 'SPLIT' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => actions.setPaymentMode(state.paymentMode === 'SPLIT' ? 'SINGLE' : 'SPLIT')}
+                  >
+                    {state.paymentMode === 'SPLIT' ? 'Activado' : 'Desactivado'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
-                {/* Sección de efectivo BS */}
-                {state.selectedMethod === 'CASH_BS' && (
-                  <CashPaymentSection
-                    mode="BS"
-                    totalAmount={total.usd * checkoutData.exchangeRate}
-                    exchangeRate={checkoutData.exchangeRate}
-                    receivedAmount={state.cash.receivedBs}
-                    onAmountChange={actions.setReceivedBs}
-                  />
-                )}
-              </>
+            {/* Selector de método de pago */}
+            <PaymentMethodSelector
+              value={state.selectedMethod}
+              onChange={actions.setPaymentMethod}
+              disabled={state.paymentMode === 'SPLIT'}
+            />
+
+            {/* Sección de efectivo USD */}
+            {state.paymentMode === 'SINGLE' && state.selectedMethod === 'CASH_USD' && (
+              <CashPaymentSection
+                mode="USD"
+                totalAmount={total.usd}
+                exchangeRate={checkoutData.exchangeRate}
+                receivedAmount={state.cash.receivedUsd}
+                onAmountChange={actions.setReceivedUsd}
+                giveChangeInBs={state.cash.giveChangeInBs}
+                onGiveChangeInBsChange={actions.setGiveChangeInBs}
+              />
+            )}
+
+            {/* Sección de efectivo BS */}
+            {state.paymentMode === 'SINGLE' && state.selectedMethod === 'CASH_BS' && (
+              <CashPaymentSection
+                mode="BS"
+                totalAmount={total.usd * checkoutData.exchangeRate}
+                exchangeRate={checkoutData.exchangeRate}
+                receivedAmount={state.cash.receivedBs}
+                onAmountChange={actions.setReceivedBs}
+              />
             )}
 
             {/* Búsqueda de cliente */}
@@ -449,13 +445,19 @@ export default function CheckoutModal({
             <InvoiceConfigSection
               invoiceSeries={checkoutData.invoiceSeries as any}
               priceLists={checkoutData.priceLists}
+              promotions={checkoutData.promotions as any}
               warehouses={checkoutData.warehouses}
               selectedSeriesId={state.invoice.seriesId}
               selectedPriceListId={state.invoice.priceListId}
+              selectedPromotionId={state.invoice.promotionId}
               selectedWarehouseId={state.invoice.warehouseId}
+              generateFiscalInvoice={state.invoice.generateFiscalInvoice}
+              hasFiscalConfig={checkoutData.invoiceSeries.length > 0}
               onSeriesChange={actions.setInvoiceSeries}
               onPriceListChange={actions.setPriceList}
+              onPromotionChange={actions.setPromotion}
               onWarehouseChange={actions.setWarehouse}
+              onGenerateFiscalInvoiceChange={actions.setGenerateFiscalInvoice}
             />
 
             {/* Nota de venta */}
@@ -540,10 +542,9 @@ export default function CheckoutModal({
               quantity={serialSelectorItem.quantity}
               onSelect={handleSerialSelect}
             />
-          )
-          }
-        </SheetContent >
-      </Sheet >
+          )}
+        </SheetContent>
+      </Sheet>
     )
   }
 

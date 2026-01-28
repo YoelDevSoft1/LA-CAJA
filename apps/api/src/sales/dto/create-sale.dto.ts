@@ -6,6 +6,7 @@ import {
   IsUUID,
   IsOptional,
   IsIn,
+  IsBoolean,
   Min,
   ValidateIf,
   Matches,
@@ -165,4 +166,9 @@ export class CreateSaleDto {
   @IsUUID()
   @IsOptional()
   warehouse_id?: string; // Bodega de donde se vende (NULL = bodega por defecto)
+
+  @IsBoolean()
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  generate_fiscal_invoice?: boolean; // Si true, genera factura fiscal para esta venta
 }

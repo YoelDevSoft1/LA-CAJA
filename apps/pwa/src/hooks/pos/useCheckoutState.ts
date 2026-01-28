@@ -22,6 +22,7 @@ const initialState: CheckoutState = {
         priceListId: null,
         promotionId: null,
         warehouseId: null,
+        generateFiscalInvoice: false,
     },
     saleNote: '',
     error: '',
@@ -59,6 +60,8 @@ function checkoutReducer(state: CheckoutState, action: CheckoutAction): Checkout
             return { ...state, invoice: { ...state.invoice, promotionId: action.payload } }
         case 'SET_WAREHOUSE':
             return { ...state, invoice: { ...state.invoice, warehouseId: action.payload } }
+        case 'SET_GENERATE_FISCAL_INVOICE':
+            return { ...state, invoice: { ...state.invoice, generateFiscalInvoice: action.payload } }
         case 'SET_SALE_NOTE':
             return { ...state, saleNote: action.payload }
         case 'SET_ERROR':
@@ -132,6 +135,10 @@ export function useCheckoutState() {
 
         setWarehouse: useCallback((id: string | null) => {
             dispatch({ type: 'SET_WAREHOUSE', payload: id })
+        }, []),
+
+        setGenerateFiscalInvoice: useCallback((value: boolean) => {
+            dispatch({ type: 'SET_GENERATE_FISCAL_INVOICE', payload: value })
         }, []),
 
         setSaleNote: useCallback((note: string) => {
