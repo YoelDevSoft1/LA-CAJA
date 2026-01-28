@@ -6,7 +6,8 @@ import {
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
-import helmet from '@fastify/helmet';
+// @ts-ignore
+import helmet = require('@fastify/helmet');
 import { SecretValidator } from './common/utils/secret-validator';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { IoAdapter } from '@nestjs/platform-socket.io';
@@ -73,7 +74,7 @@ async function bootstrap() {
   const nodeEnv = configService.get<string>('NODE_ENV');
   const isDevelopment = nodeEnv !== 'production';
   const allowAllOriginsLocal = configService.get<string>('ALLOW_ALL_ORIGINS_LOCAL') === 'true';
-  
+
   const allowedOrigins = configService.get<string>('ALLOWED_ORIGINS');
   const extraOrigins = [
     configService.get<string>('PUBLIC_APP_URL'),
@@ -84,10 +85,10 @@ async function bootstrap() {
   const originList = allowedOrigins
     ? allowedOrigins.split(',').map((origin) => origin.trim())
     : [
-        'http://localhost:5173',
-        'http://localhost:4173',
-        'http://localhost:3000',
-      ]; // Defaults para desarrollo (5173) y preview (4173)
+      'http://localhost:5173',
+      'http://localhost:4173',
+      'http://localhost:3000',
+    ]; // Defaults para desarrollo (5173) y preview (4173)
   const origins = Array.from(new Set([...originList, ...extraOrigins]));
 
   // Obtener puerto antes de usarlo
@@ -183,7 +184,7 @@ async function bootstrap() {
 
   await app.listen(port, '0.0.0.0');
   logger.log(`🚀 API listening on http://localhost:${port}`);
-  
+
   if (isDevelopment && allowAllOriginsLocal) {
     logger.warn(`⚠️  CORS: PERMITIENDO TODOS LOS ORÍGENES (modo desarrollo + VPN)`);
   } else {

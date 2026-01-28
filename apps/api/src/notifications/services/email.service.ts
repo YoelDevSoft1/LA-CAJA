@@ -2,48 +2,18 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Resend } from 'resend';
+// import { Resend } from 'resend';
+const { Resend } = require('resend');
 import { EmailQueue } from '../../database/entities/email-queue.entity';
 import { NotificationAnalytics } from '../../database/entities/notification-analytics.entity';
 import { randomUUID } from 'crypto';
 
-export interface SendEmailOptions {
-  storeId: string;
-  notificationId?: string;
-  to: string;
-  toName?: string;
-  subject: string;
-  htmlBody: string;
-  textBody?: string;
-  templateId?: string;
-  templateVariables?: Record<string, any>;
-  priority?: number;
-  scheduledFor?: Date;
-  from?: string;
-  fromName?: string;
-  replyTo?: string;
-}
+// ... (interfaces)
 
-export interface EmailWebhookPayload {
-  type: 'email.sent' | 'email.delivered' | 'email.bounced' | 'email.complained' | 'email.opened' | 'email.clicked';
-  created_at: string;
-  data: {
-    email_id: string;
-    from: string;
-    to: string[];
-    subject: string;
-    [key: string]: any;
-  };
-}
-
-/**
- * Email Service con integración de Resend
- * Maneja envío de emails transaccionales y tracking
- */
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private resend: Resend | null = null;
+  private resend: any | null = null;
   private defaultFrom: string;
   private defaultFromName: string;
 
@@ -75,7 +45,7 @@ export class EmailService {
       this.configService.get<string>('EMAIL_FROM') || 'onboarding@resend.dev';
     this.defaultFromName =
       this.configService.get<string>('EMAIL_FROM_NAME') || 'LA-CAJA';
-    
+
     this.logger.log(`📧 Email default FROM: ${this.defaultFromName} <${this.defaultFrom}>`);
     this.logger.log(`   Using Resend domain for testing (change EMAIL_FROM for production)`);
   }
@@ -129,7 +99,7 @@ export class EmailService {
       // Enviar con Resend
       const fromAddress = `${queueEntry.from_name} <${queueEntry.from_email}>`;
       this.logger.log(`📤 Attempting to send email via Resend: ${options.to} from ${fromAddress}`);
-      
+
       const result = await this.resend!.emails.send({
         from: fromAddress,
         to: [options.to],
@@ -176,7 +146,7 @@ export class EmailService {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
       this.logger.error(`❌ Failed to send email ${emailId}: ${errorMessage}`, errorStack);
-      
+
       // Log detalle del error para debugging
       if (error instanceof Error) {
         this.logger.error(`   Error details: ${error.constructor.name}`, {
