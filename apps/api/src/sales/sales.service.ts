@@ -184,24 +184,12 @@ export class SalesService {
   ): Promise<void> {
     const validateStart = Date.now();
     // Determinar bodega de venta
-    let warehouseId: string | null = null;
-    if (dto.warehouse_id) {
-      // Validar que la bodega existe y pertenece a la tienda
-      await this.warehousesService.findOne(storeId, dto.warehouse_id);
-      warehouseId = dto.warehouse_id;
-    } else {
-      // Usar bodega por defecto si no se especifica
-      const defaultWarehouse =
-        await this.warehousesService.getDefaultOrFirst(storeId);
-      warehouseId = defaultWarehouse.id;
-    }
-
-    // ⚡ OPTIMIZACIÓN CRÍTICA: Batch queries para productos, variantes, lotes y seriales
+    const warehouseId = await this.prepareWarehouse(storeId, dto.warehouse_id);
     const productIds = dto.items.map(item => item.product_id);
     const variantIds = dto.items
       .map(item => item.variant_id)
       .filter((id): id is string => !!id);
-    
+
     // ⚡ OPTIMIZACIÓN CRÍTICA: Ejecutar queries independientes en paralelo
     const [
       stockRecords,
@@ -213,21 +201,21 @@ export class SalesService {
       // ⚡ OPTIMIZACIÓN: Usar formato de array PostgreSQL nativo para mejor rendimiento
       warehouseId
         ? this.dataSource.query(
-            `SELECT product_id, variant_id, stock, reserved
+          `SELECT product_id, variant_id, stock, reserved
              FROM warehouse_stock
              WHERE warehouse_id = $1
                AND product_id = ANY($2::uuid[])`,
-            [warehouseId, productIds],
-          )
+          [warehouseId, productIds],
+        )
         : this.dataSource.query(
-            `SELECT ws.product_id, ws.variant_id, COALESCE(SUM(ws.stock - COALESCE(ws.reserved, 0)), 0) as stock, 0 as reserved
+          `SELECT ws.product_id, ws.variant_id, COALESCE(SUM(ws.stock - COALESCE(ws.reserved, 0)), 0) as stock, 0 as reserved
              FROM warehouse_stock ws
              INNER JOIN warehouses w ON ws.warehouse_id = w.id
              WHERE w.store_id = $1
                AND ws.product_id = ANY($2::uuid[])
              GROUP BY ws.product_id, ws.variant_id`,
-            [storeId, productIds],
-          ),
+          [storeId, productIds],
+        ),
       // 2. Batch query de productos
       this.productRepository.find({
         where: {
@@ -239,25 +227,25 @@ export class SalesService {
       // 3. Batch query de variantes (solo si hay)
       variantIds.length > 0
         ? this.dataSource.getRepository(ProductVariant).find({
-            where: { id: In(variantIds) },
-          })
+          where: { id: In(variantIds) },
+        })
         : Promise.resolve([]),
       // 4. Batch query para lotes
       this.dataSource.getRepository(ProductLot).find({
         where: { product_id: In(productIds) },
       }),
     ]);
-    
+
     // 5. Batch query para seriales (después de obtener productos para saber cuáles no son por peso)
     const productsWithSerials = products
       .filter(p => !p.is_weight_product)
       .map(p => p.id);
     const allSerials = productsWithSerials.length > 0
       ? await this.dataSource.getRepository(ProductSerial).find({
-          where: { product_id: In(productsWithSerials) },
-        })
+        where: { product_id: In(productsWithSerials) },
+      })
       : [];
-    
+
     // Crear mapa de stocks para acceso O(1)
     const stockMap = new Map<string, number>();
     for (const record of stockRecords) {
@@ -397,9 +385,6 @@ export class SalesService {
         }
       }
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:371',message:'VALIDATE_STOCK_AVAILABILITY_COMPLETE',data:{duration:Date.now()-validateStart,itemsCount:dto.items?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'validate-stock',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
   }
 
   /**
@@ -421,31 +406,31 @@ export class SalesService {
     // Si variantId no es NULL, buscamos variant_id = variantId
     // Esto permite que PostgreSQL use el índice único (warehouse_id, product_id, variant_id) de manera más eficiente
     // El índice único ya existe, pero PostgreSQL puede no usarlo eficientemente con la condición OR compleja
-    
+
     // ⚡ OPTIMIZACIÓN: Query separada por caso para aprovechar índices
     // Esto reduce el tiempo de 4-20 segundos a <100ms típicamente
     // Los índices parciales en la migración 84 ayudan aún más
     const result = variantId === null
       ? await manager.query(
-          `SELECT stock, reserved
+        `SELECT stock, reserved
            FROM warehouse_stock
            WHERE warehouse_id = $1
              AND product_id = $2
              AND variant_id IS NULL
            FOR UPDATE
            LIMIT 1`,
-          [warehouseId, productId],
-        )
+        [warehouseId, productId],
+      )
       : await manager.query(
-          `SELECT stock, reserved
+        `SELECT stock, reserved
            FROM warehouse_stock
            WHERE warehouse_id = $1
              AND product_id = $2
              AND variant_id = $3
            FOR UPDATE
            LIMIT 1`,
-          [warehouseId, productId, variantId],
-        );
+        [warehouseId, productId, variantId],
+      );
 
     if (!result || result.length === 0) {
       // No hay registro de stock, significa stock = 0
@@ -458,9 +443,6 @@ export class SalesService {
     }
 
     const availableStock = Number(result[0].stock || 0) - Number(result[0].reserved || 0);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:428',message:'VALIDATE_AND_LOCK_STOCK_COMPLETE',data:{duration:Date.now()-lockStart,productId,warehouseId,variantId:variantId||'null'},timestamp:Date.now(),sessionId:'debug-session',runId:'lock-stock',hypothesisId:'L'})}).catch(()=>{});
-    // #endregion
     return Math.max(0, availableStock);
   }
 
@@ -480,25 +462,25 @@ export class SalesService {
     // Esto evita el uso de OR que puede causar table scans
     const result = variantId === null
       ? await manager.query(
-          `SELECT COALESCE(SUM(ws.stock - COALESCE(ws.reserved, 0)), 0) as total_available
+        `SELECT COALESCE(SUM(ws.stock - COALESCE(ws.reserved, 0)), 0) as total_available
            FROM warehouse_stock ws
            INNER JOIN warehouses w ON ws.warehouse_id = w.id
            WHERE w.store_id = $1
              AND ws.product_id = $2
              AND ws.variant_id IS NULL
            FOR UPDATE OF ws`,
-          [storeId, productId],
-        )
+        [storeId, productId],
+      )
       : await manager.query(
-          `SELECT COALESCE(SUM(ws.stock - COALESCE(ws.reserved, 0)), 0) as total_available
+        `SELECT COALESCE(SUM(ws.stock - COALESCE(ws.reserved, 0)), 0) as total_available
            FROM warehouse_stock ws
            INNER JOIN warehouses w ON ws.warehouse_id = w.id
            WHERE w.store_id = $1
              AND ws.product_id = $2
              AND ws.variant_id = $3
            FOR UPDATE OF ws`,
-          [storeId, productId, variantId],
-        );
+        [storeId, productId, variantId],
+      );
 
     const totalAvailable = Number(result[0]?.total_available || 0);
     return Math.max(0, totalAvailable);
@@ -591,9 +573,9 @@ export class SalesService {
         return await this.dataSource.transaction(callback);
       } catch (error: any) {
         // Código de error PostgreSQL para deadlock
-        const isDeadlock = error?.code === '40P01' || 
-                          error?.message?.includes('deadlock') ||
-                          error?.message?.includes('Deadlock');
+        const isDeadlock = error?.code === '40P01' ||
+          error?.message?.includes('deadlock') ||
+          error?.message?.includes('Deadlock');
 
         if (isDeadlock && attempt < maxRetries - 1) {
           // Backoff exponencial: 100ms, 200ms, 400ms
@@ -635,7 +617,303 @@ export class SalesService {
     return nextNumber;
   }
 
+  /**
+   * Crea un registro de deuda para ventas FIAO
+   * Valida crédito disponible y crea el registro de deuda
+   * @returns El registro de deuda creado o null si no es FIAO
+   */
+  private async createDebtRecord(
+    manager: EntityManager,
+    storeId: string,
+    saleId: string,
+    customerId: string,
+    totalUsd: number,
+    totalBs: number,
+    exchangeRate: number,
+  ): Promise<Debt | null> {
+    // Validar que el cliente existe
+    const customer = await manager.findOne(Customer, {
+      where: { id: customerId, store_id: storeId },
+    });
+
+    if (!customer) {
+      throw new NotFoundException('Cliente no encontrado');
+    }
+
+    if (customer.credit_limit === null || customer.credit_limit <= 0) {
+      throw new BadRequestException(
+        'El cliente no tiene crédito habilitado para compras FIAO',
+      );
+    }
+
+    // Calcular deuda actual dentro de la transacción
+    const debtResult = await manager.query(
+      `
+      SELECT COALESCE(SUM(
+        amount_usd - COALESCE((
+          SELECT SUM(amount_usd) FROM debt_payments WHERE debt_id = d.id
+        ), 0)
+      ), 0) as current_debt
+      FROM debts d
+      WHERE store_id = $1 
+        AND customer_id = $2
+        AND status != 'paid'
+    `,
+      [storeId, customerId],
+    );
+
+    const currentDebt = parseFloat(debtResult[0]?.current_debt || '0');
+    const availableCredit = Number(customer.credit_limit) - currentDebt;
+
+    // Validar que el crédito disponible sea suficiente
+    if (totalUsd > availableCredit) {
+      throw new BadRequestException(
+        `Crédito insuficiente. Disponible: $${availableCredit.toFixed(2)} USD, Requerido: $${totalUsd.toFixed(2)} USD`,
+      );
+    }
+
+    // Crear registro de deuda
+    const debt = manager.create(Debt, {
+      id: randomUUID(),
+      store_id: storeId,
+      customer_id: customerId,
+      sale_id: saleId,
+      amount_usd: totalUsd,
+      amount_bs: totalBs,
+      exchange_rate: exchangeRate,
+      status: DebtStatus.OPEN,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    await manager.save(Debt, debt);
+    return debt;
+  }
+
+  /**
+   * Determina la bodega de venta
+   * Usa la bodega especificada o la bodega por defecto
+   * @returns ID de la bodega a usar
+   */
+  private async prepareWarehouse(
+    storeId: string,
+    warehouseId?: string | null,
+  ): Promise<string> {
+    if (warehouseId) {
+      // Validar que la bodega existe y pertenece a la tienda
+      await this.warehousesService.findOne(storeId, warehouseId);
+      return warehouseId;
+    } else {
+      // Usar bodega por defecto si no se especifica
+      const defaultWarehouse = await this.warehousesService.getDefaultOrFirst(storeId);
+      return defaultWarehouse.id;
+    }
+  }
+
+  /**
+   * Prepara la información del cliente para la venta
+   * Busca, crea o actualiza el cliente según los datos proporcionados
+   * @returns ID del cliente final o null si no se proporciona
+   */
+  private async prepareCustomerData(
+    manager: EntityManager,
+    storeId: string,
+    dto: CreateSaleDto,
+  ): Promise<string | null> {
+    let finalCustomerId: string | null = null;
+
+    // Si se proporciona customer_id, usarlo directamente
+    if (dto.customer_id) {
+      const existingCustomer = await manager.findOne(Customer, {
+        where: { id: dto.customer_id, store_id: storeId },
+      });
+      if (existingCustomer) {
+        finalCustomerId = existingCustomer.id;
+        // Opcionalmente actualizar datos si se proporcionan
+        if (
+          dto.customer_name ||
+          dto.customer_phone !== undefined ||
+          dto.customer_note !== undefined
+        ) {
+          if (dto.customer_name) existingCustomer.name = dto.customer_name;
+          if (dto.customer_phone !== undefined)
+            existingCustomer.phone = dto.customer_phone || null;
+          if (dto.customer_note !== undefined)
+            existingCustomer.note = dto.customer_note || null;
+          existingCustomer.updated_at = new Date();
+          await manager.save(Customer, existingCustomer);
+        }
+      }
+    }
+    // Si se proporcionan datos de cliente (nombre, cédula, etc.) y NO hay customer_id
+    else if (
+      dto.customer_name ||
+      dto.customer_document_id ||
+      dto.customer_phone
+    ) {
+      // Si hay nombre, la cédula es obligatoria
+      if (dto.customer_name && !dto.customer_document_id) {
+        throw new BadRequestException(
+          'Si proporcionas el nombre del cliente, la cédula es obligatoria',
+        );
+      }
+
+      // Si hay cédula, buscar cliente existente
+      let customer: Customer | null = null;
+      if (dto.customer_document_id) {
+        customer = await manager.findOne(Customer, {
+          where: {
+            store_id: storeId,
+            document_id: dto.customer_document_id.trim(),
+          },
+        });
+      }
+
+      // Si existe, actualizarlo
+      if (customer) {
+        if (dto.customer_name) customer.name = dto.customer_name;
+        if (dto.customer_phone !== undefined)
+          customer.phone = dto.customer_phone || null;
+        if (dto.customer_note !== undefined)
+          customer.note = dto.customer_note || null;
+        customer.updated_at = new Date();
+        await manager.save(Customer, customer);
+        finalCustomerId = customer.id;
+      }
+      // Si no existe, crearlo
+      else if (dto.customer_name && dto.customer_document_id) {
+        const newCustomer = manager.create(Customer, {
+          id: randomUUID(),
+          store_id: storeId,
+          name: dto.customer_name,
+          document_id: dto.customer_document_id.trim(),
+          phone: dto.customer_phone || null,
+          note: dto.customer_note || null,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+        await manager.save(Customer, newCustomer);
+        finalCustomerId = newCustomer.id;
+      }
+    }
+
+    return finalCustomerId;
+  }
+
+  /**
+   * Valida la solicitud de venta antes de procesarla
+   * @throws BadRequestException si alguna validación falla
+   * @returns La sesión de caja abierta asociada
+   */
+  private async validateSaleRequest(
+    storeId: string,
+    dto: CreateSaleDto,
+    userId?: string,
+  ): Promise<CashSession> {
+    // ⚙️ Validar configuración del sistema
+    const canGenerate = await this.configValidationService.canGenerateSale(storeId);
+    if (!canGenerate) {
+      const errorMessage = await this.configValidationService.getConfigurationErrorMessage(storeId);
+      throw new BadRequestException(errorMessage);
+    }
+
+    // ⚠️ Validar que hay items
+    if (!dto.items || dto.items.length === 0) {
+      throw new BadRequestException('El carrito no puede estar vacío');
+    }
+
+    // ⚠️ Validar que todos los items tengan cantidad > 0
+    for (const item of dto.items) {
+      const qty = item.is_weight_product && item.weight_value
+        ? Number(item.weight_value)
+        : Number(item.qty) || 0;
+      if (qty <= 0) {
+        throw new BadRequestException(
+          `La cantidad debe ser mayor a 0 para el producto ${item.product_id}`,
+        );
+      }
+    }
+
+    // ⚠️ Validar que exchange_rate sea válido
+    if (!dto.exchange_rate || dto.exchange_rate <= 0) {
+      throw new BadRequestException('La tasa de cambio debe ser mayor a 0');
+    }
+
+    // ⚠️ Validar que hay un responsable (userId)
+    if (!userId) {
+      throw new BadRequestException(
+        'Todas las ventas requieren un responsable (cajero). No se puede procesar la venta sin identificar quién la realizó.',
+      );
+    }
+
+    // ⚠️ Validar FIAO requiere cliente
+    if (dto.payment_method === 'FIAO') {
+      const hasCustomerId = !!dto.customer_id;
+      const hasCustomerData = !!(dto.customer_name && dto.customer_document_id);
+
+      if (!hasCustomerId && !hasCustomerData) {
+        throw new BadRequestException(
+          'Las ventas FIAO requieren un cliente. Debes proporcionar un customer_id existente o los datos del cliente (nombre y cédula).',
+        );
+      }
+    }
+
+    // Validar modo caja rápida
+    const hasDiscounts = dto.items.some(
+      (item) => (item.discount_bs || 0) > 0 || (item.discount_usd || 0) > 0,
+    );
+    const hasCustomer = !!(
+      dto.customer_id ||
+      dto.customer_name ||
+      dto.customer_document_id
+    );
+
+    const fastCheckoutValidation = await this.fastCheckoutRulesService.validateFastCheckout(
+      storeId,
+      dto.items.length,
+      hasDiscounts,
+      hasCustomer,
+    );
+
+    if (!fastCheckoutValidation.valid) {
+      throw new BadRequestException(fastCheckoutValidation.error);
+    }
+
+    // Validar sesión de caja abierta
+    const openSessionWhere: Record<string, any> = {
+      store_id: storeId,
+      closed_at: IsNull(),
+    };
+    if (userId) {
+      openSessionWhere.opened_by = userId;
+    }
+
+    const openSession = await this.cashSessionRepository.findOne({
+      where: openSessionWhere,
+    });
+
+    if (!openSession) {
+      throw new BadRequestException(
+        userId
+          ? 'No hay una sesión de caja abierta para este usuario. Abre caja para registrar ventas.'
+          : 'No hay una sesión de caja abierta. Abre caja para registrar ventas.',
+      );
+    }
+
+    // Validar que cash_session_id coincida si se envía
+    if (dto.cash_session_id && dto.cash_session_id !== openSession.id) {
+      throw new BadRequestException(
+        userId
+          ? 'La venta debe asociarse a tu sesión de caja abierta actual.'
+          : 'La venta debe asociarse a la sesión de caja abierta actual.',
+      );
+    }
+
+    return openSession;
+  }
+
   constructor(
+
     @InjectRepository(Sale)
     private saleRepository: Repository<Sale>,
     @InjectRepository(SaleItem)
@@ -674,7 +952,7 @@ export class SalesService {
     private securityAuditService: SecurityAuditService,
     @InjectQueue('sales-post-processing')
     private salesPostProcessingQueue: Queue,
-  ) {}
+  ) { }
 
   async create(
     storeId: string,
@@ -684,141 +962,17 @@ export class SalesService {
   ): Promise<Sale> {
     const startTime = Date.now();
     const effectiveUserRole = userRole || 'cashier';
-    const runId = `run-${Date.now()}`;
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:649',message:'SALE_CREATE_START',data:{storeId,userId,itemsCount:dto.items?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-    
-    this.logger.log(
-      `[SALE_CREATE] Iniciando creación de venta - Store: ${storeId}, User: ${userId}, Items: ${dto.items?.length || 0}`,
-    );
-    // ⚙️ VALIDAR CONFIGURACIÓN DEL SISTEMA ANTES DE GENERAR VENTA
-    const configStart = Date.now();
-    const canGenerate = await this.configValidationService.canGenerateSale(
-      storeId,
-    );
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:656',message:'CONFIG_VALIDATION',data:{duration:Date.now()-configStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
 
-    if (!canGenerate) {
-      const errorMessage =
-        await this.configValidationService.getConfigurationErrorMessage(
-          storeId,
-        );
-      throw new BadRequestException(errorMessage);
-    }
+    // ⚠️ VALIDACIONES INICIALES
+    const openSession = await this.validateSaleRequest(storeId, dto, userId);
 
-    // ⚠️ EDGE CASE: Validar que hay items
-    if (!dto.items || dto.items.length === 0) {
-      throw new BadRequestException('El carrito no puede estar vacío');
-    }
-
-    // ⚠️ EDGE CASE: Validar que todos los items tengan cantidad > 0
-    for (const item of dto.items) {
-      const qty = item.is_weight_product && item.weight_value
-        ? Number(item.weight_value)
-        : Number(item.qty) || 0;
-      if (qty <= 0) {
-        throw new BadRequestException(
-          `La cantidad debe ser mayor a 0 para el producto ${item.product_id}`,
-        );
-      }
-    }
-
-    // ⚠️ EDGE CASE: Validar que exchange_rate sea válido
-    if (!dto.exchange_rate || dto.exchange_rate <= 0) {
-      throw new BadRequestException(
-        'La tasa de cambio debe ser mayor a 0',
-      );
-    }
-
-    // ⚠️ VALIDACIÓN CRÍTICA: Todas las ventas requieren un responsable (userId)
-    if (!userId) {
-      throw new BadRequestException(
-        'Todas las ventas requieren un responsable (cajero). No se puede procesar la venta sin identificar quién la realizó.',
-      );
-    }
-
-    // ⚠️ VALIDACIÓN CRÍTICA: Ventas FIAO requieren cliente obligatoriamente
-    if (dto.payment_method === 'FIAO') {
-      const hasCustomerId = !!dto.customer_id;
-      const hasCustomerData = !!(dto.customer_name && dto.customer_document_id);
-      
-      if (!hasCustomerId && !hasCustomerData) {
-        throw new BadRequestException(
-          'Las ventas FIAO requieren un cliente. Debes proporcionar un customer_id existente o los datos del cliente (nombre y cédula).',
-        );
-      }
-    }
-
-    // Validar modo caja rápida si aplica
-    const hasDiscounts = dto.items.some(
-      (item) => (item.discount_bs || 0) > 0 || (item.discount_usd || 0) > 0,
-    );
-    const hasCustomer = !!(
-      dto.customer_id ||
-      dto.customer_name ||
-      dto.customer_document_id
-    );
-
-    const fastCheckoutValidation =
-      await this.fastCheckoutRulesService.validateFastCheckout(
-        storeId,
-        dto.items.length,
-        hasDiscounts,
-        hasCustomer,
-      );
-
-    if (!fastCheckoutValidation.valid) {
-      throw new BadRequestException(fastCheckoutValidation.error);
-    }
-
-    // Validar que exista una sesión de caja abierta
-    const cashSessionStart = Date.now();
-    const openSessionWhere: Record<string, any> = {
-      store_id: storeId,
-      closed_at: IsNull(),
-    };
-    if (userId) {
-      openSessionWhere.opened_by = userId;
-    }
-
-    const openSession = await this.cashSessionRepository.findOne({
-      where: openSessionWhere,
-    });
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:742',message:'CASH_SESSION_QUERY',data:{duration:Date.now()-cashSessionStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
-
-    if (!openSession) {
-      throw new BadRequestException(
-        userId
-          ? 'No hay una sesión de caja abierta para este usuario. Abre caja para registrar ventas.'
-          : 'No hay una sesión de caja abierta. Abre caja para registrar ventas.',
-      );
-    }
-
-    // Si se envía cash_session_id debe coincidir con la sesión abierta
-    if (dto.cash_session_id && dto.cash_session_id !== openSession.id) {
-      throw new BadRequestException(
-        userId
-          ? 'La venta debe asociarse a tu sesión de caja abierta actual.'
-          : 'La venta debe asociarse a la sesión de caja abierta actual.',
-      );
-    }
-
-    // Forzar asociación a la sesión abierta (incluye casos en los que no se envió cash_session_id)
+    // Forzar asociación a la sesión abierta
     dto.cash_session_id = openSession.id;
 
     // ⚠️ VALIDACIÓN INICIAL DE STOCK (antes de la transacción para rechazar rápidamente)
     // Esta es una validación rápida sin locks. La validación definitiva con locks se hace dentro de la transacción.
     const stockValidationStart = Date.now();
     await this.validateStockAvailability(storeId, dto, userId);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:768',message:'STOCK_VALIDATION_PRE_TX',data:{duration:Date.now()-stockValidationStart,itemsCount:dto.items?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
 
     // ⚠️ VALIDACIÓN DE CRÉDITO FIAO (antes de la transacción)
     // Calcular total aproximado para validación (sin descuentos de promoción aún)
@@ -851,125 +1005,19 @@ export class SalesService {
         }
       }
       await this.validateFIAOCredit(storeId, dto, approximateTotalUsd);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:799',message:'FIAO_VALIDATION_PRE_TX',data:{duration:Date.now()-fiaoValidationStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
     }
 
     // Usar transacción con retry logic para deadlocks
     const transactionStart = Date.now();
     const saleWithDebt = await this.transactionWithRetry(async (manager) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:803',message:'TRANSACTION_START',data:{},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'F'})}).catch(()=>{});
-      // #endregion
-      // Manejar información del cliente (opcional para todas las ventas)
-      const customerStart = Date.now();
-      let finalCustomerId: string | null = null;
+      // Manejar información del cliente
+      const finalCustomerId = await this.prepareCustomerData(manager, storeId, dto);
 
-      // Si se proporciona customer_id, usarlo directamente
-      if (dto.customer_id) {
-        const existingCustomer = await manager.findOne(Customer, {
-          where: { id: dto.customer_id, store_id: storeId },
-        });
-        if (existingCustomer) {
-          finalCustomerId = existingCustomer.id;
-          // Opcionalmente actualizar datos si se proporcionan
-          if (
-            dto.customer_name ||
-            dto.customer_phone !== undefined ||
-            dto.customer_note !== undefined
-          ) {
-            if (dto.customer_name) existingCustomer.name = dto.customer_name;
-            if (dto.customer_phone !== undefined)
-              existingCustomer.phone = dto.customer_phone || null;
-            if (dto.customer_note !== undefined)
-              existingCustomer.note = dto.customer_note || null;
-            existingCustomer.updated_at = new Date();
-            await manager.save(Customer, existingCustomer);
-          }
-        }
-      }
-      // Si se proporcionan datos de cliente (nombre, cédula, etc.) y NO hay customer_id
-      else if (
-        dto.customer_name ||
-        dto.customer_document_id ||
-        dto.customer_phone
-      ) {
-        // Si hay nombre, la cédula es obligatoria
-        if (dto.customer_name && !dto.customer_document_id) {
-          throw new BadRequestException(
-            'Si proporcionas el nombre del cliente, la cédula es obligatoria',
-          );
-        }
-
-        // Si hay cédula, buscar cliente existente
-        let customer: Customer | null = null;
-        if (dto.customer_document_id) {
-          customer = await manager.findOne(Customer, {
-            where: {
-              store_id: storeId,
-              document_id: dto.customer_document_id.trim(),
-            },
-          });
-        }
-
-        // Si existe, actualizarlo
-        if (customer) {
-          // Actualizar datos del cliente
-          if (dto.customer_name) customer.name = dto.customer_name;
-          if (dto.customer_phone !== undefined)
-            customer.phone = dto.customer_phone || null;
-          if (dto.customer_note !== undefined)
-            customer.note = dto.customer_note || null;
-          customer.updated_at = new Date();
-          customer = await manager.save(Customer, customer);
-          finalCustomerId = customer.id;
-        } else if (dto.customer_name && dto.customer_document_id) {
-          // Crear nuevo cliente (requiere nombre Y cédula)
-          customer = manager.create(Customer, {
-            id: randomUUID(),
-            store_id: storeId,
-            name: dto.customer_name,
-            document_id: dto.customer_document_id.trim(),
-            phone: dto.customer_phone || null,
-            note: dto.customer_note || null,
-            updated_at: new Date(),
-          });
-          customer = await manager.save(Customer, customer);
-          finalCustomerId = customer.id;
-        }
-      } else if (dto.payment_method === 'FIAO') {
-        // Para FIAO sin datos nuevos, buscar por customer_id existente
-        if (dto.customer_id) {
-          finalCustomerId = dto.customer_id;
-        } else {
-          throw new BadRequestException(
-            'FIAO requiere información del cliente (nombre y cédula) o un customer_id existente',
-          );
-        }
-      }
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:889',message:'CUSTOMER_HANDLING',data:{duration:Date.now()-customerStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'G'})}).catch(()=>{});
-      // #endregion
       const saleId = randomUUID();
       const soldAt = new Date();
 
       // Determinar bodega de venta
-      const warehouseStart = Date.now();
-      let warehouseId: string | null = null;
-      if (dto.warehouse_id) {
-        // Validar que la bodega existe y pertenece a la tienda
-        await this.warehousesService.findOne(storeId, dto.warehouse_id);
-        warehouseId = dto.warehouse_id;
-      } else {
-        // Usar bodega por defecto si no se especifica
-        const defaultWarehouse =
-          await this.warehousesService.getDefaultOrFirst(storeId);
-        warehouseId = defaultWarehouse.id;
-      }
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:903',message:'WAREHOUSE_DETERMINATION',data:{duration:Date.now()-warehouseStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H'})}).catch(()=>{});
-      // #endregion
+      const warehouseId = await this.prepareWarehouse(storeId, dto.warehouse_id);
 
       // ⚡ OPTIMIZACIÓN: Obtener todos los productos en una sola query batch
       const productsQueryStart = Date.now();
@@ -986,9 +1034,6 @@ export class SalesService {
           is_active: true,
         },
       });
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:912',message:'PRODUCTS_BATCH_QUERY',data:{duration:Date.now()-productsQueryStart,productsCount:products.length},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'I'})}).catch(()=>{});
-      // #endregion
 
       // Crear mapa de productos para acceso O(1)
       const productMap = new Map<string, Product>();
@@ -1015,21 +1060,18 @@ export class SalesService {
         const product = productMap.get(id);
         return product && !product.is_weight_product;
       });
-      
+
       // ⚡ OPTIMIZACIÓN: Ejecutar queries de seriales y lotes en paralelo
       const [allSerials, allLots] = await Promise.all([
         productsWithSerials.length > 0
           ? manager.find(ProductSerial, {
-              where: { product_id: In(productsWithSerials) },
-            })
+            where: { product_id: In(productsWithSerials) },
+          })
           : Promise.resolve([]),
         manager.find(ProductLot, {
           where: { product_id: In(productIds) },
         }),
       ]);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:951',message:'SERIALS_LOTS_BATCH_QUERY',data:{duration:Date.now()-serialsLotsStart,serialsCount:allSerials.length,lotsCount:allLots.length},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'J'})}).catch(()=>{});
-      // #endregion
 
       // Crear mapas para acceso rápido
       const serialsMap = new Map<string, ProductSerial[]>();
@@ -1151,9 +1193,6 @@ export class SalesService {
             .orderBy('lot.expiration_date', 'ASC', 'NULLS LAST') // FIFO: lotes más antiguos primero
             .setLock('pessimistic_write', undefined, ['SKIP LOCKED'])
             .getMany();
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1067',message:'LOTS_FIFO_LOCK',data:{duration:Date.now()-lotsLockStart,productId:product.id,lockedLotsCount:lockedLots.length},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'K'})}).catch(()=>{});
-          // #endregion
 
           if (lockedLots.length === 0) {
             throw new BadRequestException(
@@ -1200,23 +1239,20 @@ export class SalesService {
           const stockLockStart = Date.now();
           const currentStock = warehouseId
             ? await this.validateAndLockStock(
-                manager,
-                storeId,
-                warehouseId,
-                product.id,
-                variant?.id || null,
-                requestedQty,
-              )
+              manager,
+              storeId,
+              warehouseId,
+              product.id,
+              variant?.id || null,
+              requestedQty,
+            )
             : await this.validateAndLockTotalStock(
-                manager,
-                storeId,
-                product.id,
-                variant?.id || null,
-                requestedQty,
-              );
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1117',message:'STOCK_LOCK_QUERY',data:{duration:Date.now()-stockLockStart,productId:product.id,warehouseId,variantId:variant?.id||null},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'L'})}).catch(()=>{});
-          // #endregion
+              manager,
+              storeId,
+              product.id,
+              variant?.id || null,
+              requestedQty,
+            );
 
           if (currentStock < requestedQty) {
             const variantInfo = variant
@@ -1545,9 +1581,6 @@ export class SalesService {
         invoiceSeriesId = invoiceData.series.id;
         invoiceNumber = invoiceData.invoice_number;
         invoiceFullNumber = invoiceData.invoice_full_number;
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1451',message:'INVOICE_NUMBER_GENERATION',data:{duration:Date.now()-invoiceNumberStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'M'})}).catch(()=>{});
-        // #endregion
       } catch (error) {
         // Si no hay series configuradas, la venta se crea sin número de factura
         // Esto permite que el sistema funcione aunque no se hayan configurado series
@@ -1559,9 +1592,6 @@ export class SalesService {
 
       const saleNumberStart = Date.now();
       const saleNumber = await this.getNextSaleNumber(manager, storeId);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1469',message:'SALE_NUMBER_GENERATION',data:{duration:Date.now()-saleNumberStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'N'})}).catch(()=>{});
-      // #endregion
 
       // Crear la venta
       const sale = manager.create(Sale, {
@@ -1600,16 +1630,10 @@ export class SalesService {
 
       const saveSaleStart = Date.now();
       const savedSale = await manager.save(Sale, sale);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1506',message:'SAVE_SALE',data:{duration:Date.now()-saveSaleStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'O'})}).catch(()=>{});
-      // #endregion
 
       // Guardar items
       const saveItemsStart = Date.now();
       await manager.save(SaleItem, items);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1509',message:'SAVE_SALE_ITEMS',data:{duration:Date.now()-saveItemsStart,itemsCount:items.length},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'P'})}).catch(()=>{});
-      // #endregion
 
       if (discountBs > 0 || discountUsd > 0) {
         await this.securityAuditService.log({
@@ -1689,9 +1713,6 @@ export class SalesService {
       if (movementsToCreate.length > 0) {
         const saveMovementsStart = Date.now();
         await manager.save(InventoryMovement, movementsToCreate);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1587',message:'SAVE_INVENTORY_MOVEMENTS',data:{duration:Date.now()-saveMovementsStart,movementsCount:movementsToCreate.length},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'Q'})}).catch(()=>{});
-        // #endregion
       }
 
       // ⚡ OPTIMIZACIÓN CRÍTICA: Batch update de stocks (reduce de N queries a 1-2 queries)
@@ -1703,9 +1724,6 @@ export class SalesService {
           storeId,
           manager,
         );
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1592',message:'UPDATE_STOCK_BATCH',data:{duration:Date.now()-updateStockBatchStart,updatesCount:stockUpdates.length},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'R'})}).catch(()=>{});
-        // #endregion
       }
 
       // ⚠️ VALIDACIÓN CRÍTICA: Si es venta FIAO, DEBE haber un cliente válido
@@ -1716,60 +1734,17 @@ export class SalesService {
       }
 
       // Si es venta FIAO, crear la deuda automáticamente
-      // ⚠️ EDGE CASE: Validar crédito nuevamente dentro de la transacción (con el total real)
+      let debt: Debt | null = null;
       if (dto.payment_method === 'FIAO' && finalCustomerId) {
-        // Validar crédito nuevamente con el total real calculado (puede diferir del aproximado)
-        const customer = await manager.findOne(Customer, {
-          where: { id: finalCustomerId, store_id: storeId },
-        });
-
-        if (!customer) {
-          throw new NotFoundException('Cliente no encontrado');
-        }
-
-        if (customer.credit_limit === null || customer.credit_limit <= 0) {
-          throw new BadRequestException(
-            'El cliente no tiene crédito habilitado para compras FIAO',
-          );
-        }
-
-        // Calcular deuda actual dentro de la transacción
-        const debtResult = await manager.query(
-          `
-          SELECT COALESCE(SUM(
-            amount_usd - COALESCE((
-              SELECT SUM(amount_usd) FROM debt_payments WHERE debt_id = d.id
-            ), 0)
-          ), 0) as current_debt
-          FROM debts d
-          WHERE store_id = $1 
-            AND customer_id = $2
-            AND status != 'paid'
-        `,
-          [storeId, finalCustomerId],
+        debt = await this.createDebtRecord(
+          manager,
+          storeId,
+          saleId,
+          finalCustomerId,
+          totalUsd,
+          totalBs,
+          dto.exchange_rate,
         );
-
-        const currentDebt = parseFloat(debtResult[0]?.current_debt || '0');
-        const availableCredit = Number(customer.credit_limit) - currentDebt;
-
-        // Validar que el crédito disponible sea suficiente con el total real
-        if (availableCredit < totalUsd) {
-          throw new BadRequestException(
-            `Crédito insuficiente. Disponible: $${availableCredit.toFixed(2)} USD, Total de venta: $${totalUsd.toFixed(2)} USD`,
-          );
-        }
-
-        const debt = manager.create(Debt, {
-          id: randomUUID(),
-          store_id: storeId,
-          sale_id: saleId,
-          customer_id: finalCustomerId,
-          created_at: soldAt,
-          amount_bs: totalBs,
-          amount_usd: totalUsd,
-          status: DebtStatus.OPEN,
-        });
-        await manager.save(Debt, debt);
       }
 
       // ⚡ OPTIMIZACIÓN: Query simplificada con todos los datos necesarios en una sola query
@@ -1794,9 +1769,6 @@ export class SalesService {
         ])
         .where('sale.id = :saleId', { saleId })
         .getOne();
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1665',message:'FINAL_SALE_QUERY',data:{duration:Date.now()-finalQueryStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'S'})}).catch(()=>{});
-      // #endregion
 
       if (!savedSaleWithItems) {
         throw new Error('Error al recuperar la venta creada');
@@ -1814,7 +1786,7 @@ export class SalesService {
             .leftJoinAndSelect('debt.payments', 'payments')
             .where('debt.id = :debtId', { debtId })
             .getOne();
-          
+
           if (debtWithPayments) {
             const totalPaidBs = (debtWithPayments.payments || []).reduce(
               (sum: number, p: any) => sum + Number(p.amount_bs),
@@ -1840,9 +1812,6 @@ export class SalesService {
 
       return saleWithDebt;
     });
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1726',message:'TRANSACTION_COMPLETE',data:{duration:Date.now()-transactionStart},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'T'})}).catch(()=>{});
-    // #endregion
 
     // ⚡ OPTIMIZACIÓN: Encolar tareas post-venta de forma asíncrona
     // Esto permite retornar la respuesta inmediatamente sin esperar
@@ -1888,9 +1857,6 @@ export class SalesService {
     saleWithDebt.fiscal_invoice = null; // Se agregará cuando se procese en background
 
     const duration = Date.now() - startTime;
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sales.service.ts:1771',message:'SALE_CREATE_COMPLETE',data:{duration,totalDuration:duration,itemsCount:dto.items?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'U'})}).catch(()=>{});
-    // #endregion
     this.logger.log(
       `[SALE_CREATE] ✅ Venta creada exitosamente - ID: ${saleWithDebt.id}, Duración: ${duration}ms, Items: ${dto.items?.length || 0}`,
     );
@@ -1910,7 +1876,7 @@ export class SalesService {
     if (!storeId) {
       throw new BadRequestException('Store ID es requerido');
     }
-    
+
     const sale = await this.saleRepository
       .createQueryBuilder('sale')
       .leftJoinAndSelect('sale.items', 'items')
@@ -1931,7 +1897,7 @@ export class SalesService {
     if (!sale) {
       throw new NotFoundException('Venta no encontrada');
     }
-    
+
     // Validación adicional de seguridad: asegurar que la venta pertenece a la tienda
     if (sale.store_id !== storeId) {
       throw new UnauthorizedException(
@@ -2011,7 +1977,7 @@ export class SalesService {
     // Query para obtener ventas con relaciones
     // Usar find con relations para asegurar que los items se carguen correctamente
     const whereConditions: any = { store_id: storeId };
-    
+
     if (dateFrom && dateTo) {
       whereConditions.sold_at = Between(dateFrom, dateTo);
     } else if (dateFrom) {
@@ -2033,10 +1999,10 @@ export class SalesService {
     const debts =
       saleIds.length > 0
         ? await this.debtRepository.find({
-            where: { sale_id: In(saleIds) },
-            relations: ['payments'],
-            select: ['id', 'sale_id', 'status', 'amount_bs', 'amount_usd'],
-          })
+          where: { sale_id: In(saleIds) },
+          relations: ['payments'],
+          select: ['id', 'sale_id', 'status', 'amount_bs', 'amount_usd'],
+        })
         : [];
 
     // Mapear deudas por sale_id y calcular montos pendientes
@@ -2132,19 +2098,19 @@ export class SalesService {
       const fiscalInvoices = await manager.find(FiscalInvoice, {
         where: { sale_id: saleId, store_id: storeId },
       });
-      
+
       // Buscar si hay una factura emitida (no nota de crédito)
       const issuedInvoice = fiscalInvoices.find(
         (inv) => inv.invoice_type === 'invoice' && inv.status === 'issued',
       );
-      
+
       if (issuedInvoice) {
         // Si hay factura emitida, verificar si existe una nota de crédito emitida que la anule
         const issuedCreditNote = fiscalInvoices.find(
           (inv) =>
             inv.invoice_type === 'credit_note' && inv.status === 'issued',
         );
-        
+
         if (!issuedCreditNote) {
           throw new BadRequestException(
             'La venta tiene una factura fiscal emitida. Debe crear y emitir una nota de crédito antes de anular la venta.',
@@ -2310,19 +2276,19 @@ export class SalesService {
       const fiscalInvoices = await manager.find(FiscalInvoice, {
         where: { sale_id: saleId, store_id: storeId },
       });
-      
+
       // Buscar si hay una factura emitida (no nota de crédito)
       const issuedInvoice = fiscalInvoices.find(
         (inv) => inv.invoice_type === 'invoice' && inv.status === 'issued',
       );
-      
+
       if (issuedInvoice) {
         // Si hay factura emitida, verificar si existe una nota de crédito emitida que la anule
         const issuedCreditNote = fiscalInvoices.find(
           (inv) =>
             inv.invoice_type === 'credit_note' && inv.status === 'issued',
         );
-        
+
         if (!issuedCreditNote) {
           throw new BadRequestException(
             'La venta tiene una factura fiscal emitida. Debe crear y emitir una nota de crédito antes de devolver items.',
@@ -2356,14 +2322,14 @@ export class SalesService {
       const saleItemIds = saleItems.map((item) => item.id);
       const existingReturns = saleItemIds.length
         ? await manager
-            .createQueryBuilder(SaleReturnItem, 'return_item')
-            .select('return_item.sale_item_id', 'sale_item_id')
-            .addSelect('SUM(return_item.qty)', 'returned_qty')
-            .where('return_item.sale_item_id IN (:...saleItemIds)', {
-              saleItemIds,
-            })
-            .groupBy('return_item.sale_item_id')
-            .getRawMany()
+          .createQueryBuilder(SaleReturnItem, 'return_item')
+          .select('return_item.sale_item_id', 'sale_item_id')
+          .addSelect('SUM(return_item.qty)', 'returned_qty')
+          .where('return_item.sale_item_id IN (:...saleItemIds)', {
+            saleItemIds,
+          })
+          .groupBy('return_item.sale_item_id')
+          .getRawMany()
         : [];
 
       const returnedQtyByItem = new Map<string, number>();

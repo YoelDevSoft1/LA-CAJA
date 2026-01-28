@@ -418,39 +418,6 @@ export default function POSPage() {
 
   const total = calculateTotalWithCurrentRate
 
-  // #region agent log
-  // Log para debug: verificar tasa de cambio y totales
-  // ⚡ FIX: Solo ejecutar en desarrollo local (no en producción)
-  useEffect(() => {
-    // Solo ejecutar si estamos en localhost (desarrollo)
-    if (import.meta.env.DEV && window.location.hostname === 'localhost' && items.length > 0) {
-      fetch('http://127.0.0.1:7242/ingest/e5054227-0ba5-4d49-832d-470c860ff731', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: 'POSPage.tsx:872',
-          message: 'Preview total calculation',
-          data: {
-            exchangeRate,
-            totalUsd: total.usd,
-            totalBs: total.bs,
-            itemsCount: items.length,
-            firstItem: items[0] ? {
-              product_name: items[0].product_name,
-              unit_price_usd: items[0].unit_price_usd,
-              unit_price_bs: items[0].unit_price_bs,
-              qty: items[0].qty,
-            } : null,
-          },
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          runId: 'preview-check',
-          hypothesisId: 'A',
-        }),
-      }).catch(() => { });
-    }
-  }, [items, total, exchangeRate]);
-  // #endregion
   const totalDiscountUsd = items.reduce((sum, item) => sum + Number(item.discount_usd || 0), 0)
 
   // Porcentaje máximo de descuento permitido (configurable por rol en el futuro)
