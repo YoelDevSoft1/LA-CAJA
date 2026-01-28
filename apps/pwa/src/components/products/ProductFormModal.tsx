@@ -954,6 +954,8 @@ export default function ProductFormModal({
                   </Label>
                   <Input
                     type="number"
+                    step="any"
+                    inputMode="decimal"
                     placeholder="0.00"
                     className="bg-background"
                     // key para forzar re-render y limpiar al cambiar moneda si se desea, 
@@ -987,6 +989,8 @@ export default function ProductFormModal({
                   <Input
                     id="calc-units"
                     type="number"
+                    step="any"
+                    inputMode="decimal"
                     placeholder="Ej: 12, 24"
                     className="bg-background"
                     onChange={(e) => {

@@ -584,11 +584,12 @@ class SyncServiceClass {
           invalidActorEventIds.push(evt.event_id);
           return null;
         }
-        // Remover store_id y device_id del payload individual
-        // El backend los recibe en el DTO principal
-        const { store_id, device_id, payload, ...rest } = evt;
+        // Remover store_id, device_id y last_error del payload individual
+        // El backend los recibe en el DTO principal o no los espera (last_error)
+        const { store_id, device_id, last_error, payload, ...rest } = evt as any;
         void store_id;
         void device_id;
+        void last_error;
         // Crear evento sin store_id y device_id para enviar al backend
         // El backend los espera solo en el DTO principal, no en cada evento
         // Remover store_id y device_id del evento (van en el DTO principal)
