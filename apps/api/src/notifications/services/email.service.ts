@@ -8,7 +8,34 @@ import { EmailQueue } from '../../database/entities/email-queue.entity';
 import { NotificationAnalytics } from '../../database/entities/notification-analytics.entity';
 import { randomUUID } from 'crypto';
 
-// ... (interfaces)
+export interface SendEmailOptions {
+  storeId: string;
+  notificationId?: string;
+  to: string;
+  toName?: string;
+  subject: string;
+  htmlBody: string;
+  textBody?: string;
+  templateId?: string;
+  templateVariables?: Record<string, any>;
+  priority?: number;
+  scheduledFor?: Date;
+  from?: string;
+  fromName?: string;
+  replyTo?: string;
+}
+
+export interface EmailWebhookPayload {
+  type: 'email.sent' | 'email.delivered' | 'email.bounced' | 'email.complained' | 'email.opened' | 'email.clicked';
+  created_at: string;
+  data: {
+    email_id: string;
+    from: string;
+    to: string[];
+    subject: string;
+    [key: string]: any;
+  };
+}
 
 @Injectable()
 export class EmailService {
