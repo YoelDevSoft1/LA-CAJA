@@ -960,7 +960,7 @@ export default function SalesPage() {
                                   Mi Moneda: {Number(sale.totals.total_bs).toFixed(2)} Bs
                                 </span>
                                 {isFIAO && sale.debt && isPending && (
-                                  <Badge variant="outline" className="mt-1 bg-orange-500/10 text-orange-600 border-orange-500/20 text-[10px] h-5 px-1.5 ml-auto">
+                                  <Badge variant="outline" className="mt-1 bg-orange-500/10 text-orange-600 border-orange-500/20 text-[10px] h-5 px-2 ml-auto whitespace-nowrap">
                                     Debe: ${Number(sale.debt.remaining_usd || 0).toFixed(2)}
                                   </Badge>
                                 )}

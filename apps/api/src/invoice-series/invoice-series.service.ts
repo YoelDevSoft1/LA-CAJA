@@ -151,13 +151,16 @@ export class InvoiceSeriesService {
 
       const series = result[0] as InvoiceSeries;
       // ⚡ FIX CRÍTICO: Validar todos los valores antes de construir el número
+      console.log('[INVOICE DEBUG] Series from DB:', JSON.stringify(series, null, 2));
       const currentNumber = Number(series.current_number) || Number(series.start_number) || 1;
+      console.log('[INVOICE DEBUG] Calculated currentNumber:', currentNumber);
       if (isNaN(currentNumber) || currentNumber <= 0) {
         throw new BadRequestException(
           `Número de factura inválido: current_number=${series.current_number}, start_number=${series.start_number}`,
         );
       }
       const invoiceNumber = currentNumber.toString().padStart(6, '0');
+      console.log('[INVOICE DEBUG] Final invoiceNumber:', invoiceNumber);
 
       // ⚡ FIX CRÍTICO: Validar que series_code existe y no es undefined/null
       const seriesCode = series.series_code || 'FAC';
@@ -165,6 +168,7 @@ export class InvoiceSeriesService {
       const invoiceFullNumber = prefix
         ? `${prefix}-${seriesCode}-${invoiceNumber}`
         : `${seriesCode}-${invoiceNumber}`;
+      console.log('[INVOICE DEBUG] Full number:', invoiceFullNumber, '(prefix:', prefix, 'seriesCode:', seriesCode, 'invoiceNumber:', invoiceNumber, ')');
 
       return {
         series,
