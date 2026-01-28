@@ -6,6 +6,7 @@ import { salesService, Sale } from '@/services/sales.service'
 import { useAuth } from '@/stores/auth.store'
 import SaleDetailModal from '@/components/sales/SaleDetailModal'
 import { format, isSameDay } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -77,7 +78,7 @@ function DatePicker({
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {date ? format(date, 'PPP', { locale: undefined }) : <span>Seleccionar fecha</span>}
+            {date ? format(date, 'PPP', { locale: es }) : <span>Seleccionar fecha</span>}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
@@ -86,6 +87,7 @@ function DatePicker({
             selected={date}
             onSelect={onDateChange}
             initialFocus
+            locale={es}
           />
         </PopoverContent>
       </Popover>
@@ -837,7 +839,7 @@ export default function SalesPage() {
                 </div>
               ) : (
                 /* Vista de tabla para desktop - Premium Grid */
-                <div className="rounded-xl overflow-hidden border border-white/10 bg-background/50 backdrop-blur-md shadow-inner">
+                <div className="rounded-xl overflow-x-auto border border-white/10 bg-background/50 backdrop-blur-md shadow-inner">
                   <Table>
                     <TableHeader className="bg-muted/30">
                       <TableRow className="hover:bg-transparent border-white/5">
@@ -934,7 +936,7 @@ export default function SalesPage() {
                               </div>
                             </TableCell>
                             <TableCell className="hidden lg:table-cell">
-                              <div className="flex -space-x-2 overflow-hidden py-1">
+                              <div className="flex -space-x-2 overflow-x-auto py-1">
                                 {sale.items.slice(0, 4).map((item, idx) => (
                                   <div key={idx} className="relative z-0 group-hover:z-10 transition-all hover:scale-110">
                                     <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center text-[10px] font-bold shadow-sm" title={item.product?.name}>
@@ -955,7 +957,7 @@ export default function SalesPage() {
                                   ${Number(sale.totals.total_usd).toFixed(2)}
                                 </span>
                                 <span className="text-xs text-muted-foreground font-medium">
-                                  My Currency: {Number(sale.totals.total_bs).toFixed(2)} Bs
+                                  Mi Moneda: {Number(sale.totals.total_bs).toFixed(2)} Bs
                                 </span>
                                 {isFIAO && sale.debt && isPending && (
                                   <Badge variant="outline" className="mt-1 bg-orange-500/10 text-orange-600 border-orange-500/20 text-[10px] h-5 px-1.5 ml-auto">
