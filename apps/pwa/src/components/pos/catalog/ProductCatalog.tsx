@@ -171,30 +171,32 @@ export function ProductCatalog({
                             >
                                 <button
                                     onClick={() => onProductClick(product)}
-                                    className="w-full h-[96px] mt-1 text-left group relative bg-card hover:bg-muted/50 transition-all duration-200 rounded-xl border border-border/60 hover:border-primary/30 hover:shadow-md overflow-hidden p-3 sm:p-4 flex items-center gap-3 sm:gap-4 active:scale-[0.99]"
+                                    className="w-full h-[104px] mt-1 text-left group relative bg-gradient-to-br from-card/90 to-card/50 hover:from-card hover:to-card/80 backdrop-blur-md transition-all duration-300 rounded-2xl border border-white/10 hover:border-primary/20 shadow-sm hover:shadow-lg hover:-translate-y-0.5 overflow-hidden p-3 sm:p-4 flex items-center gap-3 sm:gap-4 active:scale-[0.98] ring-1 ring-transparent hover:ring-primary/10"
                                 >
-                                    <div className="absolute left-0 top-0 bottom-0 w-0 bg-primary opacity-0 group-hover:opacity-100 group-hover:w-1 transition-all duration-200" />
+                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary/0 group-hover:bg-primary transition-all duration-300" />
 
                                     {/* Icono / Imagen */}
                                     <div className={cn(
-                                        "w-12 h-12 sm:w-14 sm:h-14 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors shadow-sm",
-                                        isLowStock ? "bg-warning/10 text-warning border border-warning/20" : "bg-primary/5 text-primary group-hover:bg-primary/10 border border-primary/10"
+                                        "w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-300 shadow-inner",
+                                        isLowStock
+                                            ? "bg-warning/10 text-warning ring-1 ring-warning/20"
+                                            : "bg-gradient-to-br from-primary/10 to-primary/5 text-primary group-hover:from-primary/20 group-hover:to-primary/10 ring-1 ring-primary/10"
                                     )}>
                                         {product.is_weight_product ? (
-                                            <Scale className="w-6 h-6 sm:w-7 sm:h-7" />
+                                            <Scale className={cn("w-6 h-6 sm:w-7 sm:h-7 transition-transform duration-300 group-hover:scale-110", isLowStock && "animate-pulse")} />
                                         ) : (
-                                            <CategoryIcon className="w-6 h-6 sm:w-7 sm:h-7" />
+                                            <CategoryIcon className={cn("w-6 h-6 sm:w-7 sm:h-7 transition-transform duration-300 group-hover:scale-110", isLowStock && "animate-pulse")} />
                                         )}
                                     </div>
 
                                     {/* Info */}
                                     <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-0.5">
                                         <div className="flex items-start justify-between gap-2">
-                                            <h3 className="font-semibold text-sm sm:text-base text-foreground -mt-0.5 leading-tight line-clamp-2 group-hover:text-primary transition-colors">
+                                            <h3 className="font-bold text-sm sm:text-base text-foreground/90 leading-tight line-clamp-2 group-hover:text-primary transition-colors duration-200">
                                                 {product.name}
                                             </h3>
                                             {isLowStock && (
-                                                <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-warning/5 text-warning border-warning/30 flex-shrink-0 animate-pulse">
+                                                <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-warning/10 text-warning border-warning/30 flex-shrink-0">
                                                     Bajo Stock
                                                 </Badge>
                                             )}
@@ -202,12 +204,12 @@ export function ProductCatalog({
 
                                         <div className="flex items-center gap-2 mt-auto">
                                             {product.category && (
-                                                <span className="text-xs text-muted-foreground truncate max-w-[100px] hidden sm:inline-block bg-muted/50 px-1.5 py-0.5 rounded-md">
+                                                <span className="text-[11px] font-medium text-muted-foreground truncate max-w-[100px] hidden sm:inline-flex items-center px-1.5 py-0.5 rounded-md bg-muted/30 border border-white/5">
                                                     {product.category}
                                                 </span>
                                             )}
                                             {product.barcode && (
-                                                <span className="text-[10px] text-muted-foreground/60 font-mono hidden sm:inline-block truncate">
+                                                <span className="text-[10px] text-muted-foreground/50 font-mono hidden sm:inline-block truncate tracking-wider">
                                                     {product.barcode}
                                                 </span>
                                             )}
@@ -215,17 +217,17 @@ export function ProductCatalog({
                                     </div>
 
                                     {/* Precio */}
-                                    <div className="text-right flex-shrink-0 flex flex-col justify-center h-full bg-muted/20 px-3 -my-4 -mr-4 py-4 border-l border-border/30 w-24 sm:w-28 group-hover:bg-primary/5 transition-colors">
+                                    <div className="text-right flex-shrink-0 flex flex-col justify-center h-full pl-2">
                                         <div className="flex flex-col items-end">
                                             {product.is_weight_product ? (
-                                                <Badge variant="secondary" className="mb-1 text-[9px] h-4 px-1">
+                                                <span className="mb-0.5 text-[10px] font-medium text-muted-foreground px-1.5 py-0.5 rounded-md bg-muted/50 border border-white/5">
                                                     /{product.weight_unit || 'kg'}
-                                                </Badge>
+                                                </span>
                                             ) : null}
-                                            <span className="font-bold text-base sm:text-lg text-primary tabular-nums tracking-tight">
+                                            <span className="font-extrabold text-lg sm:text-xl text-primary tabular-nums tracking-tighter drop-shadow-sm">
                                                 ${Number(product.is_weight_product ? product.price_per_weight_usd : product.price_usd || 0).toFixed(2)}
                                             </span>
-                                            <span className="text-[10px] sm:text-xs text-muted-foreground font-medium tabular-nums">
+                                            <span className="text-[11px] sm:text-xs text-muted-foreground/80 font-medium tabular-nums mt-0.5">
                                                 Bs {Number(product.is_weight_product ? product.price_per_weight_bs : product.price_bs || 0).toFixed(2)}
                                             </span>
                                         </div>

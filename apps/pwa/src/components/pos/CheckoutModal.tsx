@@ -256,7 +256,8 @@ export default function CheckoutModal({
                   <h3 className="font-bold text-foreground text-base">Resumen de la venta</h3>
                 </div>
                 <div className="space-y-4 text-sm">
-                  <div className="h-24 sm:h-28 lg:h-40 rounded-lg border border-border/30 bg-muted/20 p-2">
+                  {/* Lista de productos */}
+                  <div className="h-24 sm:h-28 lg:h-40 lg:max-h-48 rounded-lg border border-border/30 bg-muted/20 p-2">
                     <ScrollArea className="h-full pr-2">
                       <div className="space-y-2">
                         {items.map((item, index) => (
@@ -268,25 +269,84 @@ export default function CheckoutModal({
                             )}
                           >
                             <div className="flex-1 min-w-0 mr-3">
-                              <p className="font-medium text-foreground truncate">
+                              <p
+                                className="font-semibold text-foreground text-sm break-words leading-snug"
+                                title={item.product_name}
+                              >
                                 {item.product_name}
                               </p>
-                              {item.variant_name && (
-                                <p className="text-xs text-muted-foreground">{item.variant_name}</p>
-                              )}
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {item.is_weight_product ? (
+                                  <>
+                                    ${Number(item.price_per_weight_usd ?? item.unit_price_usd).toFixed(
+                                      (item.weight_unit === 'g' || item.weight_unit === 'oz') ? 4 : 2
+                                    )} / {item.weight_unit || 'kg'}
+                                  </>
+                                ) : (
+                                  <>${Number(item.unit_price_usd).toFixed(2)} c/u</>
+                                )}
+                              </p>
                             </div>
                             <div className="text-right flex-shrink-0">
-                              <p className="font-semibold text-foreground">
-                                ${item.unit_price_usd.toFixed(2)}
+                              <p className="font-bold text-foreground text-sm">
+                                {item.is_weight_product
+                                  ? (() => {
+                                    const safeUnit = item.weight_unit || 'kg'
+                                    const decimals = safeUnit === 'g' || safeUnit === 'oz' ? 0 : 3
+                                    const safeValue = Number.isFinite(item.qty) ? item.qty : 0
+                                    const fixed = safeValue.toFixed(decimals)
+                                    const trimmed = fixed.replace(/\.?0+$/, '')
+                                    return `${trimmed} ${safeUnit}`
+                                  })()
+                                  : `x${item.qty}`}
                               </p>
-                              <p className="text-xs text-muted-foreground">
-                                x{item.qty}
+                              <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
+                                ${(item.qty * Number(item.unit_price_usd)).toFixed(2)}
                               </p>
                             </div>
                           </div>
                         ))}
                       </div>
                     </ScrollArea>
+                  </div>
+
+                  {/* Resumen de cantidades */}
+                  <div className="flex justify-between items-center pt-3 border-t border-border/40">
+                    <span className="text-muted-foreground font-medium text-sm">Total Items:</span>
+                    <span className="font-bold text-foreground">
+                      {(() => {
+                        const totalUnits = items.reduce(
+                          (sum, item) => sum + (item.is_weight_product ? 0 : item.qty),
+                          0
+                        )
+                        const weightLineItems = items.filter((item) => item.is_weight_product).length
+                        return weightLineItems > 0
+                          ? totalUnits > 0
+                            ? `${totalUnits} unidades + ${weightLineItems} por peso`
+                            : `${weightLineItems} por peso`
+                          : `${totalUnits} unidades`
+                      })()}
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-primary/5 p-3 border border-primary/20">
+                    <div className="flex justify-between items-baseline mb-2">
+                      <span className="text-foreground font-semibold">Total USD:</span>
+                      <span className="text-xl font-bold text-primary tabular-nums">${total.usd.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Equivalente en Bs (tasa {checkoutData.exchangeRate.toFixed(2)}):</span>
+                      <span className="tabular-nums">Bs. {(total.usd * checkoutData.exchangeRate).toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-muted/30 p-3 border border-border/30">
+                    <div className="flex justify-between items-baseline mb-2">
+                      <span className="text-foreground font-semibold">Total Bs:</span>
+                      <span className="text-lg font-bold text-foreground tabular-nums">Bs. {(total.usd * checkoutData.exchangeRate).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Tasa: {checkoutData.exchangeRate.toFixed(2)}</span>
+                      <span className="tabular-nums">${total.usd.toFixed(2)} USD</span>
+                    </div>
                   </div>
                 </div>
               </CardContent>

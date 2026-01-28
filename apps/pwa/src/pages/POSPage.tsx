@@ -699,10 +699,10 @@ export default function POSPage() {
 
 
   return (
-    <div className="h-full max-w-7xl mx-auto">
+    <div className="h-[calc(100vh-4rem)] lg:h-[calc(100vh-5rem)] max-w-7xl mx-auto overflow-hidden flex flex-col">
       {/* Layout: Mobile (stacked) / Tablet Landscape (optimizado) / Desktop (side by side) */}
       <div className={cn(
-        "grid gap-4 sm:gap-6",
+        "grid gap-4 sm:gap-6 flex-1 min-h-0",
         isTabletLandscape ? "grid-cols-[1.3fr_1fr]" : "grid-cols-1 lg:grid-cols-3"
       )}>
         {/* Búsqueda y Lista de Productos */}
@@ -735,39 +735,42 @@ export default function POSPage() {
             }}
           />
 
-          <ProductCatalog
-            products={products as any[]}
-            isLoading={isLoading}
-            isError={isProductsError}
-            searchQuery={searchQuery}
-            lowStockIds={lowStockIds}
-            onProductClick={handleProductClick}
-          />
-
-
-
+          <div className="flex-1 min-h-0 relative">
+            <ProductCatalog
+              products={products as any[]}
+              isLoading={isLoading}
+              isError={isProductsError}
+              searchQuery={searchQuery}
+              lowStockIds={lowStockIds}
+              onProductClick={handleProductClick}
+            />
+          </div>
         </div>
 
-        {/* Carrito - Sticky en desktop/tablet landscape, normal en mobile */}
-        {/* Carrito Modular - Reemplaza todo el bloque anterior */}
-        <POSCart
-          items={items}
-          cartSummaries={cartSummaries}
-          activeCartId={activeCartId}
-          total={total}
-          totalDiscountUsd={totalDiscountUsd}
-          hasOpenCash={hasOpenCash}
-          isMobile={isMobile}
-          isTabletLandscape={isTabletLandscape}
-          invalidCartProductIds={invalidCartProductIds}
-          shouldPrint={shouldPrint}
-          setShouldPrint={setShouldPrint}
-          onSwitchCart={handleSwitchCart}
-          onCheckout={() => setShowCheckout(true)}
-          onUpdateQty={handleUpdateQty}
-          onRemoveItem={removeItem}
-          onClearCart={clear}
-        />
+        {/* Carrito - Flex para ocupar altura completa */}
+        <div className={cn(
+          "flex flex-col h-full overflow-hidden min-h-0",
+          !isTabletLandscape && "lg:col-span-1"
+        )}>
+          <POSCart
+            items={items}
+            cartSummaries={cartSummaries}
+            activeCartId={activeCartId}
+            total={total}
+            totalDiscountUsd={totalDiscountUsd}
+            hasOpenCash={hasOpenCash}
+            isMobile={isMobile}
+            isTabletLandscape={isTabletLandscape}
+            invalidCartProductIds={invalidCartProductIds}
+            shouldPrint={shouldPrint}
+            setShouldPrint={setShouldPrint}
+            onSwitchCart={handleSwitchCart}
+            onCheckout={() => setShowCheckout(true)}
+            onUpdateQty={handleUpdateQty}
+            onRemoveItem={removeItem}
+            onClearCart={clear}
+          />
+        </div>
       </div>
 
       {/* Modal de checkout - Lazy loaded para reducir bundle inicial */}
