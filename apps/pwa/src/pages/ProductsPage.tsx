@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Plus, Edit, Trash2, Package, CheckCircle, DollarSign, Layers, Boxes, Hash, Upload, AlertTriangle, LayoutGrid, LayoutList, Download, Copy, MoreHorizontal, TrendingUp, TrendingDown, Archive } from 'lucide-react'
+import { Search, Plus, Edit, Trash2, Package, CheckCircle, DollarSign, Layers, Boxes, Hash, Upload, AlertTriangle, LayoutGrid, LayoutList, Download, Copy, MoreHorizontal, AlertCircle } from 'lucide-react'
 import { productsService, Product, ProductSearchResponse } from '@/services/products.service'
 import { productsCacheService } from '@/services/products-cache.service'
 import { warehousesService } from '@/services/warehouses.service'
@@ -63,24 +63,20 @@ const formatStockValue = (product: Product, item?: StockStatus) => {
   return `${formatKg(kgValue)} kg`
 }
 
-/**
- * Genera un color consistente para una categoría usando hash
- * Retorna una tupla [bgColor, textColor, borderColor]
- */
 const getCategoryColor = (category: string): [string, string, string] => {
   const colorPalette: Array<[string, string, string]> = [
-    ['bg-blue-100', 'text-blue-700', 'border-blue-300'], // Azul
-    ['bg-green-100', 'text-green-700', 'border-green-300'], // Verde
-    ['bg-purple-100', 'text-purple-700', 'border-purple-300'], // Púrpura
-    ['bg-orange-100', 'text-orange-700', 'border-orange-300'], // Naranja
-    ['bg-pink-100', 'text-pink-700', 'border-pink-300'], // Rosa
-    ['bg-cyan-100', 'text-cyan-700', 'border-cyan-300'], // Cian
-    ['bg-amber-100', 'text-amber-700', 'border-amber-300'], // Ámbar
-    ['bg-indigo-100', 'text-indigo-700', 'border-indigo-300'], // Índigo
-    ['bg-teal-100', 'text-teal-700', 'border-teal-300'], // Verde azulado
-    ['bg-rose-100', 'text-rose-700', 'border-rose-300'], // Rosa oscuro
-    ['bg-violet-100', 'text-violet-700', 'border-violet-300'], // Violeta
-    ['bg-emerald-100', 'text-emerald-700', 'border-emerald-300'], // Esmeralda
+    ['bg-blue-100', 'text-blue-700', 'border-blue-300'],
+    ['bg-green-100', 'text-green-700', 'border-green-300'],
+    ['bg-purple-100', 'text-purple-700', 'border-purple-300'],
+    ['bg-orange-100', 'text-orange-700', 'border-orange-300'],
+    ['bg-pink-100', 'text-pink-700', 'border-pink-300'],
+    ['bg-cyan-100', 'text-cyan-700', 'border-cyan-300'],
+    ['bg-amber-100', 'text-amber-700', 'border-amber-300'],
+    ['bg-indigo-100', 'text-indigo-700', 'border-indigo-300'],
+    ['bg-teal-100', 'text-teal-700', 'border-teal-300'],
+    ['bg-rose-100', 'text-rose-700', 'border-rose-300'],
+    ['bg-violet-100', 'text-violet-700', 'border-violet-300'],
+    ['bg-emerald-100', 'text-emerald-700', 'border-emerald-300'],
   ]
 
   let hash = 0
@@ -133,7 +129,6 @@ export default function ProductsPage() {
   const [initialData, setInitialData] = useState<ProductSearchResponse | undefined>(undefined)
   const { isOnline } = useOnline()
 
-  // KPI DATA: Stock bajo
   const { data: lowStockCountData } = useQuery({
     queryKey: ['inventory', 'low-stock-count', user?.store_id],
     queryFn: () =>
@@ -455,31 +450,33 @@ export default function ProductsPage() {
         threshold={80}
       />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-6">
-        <Card className="border-none shadow-sm bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/20 dark:to-background">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-              <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+      {/* KPI Cards: Minimalist Style */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <Card>
+          <CardContent className="p-6 flex flex-col justify-center">
+            <div className="flex items-center justify-between space-x-2">
+              <span className="text-sm font-medium text-muted-foreground">Total Productos</span>
+              <Package className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Total Productos</p>
-              <h3 className="text-2xl font-bold text-foreground">{total}</h3>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-3xl font-bold tracking-tight text-foreground">{total}</span>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-gradient-to-br from-orange-50 to-white dark:from-orange-950/20 dark:to-background">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-xl">
-              <AlertTriangle className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+        <Card>
+          <CardContent className="p-6 flex flex-col justify-center">
+            <div className="flex items-center justify-between space-x-2">
+              <span className="text-sm font-medium text-muted-foreground">Alertas de Stock</span>
+              <AlertCircle className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Alertas de Stock</p>
-              <h3 className="text-2xl font-bold text-orange-700 dark:text-orange-400">
-                {lowStockCount}
-                <span className="text-xs font-normal text-muted-foreground ml-2">críticos</span>
-              </h3>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-3xl font-bold tracking-tight text-foreground">{lowStockCount}</span>
+              {lowStockCount > 0 && (
+                <span className="text-sm font-medium text-orange-600 dark:text-orange-400">
+                  críticos
+                </span>
+              )}
             </div>
           </CardContent>
         </Card>
